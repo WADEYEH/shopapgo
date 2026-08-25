@@ -83,7 +83,7 @@ Supporting views:
 
 Suggested tracking matrix:
 
-| SKU | Hero | Header | Selector | Product | Sticky | Final |
+| Product code | Hero | Header | Selector | Product | Sticky | Final |
 | --- | --- | --- | --- | --- | --- | --- |
 | D204 | yes | dynamic | yes | yes | dynamic | yes |
 | D215 | no | dynamic | yes | yes | dynamic | yes |
@@ -162,7 +162,8 @@ copy; it is not required for version one.
   rendered DOM.
 - Confirm preview/local host is never indexable.
 - Inspect network requests before consent and before video click.
-- Click every CTA placement and compare SKU plus Attribution parameters.
+- Click every CTA placement and compare the D204/D215 product code plus
+  Attribution parameters.
 - Confirm no click event for unavailable links.
 - Confirm one page-view event and one event per action.
 - Search rendered source for MYR, TWD, Malaysian shipping, cart, price, rating,

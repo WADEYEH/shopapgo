@@ -73,7 +73,7 @@ window.APGO_CONFIG = {
 Rules:
 
 - Amazon URLs must be HTTPS on `amazon.com` or one of its subdomains.
-- Mark `linkReady:true` only after the exact SKU and its Attribution URL have
+- Mark `linkReady:true` only after the exact product and its Attribution URL have
   been verified in a signed-out US session.
 - Put video paths on the matching `[data-video-card]` as `data-video-src`; mark
   `videoReady:true` only after the footage/poster/captions are approved. The
@@ -94,8 +94,8 @@ email, video availability, and robots state without reloading.
 
 - Initial selection: D204.
 - `#d204` and `#d215` deep-link the selected routine.
-- Hero/product/final CTAs remain fixed to their declared SKU.
-- Header/mobile sticky CTAs follow the selected SKU.
+- Hero/product/final CTAs remain fixed to their declared product.
+- Header/mobile sticky CTAs follow the selected product.
 - An unavailable URL has no `href` and no click analytics.
 - Mobile sticky appears only after the hero and hides over the final choice.
 - The sticky JavaScript breakpoint is 719 px, matching the prototype CSS.

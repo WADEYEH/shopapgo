@@ -137,7 +137,7 @@ introductory copy.
 
 - White or dark surface according to section.
 - 16 px radius and one-pixel neutral border.
-- Four-pixel SKU accent at top.
+- Four-pixel product accent at top.
 - Selected state: two-pixel accent border, check icon, and `SELECTED` text.
 - Unselected cards retain normal opacity and readable contrast.
 - Card itself is not a link; radios and Amazon CTA remain separate controls.

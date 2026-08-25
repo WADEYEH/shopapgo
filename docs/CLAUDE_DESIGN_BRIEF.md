@@ -257,7 +257,7 @@ Design principles:
 - strong editorial scale and generous negative space;
 - monospace or technical display type paired with a highly readable body face;
 - orange for brand and primary actions;
-- rose/green only as SKU identity, never the sole indicator of selection;
+- rose/green only as product identity, never the sole indicator of selection;
 - restrained motion: small reveals, selected-state transitions, and arrow
   feedback only;
 - no parallax, marquee, floating bottles, autoplay, or carousel.
@@ -353,7 +353,7 @@ Never use files marked:
 - `AI_candidate_NOT_USED`
 - `USER CONFIRMATION PENDING`
 
-Do not publish any of the following without SKU-specific approved evidence:
+Do not publish any of the following without product-specific approved evidence:
 
 - angle, duration, wash-count, hardness, temperature, or percentage metrics;
 - nano, ceramic, SiO2, graphene, 9H/10H, or molecular-barrier chemistry;
@@ -380,6 +380,10 @@ data-placement="hero|header|selector|product|sticky|final"
 data-product-card="d204|d215"
 data-video-card="d204|d215"
 ```
+
+`data-sku` is a required internal implementation hook only. Never show the word
+`SKU` to shoppers or use it as a synonym for a product. Consumer-facing copy
+should say `product`, `model`, `D204`, or `D215` as appropriate.
 
 Use this configuration shape; do not hardcode URLs in page markup:
 

@@ -153,7 +153,7 @@ Editable presentation fields may include:
 
 Lock or validate these content-truth fields:
 
-- product display names and SKU mapping;
+- product display names and D204/D215 product-code mapping;
 - 300 mL / 10.1 fl oz for D204;
 - 200 mL / 6.8 fl oz for D215;
 - dry/wet starting surface and sequence;

@@ -20,7 +20,7 @@ screenshot alone.
 ## 2. Claim and marketplace exclusions
 
 - [ ] No angle, duration, wash-count, hardness, temperature, or percentage
-      metric appears without approved SKU-specific evidence.
+      metric appears without approved product-specific evidence.
 - [ ] No nano, ceramic, SiO2, graphene, 9H/10H, molecular-barrier, UV, scratch,
       chemical, corrosion, all-surface, or durability claim is present.
 - [ ] Neither product is called stronger, faster, easier, better, flagship, or
@@ -59,7 +59,7 @@ screenshot alone.
 - [ ] Selection updates `body[data-selected-sku]`, card state, live region,
       header CTA, and mobile sticky CTA.
 - [ ] Hero CTA remains D204 after selecting D215.
-- [ ] Product/selector/final CTAs remain mapped to their own SKU.
+- [ ] Product/selector/final CTAs remain mapped to their own D204/D215 product.
 - [ ] Mobile sticky is hidden in hero, visible after hero, and hidden over the
       final choice.
 - [ ] FAQ works with JavaScript disabled.
@@ -71,7 +71,7 @@ screenshot alone.
 - [ ] D204 and D215 Amazon detail pages are publicly buyable in a signed-out US
       session.
 - [ ] Every URL is HTTPS on amazon.com or its subdomain.
-- [ ] Every placement uses the correct SKU-specific Attribution URL.
+- [ ] Every placement uses the correct product-specific Attribution URL.
 - [ ] Query parameters survive the final redirect.
 - [ ] Links open in a new tab and display `Opens Amazon.com`.
 - [ ] Disabled state has no `href`, is not keyboard-focusable, and is announced
@@ -117,7 +117,8 @@ screenshot alone.
 
 - [ ] One `us_referral_landing_view` fires per load.
 - [ ] User selection fires `fit_selector_answer`; initial state does not.
-- [ ] Enabled CTA fires one `amazon_referral_click` with correct SKU/placement.
+- [ ] Enabled CTA fires one `amazon_referral_click` with the correct internal
+      product code and placement.
 - [ ] Disabled CTA fires no referral event.
 - [ ] Video first play and FAQ open fire one correctly parameterized event.
 - [ ] Scroll thresholds fire once at 25/50/75/90.

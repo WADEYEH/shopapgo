@@ -18,7 +18,8 @@ This repository contains a framework-free, local-only HTML/CSS/JavaScript protot
 - `[data-product-card="d204|d215"]`: selectable product card.
 - `[data-video-card="d204|d215"]`: application video card.
 - `[data-placement="hero|header|selector|product|sticky|final"]`: analytics placement.
-- `body[data-selected-sku="d204|d215"]`: global selected SKU state.
+- `body[data-selected-sku="d204|d215"]`: global selected-product state. The
+  attribute name is an internal hook and is never rendered as consumer copy.
 
 ## Content truth
 
@@ -41,4 +42,3 @@ This repository contains a framework-free, local-only HTML/CSS/JavaScript protot
 - Asset lane: `prototype/assets/**`, `docs/asset-map.md`.
 - Interaction/docs lane: `prototype/js/**`, all other `docs/**`, `tests/**`, `scripts/**`, `README.md`, `package.json`.
 - Only the root integrator edits this contract and performs final integration.
-
