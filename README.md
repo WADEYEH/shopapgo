@@ -8,6 +8,8 @@ through Shopify or this prototype.
 ## Current state
 
 - Local review only; no deployment is configured.
+- Source handoff is complete in the private repository
+  `WADEYEH/apgo-us-amazon-landing` at tag `v1.0.0-design-handoff`.
 - `preview: true` and `noindex,nofollow` are the safe defaults.
 - Amazon URLs and support email are intentionally blank/not ready. Local
   D204/D215 application videos are enabled for prototype review.

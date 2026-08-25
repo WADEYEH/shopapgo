@@ -2,7 +2,10 @@
 
 Review package generated: 2026-08-25 (Asia/Taipei)
 
-Status: **local design review ready**. This prototype has not been deployed, connected to a Shopify store, pushed to GitHub, or made indexable.
+Status: **design handoff complete**. The approved source and review package are
+in the private repository `WADEYEH/apgo-us-amazon-landing` on `main` and at tag
+`v1.0.0-design-handoff`. The prototype has not been deployed, connected to a
+Shopify store, or made indexable.
 
 ## What to review once
 
@@ -58,6 +61,6 @@ Then open `http://127.0.0.1:4173/`.
 6. Confirmation of the right to republish the local D204 footage for the US page.
 7. Confirmation of the right to republish the APGO Malaysia-hosted D215 visual footage for the US page. The prototype edit contains no audio.
 8. Confirmation that US retail boxes and labels are pixel-identical to the source packshots, or replacement US packshots.
-9. Final review response: `GO` or one consolidated visual/content correction list.
-
-After `GO`, the planned handoff step is to create the private repository `WADEYEH/apgo-us-amazon-landing`, push `main`, and create tag `v1.0.0-design-handoff`. Until then, the complete commit history remains local.
+Visual/content `GO` was recorded on 2026-08-25. The private repository, `main`
+branch, and `v1.0.0-design-handoff` tag are complete. Items 1–8 remain
+publication blockers and do not prevent the design-to-engineering handoff.
