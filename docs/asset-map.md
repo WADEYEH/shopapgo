@@ -37,12 +37,12 @@ Generated backgrounds must remain separate from official product truth. The page
 | `prototype/assets/video/d204-application.mp4` | Same video | Approved real source / ready for prototype; publication rights confirmation remains required | Trim to 22.2 seconds before unsupported final title card; 720 x 1280 H.264/AAC; 30 fps; fast-start; metadata removed | Click-to-load D204 video |
 | `prototype/assets/video/d204-captions-en.vtt` | D204 video audio | Ready for prototype | Music cue only; no instructional narration transcribed | Caption track |
 | `prototype/assets/application/d215-step-1.webp` | APGO Malaysia Shopify CDN video, 00:00.5 | Approved real source / ready for prototype | Exact real rinse frame; center 4:3 crop; 1200 x 900 WebP | D215 `Wash` step |
-| `prototype/assets/application/d215-step-2.webp` | Same video, 00:06.0 | Approved real source / ready for prototype | Exact real wet-surface frame; center 4:3 crop; 1200 x 900 WebP | D215 `Keep paint wet` step |
-| `prototype/assets/application/d215-step-3.webp` | Same video, 00:10.0 | Approved real source / ready for prototype | Exact real spray frame; center 4:3 crop; 1200 x 900 WebP | D215 `Spray and spread` step |
-| `prototype/assets/application/d215-step-4.webp` | Same video, 00:13.0 | Approved real source / ready for prototype | Exact real final-towel frame; center 4:3 crop; 1200 x 900 WebP | D215 `Dry` step |
-| `prototype/assets/video/d215-poster.webp` | Same video, 00:10.0 | Approved real source / ready for prototype | Real vertical frame centered over a mechanically blurred/darkened duplicate; 1600 x 900 WebP; no generated content | D215 video poster |
-| `prototype/assets/video/d215-application.mp4` | APGO Malaysia Shopify CDN: `https://apgo.my/cdn/shop/videos/c/vp/380dc7b0cfdd4b4ea8c7b8e8bedd9815/380dc7b0cfdd4b4ea8c7b8e8bedd9815.HD-1080p-7.2Mbps-81867711.mp4?v=0` | Approved APGO-hosted source / ready for prototype; US reuse approval must be confirmed before publication | Trim to 22.2 seconds before unsupported final title card; 606 x 1080 H.264/AAC; 30 fps; fast-start; metadata removed | Click-to-load D215 video |
-| `prototype/assets/video/d215-captions-en.vtt` | D215 video audio | Ready for prototype | Music cue only; no instructional narration transcribed | Caption track |
+| `prototype/assets/application/d215-step-2.webp` | Same video, 00:04.0 | Approved real source / ready for prototype | Exact real wet hood-paint frame; lower 4:3 crop (`y=500`); 1200 x 900 WebP | D215 `Keep paint wet` step |
+| `prototype/assets/application/d215-step-3.webp` | Same video, 00:08.0 | Approved real source / ready for prototype | Exact real hood-paint spray frame; lower 4:3 crop (`y=340`); 1200 x 900 WebP | D215 `Spray and spread` step |
+| `prototype/assets/application/d215-step-4.webp` | Same video, 00:16.0 | Approved real source / ready for prototype | Exact real gray-towel drying frame on hood paint; lower 4:3 crop (`y=350`); 1200 x 900 WebP | D215 `Dry` step |
+| `prototype/assets/video/d215-poster.webp` | Same video, 00:08.0 | Approved real source / ready for prototype | Real hood-paint spray frame centered over a mechanically blurred/darkened duplicate; 1600 x 900 WebP; no generated content | D215 video poster |
+| `prototype/assets/video/d215-application.mp4` | APGO Malaysia Shopify CDN: `https://apgo.my/cdn/shop/videos/c/vp/380dc7b0cfdd4b4ea8c7b8e8bedd9815/380dc7b0cfdd4b4ea8c7b8e8bedd9815.HD-1080p-7.2Mbps-81867711.mp4?v=0` | Approved APGO-hosted source / ready for prototype; US reuse approval must be confirmed before publication | Paint-focused hard cut of source `00:00.0–00:09.3` + `00:15.0–00:17.2`; side-glass sequence and unsupported title card removed; 11.5 seconds; 606 x 1080 H.264; 30 fps; fast-start; metadata and audio removed; no generated or blended frames | Click-to-load D215 video |
+| `prototype/assets/video/d215-captions-en.vtt` | D215 paint-focused edit | Ready for prototype | No cues: source audio removed to avoid a discontinuity at the hard cut; no spoken dialogue | Empty caption track / implementation compatibility |
 
 If an application frame cannot clearly represent the stated step, the page must use the HTML numbered-step fallback. It must not generate a replacement image.
 
@@ -56,7 +56,7 @@ If an application frame cannot clearly represent the stated step, the page must 
 
 ## Missing or publication-blocking inputs
 
-- Confirm APGO's right to republish the Malaysia-store D215 video and its audio on the US-market page.
+- Confirm APGO's right to republish the Malaysia-store D215 visual footage on the US-market page. The prototype edit contains no audio.
 - Confirm the D204 local video's ownership and audio usage rights for US publication.
 - Confirm whether the US retail boxes and labels are pixel-identical to the Taiwan/Malaysia sources used here.
 - Final ASINs, Amazon Attribution URLs, neutral-domain ownership and US support email are intentionally outside this asset lane.
