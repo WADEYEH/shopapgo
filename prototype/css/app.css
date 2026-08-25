@@ -843,7 +843,7 @@ body[data-selected-sku="d215"] .product-card--d215 {
   border-bottom: 1px solid var(--light-border);
 }
 
-.sku-badge {
+.product-badge {
   display: inline-flex;
   min-height: 28px;
   align-items: center;
@@ -857,12 +857,12 @@ body[data-selected-sku="d215"] .product-card--d215 {
   text-transform: uppercase;
 }
 
-.sku-badge--d204 {
+.product-badge--d204 {
   background: var(--d204-pink-soft);
   color: var(--d204-pink-dark);
 }
 
-.sku-badge--d215 {
+.product-badge--d215 {
   background: var(--d215-green-soft);
   color: var(--d215-green-dark);
 }

@@ -52,7 +52,7 @@ source.
 ### D204
 
 - Display name: `APGO Atomic Colored Glaze`
-- Model: `D204`
+- Product code: `D204`
 - Net contents: `300 mL / 10.1 fl oz`
 - Starting surface: clean and fully dry automotive paint
 - Routine: `Spray / Spread / Buff`
@@ -63,7 +63,7 @@ source.
 ### D215
 
 - Display name: `APGO Atomic Glaze Coating`
-- Model: `D215`
+- Product code: `D215`
 - Net contents: `200 mL / 6.8 fl oz`
 - Starting surface: clean automotive paint that is still wet after washing
 - Routine: `Wash / Spray and Spread / Dry`
@@ -82,8 +82,9 @@ Primary message:
 
 Hero explanation:
 
-> Choose D204 for use on clean, dry automotive paint. Choose D215 while the
-> paint is still wet after washing.
+> Both products share the same simple core: spray, spread, and finish with a
+> clean towel. The difference is timing—D204 on dry paint, D215 while the paint
+> is still wet.
 
 The visitor should be able to understand the choice in under ten seconds:
 
@@ -136,7 +137,6 @@ recommended.
 Compare only:
 
 - product name;
-- model;
 - starting surface;
 - routine;
 - place in wash routine;
@@ -383,7 +383,7 @@ data-video-card="d204|d215"
 
 `data-sku` is a required internal implementation hook only. Never show the word
 `SKU` to shoppers or use it as a synonym for a product. Consumer-facing copy
-should say `product`, `model`, `D204`, or `D215` as appropriate.
+should say `product`, `D204`, or `D215` as appropriate.
 
 Use this configuration shape; do not hardcode URLs in page markup:
 

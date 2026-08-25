@@ -151,7 +151,7 @@ test("missing or invalid Amazon URLs never become clickable links", async ({ pag
   await expect(d204Links.first()).toHaveAttribute("aria-disabled", "true");
 });
 
-test("fixed and selected CTAs preserve exact SKU mapping", async ({ page }) => {
+test("fixed and selected CTAs preserve exact product mapping", async ({ page }) => {
   await enableAmazonLinks(page);
 
   const fixed = await page.locator("[data-amazon-cta][data-sku]").evaluateAll(

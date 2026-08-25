@@ -77,8 +77,8 @@ Rules:
   been verified in a signed-out US session.
 - Put video paths on the matching `[data-video-card]` as `data-video-src`; mark
   `videoReady:true` only after the footage/poster/captions are approved. The
-  prototype falls back to `assets/video/{sku}-application.mp4` and
-  `assets/video/{sku}-captions-en.vtt`.
+  prototype falls back to `assets/video/{product-code}-application.mp4` and
+  `assets/video/{product-code}-captions-en.vtt`.
 - D215 local playback does not itself approve US publication rights; record
   evidence of those reuse rights before public handoff.
 - Supply only a real monitored support email.

@@ -10,6 +10,8 @@ page is made indexable.
 - Product names:
   - `APGO Atomic Colored Glaze` (`D204`)
   - `APGO Atomic Glaze Coating` (`D215`)
+- In shopper-facing copy, refer to `D204`, `D215`, or `the product`; never use
+  `SKU`, `model`, or another technical identifier as a product synonym.
 - Buttons:
   - `Buy D204 on Amazon`
   - `Buy D215 on Amazon`
@@ -43,8 +45,9 @@ H1:
 
 Lead:
 
-> Choose D204 for use on clean, dry automotive paint. Choose D215 while the
-> paint is still wet after washing.
+> Both products share the same simple core: spray, spread, and finish with a
+> clean towel. The difference is timing—D204 on dry paint, D215 while the paint
+> is still wet.
 
 Facts:
 
@@ -114,7 +117,6 @@ H2:
 | Detail | D204 | D215 |
 | --- | --- | --- |
 | Product | APGO Atomic Colored Glaze | APGO Atomic Glaze Coating |
-| Model | D204 | D215 |
 | Starting surface | Clean and fully dry automotive paint | Clean automotive paint that is still wet after washing |
 | Routine | Spray / Spread / Buff | Wash / Spray and Spread / Dry |
 | Place in wash routine | After drying | Before final drying |
