@@ -36,6 +36,11 @@ Shared assets:
 - `us-referral.js`
 - approved files copied from `prototype/assets/`
 
+Generated studio/context backgrounds may be migrated only when the official
+product packshot and logo remain separate, unchanged layers. Do not flatten or
+reuse a generated image that contains AI-rendered packaging, labels, text,
+before/after results, water/effect evidence, or performance numbers.
+
 The final filenames may follow the destination theme convention. Preserve the
 behavior and DOM hooks rather than prototype class names.
 

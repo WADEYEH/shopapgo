@@ -31,6 +31,11 @@ screenshot alone.
       search, newsletter, gift app, or local promotion appears.
 - [ ] Real application/result imagery is real and approved; generated candidate
       files are excluded.
+- [ ] Any AI-generated studio/car/context/brand-atmosphere layer contains no
+      packaging, logo, text, performance number, before/after state, water, or
+      effect evidence.
+- [ ] Official bottle, box, label, and logo are unchanged mechanical overlays on
+      generated backgrounds, not AI reproductions or repaints.
 
 ## 3. Visual review
 

@@ -300,6 +300,7 @@
       card.dataset.videoSrc ||
       trigger?.dataset.videoSrc ||
       video?.dataset.src ||
+      video?.querySelector("source[data-src]")?.dataset.src ||
       "";
     return typeof source === "string" ? source.trim() : "";
   }

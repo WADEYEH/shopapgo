@@ -324,6 +324,23 @@ official source files and must not be redrawn. AI/compositing may create only
 claim-free automotive backgrounds and lighting around an unchanged official
 packshot.
 
+When a contextual image is missing, AI may generate only a studio, vehicle,
+context, or brand-atmosphere **background**. Composite the official bottle,
+box, label, and logo into that background mechanically, without repainting,
+restyling, relabeling, or asking the image model to reproduce the product.
+
+The Codex version may provide these generated-background references for
+comparison:
+
+- `prototype/assets/generated/hero-studio-bg.webp`
+- `prototype/assets/generated/d204-context-bg.webp`
+- `prototype/assets/generated/d215-context-bg.webp`
+
+Generated backgrounds must contain no product packaging, readable or decorative
+text, performance number, badge, before/after comparison, water-beading/result
+evidence, or implied test result. They are atmosphere only and are never product
+or performance evidence.
+
 Application, water behavior, people, factories, laboratories, durability, test
 evidence, and before/after results require real approved source material.
 

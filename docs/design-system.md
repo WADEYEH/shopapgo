@@ -14,6 +14,26 @@ value differ.
 - Product truth remains in official packshots; backgrounds and lighting remain
   claim-free.
 
+## Generated-background policy
+
+AI may fill a missing studio, vehicle, contextual, or brand-atmosphere
+background. It may not generate or redraw a bottle, box, label, logo, product
+text, performance number, water/result evidence, or before/after comparison.
+Official product and logo files must be mechanically composited over the
+generated background without relabeling, reshaping, repainting, or blending away
+product details.
+
+Expected generated-background slots:
+
+- `prototype/assets/generated/hero-studio-bg.webp`
+- `prototype/assets/generated/d204-context-bg.webp`
+- `prototype/assets/generated/d215-context-bg.webp`
+
+Treat these as atmosphere-only layers. They must remain visually plausible but
+claim-neutral: no text, badges, gauges, diagrams, tests, water beads, result
+panels, or comparison states. Real application and effect media always comes
+from approved real source material.
+
 ## Grid and spacing
 
 Desktop reference: 1440 × 900 px.

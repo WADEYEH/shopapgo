@@ -1,0 +1,22 @@
+{
+  "name": "apgo-us-amazon-landing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-free APGO US Amazon referral landing page prototype",
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 4173 -d prototype",
+    "test": "npm run test:static && npm run test:e2e",
+    "test:static": "node --test tests/static-contract.test.mjs",
+    "test:e2e": "playwright test",
+    "capture": "node scripts/capture.mjs",
+    "record": "node scripts/record-review.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1"
+  }
+}
