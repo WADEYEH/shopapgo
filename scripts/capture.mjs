@@ -50,16 +50,18 @@ try {
     const d215 = page.locator(
       'input[data-routine-option][value="d215"], input[name="application-routine"][value="d215"]',
     );
-    if ((await d215.count()) > 0) await d215.first().check();
+    if ((await d215.count()) > 0) await d215.first().check({ force: true });
 
-    const faq = page.locator("details[data-faq-item], [data-faq] details").first();
+    const faq = page
+      .locator("details[data-faq-item], [data-faq] details, .faq-list details, #faq details")
+      .first();
     if ((await faq.count()) > 0) {
       await faq.evaluate((element) => {
         element.open = true;
       });
     }
 
-    const hero = page.locator("[data-hero], #hero").first();
+    const hero = page.locator("[data-hero], #hero, .hero, #top").first();
     if ((await hero.count()) > 0) {
       await hero.evaluate((element) => {
         window.scrollTo(0, element.offsetTop + element.offsetHeight + 24);

@@ -11,12 +11,12 @@ window.APGO_CONFIG = {
     d204: {
       amazonUrl: "",
       linkReady: false,
-      videoReady: false,
+      videoReady: true,
     },
     d215: {
       amazonUrl: "",
       linkReady: false,
-      videoReady: false,
+      videoReady: true,
     },
   },
 };

@@ -78,18 +78,24 @@ Required hooks:
 - `[data-placement="hero|header|selector|product|sticky|final"]` — analytics.
 - `[data-product-card="d204|d215"]` — selection state.
 - `[data-video-card="d204|d215"]` — video state.
-- `[data-mobile-sticky]`, `[data-hero]`, `[data-final-cta]` — sticky visibility.
-- `[data-support-email][data-populate-email]` — verified email insertion.
+- `[data-mobile-purchase]`, `#top`, `#shop` — current prototype sticky/hero/final
+  hooks. The JS also accepts `[data-mobile-sticky]`, `[data-hero]`, and
+  `[data-final-cta]` aliases.
+- `[data-support-email]` — verified email insertion; missing values are hidden.
+- `[data-support-answer]` — complete verified-email FAQ answer.
 - `[data-selection-live]` — optional live region; JS creates one if omitted.
-- `details[data-faq-item][data-question-id]` — FAQ analytics.
+- `.faq-list details` — current FAQ analytics hook; optional
+  `data-question-id` supplies a stable reporting ID.
 
 Recommended nested hooks:
 
-- `[data-cta-label]` — dynamic CTA label.
+- `[data-selected-cta-label]` — current dynamic CTA label; JS also accepts
+  `[data-cta-label]`.
 - `[data-cta-status]` — `Opens Amazon.com` / pending status.
 - `[data-selected-indicator]` — visual selected badge.
 - `[data-video-trigger]`, `[data-video-mount]` — lazy video hydration.
-- `[data-menu-toggle]`, `[data-mobile-menu]` — mobile navigation.
+- `[data-nav-toggle]`, `[data-site-nav]` — current mobile navigation hooks; JS
+  toggles `.is-open` and `data-open` without hiding the desktop navigation.
 
 ## Theme editor data model
 
@@ -200,6 +206,8 @@ parameters through any Shopify redirect or market routing.
   priority.
 - Below-fold images: explicit dimensions and lazy loading.
 - Video: real poster only; no media request before deliberate click.
+- Preserve the English VTT caption track. D215 may play in the local prototype,
+  but do not publish it in the US template until reuse rights are documented.
 - Load one minified CSS and one deferred JS file for this page.
 - Avoid theme app blocks on the referral template.
 - Mobile targets: LCP <2.5 s, CLS <0.10, INP <200 ms under representative US

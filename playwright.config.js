@@ -1,5 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
+const baseURL = process.env.APGO_BASE_URL || "http://127.0.0.1:4173";
+const prototypeDirectory = process.env.APGO_PROTOTYPE_DIR || "prototype";
+const port = new URL(baseURL).port || "4173";
+
 export default defineConfig({
   testDir: "./tests",
   testMatch: /.*\.spec\.mjs/,
@@ -13,7 +17,7 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL,
     browserName: "chromium",
     headless: true,
     locale: "en-US",
@@ -23,8 +27,8 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: "python3 -m http.server 4173 -d prototype",
-    url: "http://127.0.0.1:4173/",
+    command: `python3 -m http.server ${port} -d ${JSON.stringify(prototypeDirectory)}`,
+    url: `${baseURL}/`,
     reuseExistingServer: true,
     timeout: 20_000,
   },

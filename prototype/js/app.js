@@ -84,7 +84,7 @@
   function setCtaLabel(element, sku) {
     const label = `Buy ${PRODUCT_COPY[sku].label} on Amazon`;
     const labelNode = element.querySelector(
-      "[data-cta-label], .cta__label, .button__label",
+      "[data-cta-label], [data-selected-cta-label], .cta__label, .button__label",
     );
     if (labelNode) labelNode.textContent = label;
     element.dataset.resolvedSku = sku;
@@ -186,6 +186,7 @@
     matchingInputs.forEach((input) => {
       if (
         input.matches("[data-routine-option]") ||
+        input.matches("[data-routine-selector]") ||
         input.name === "application-routine" ||
         input.name === "routine"
       ) {
@@ -197,6 +198,7 @@
       const selected = normalizeSku(card.dataset.productCard) === sku;
       card.classList.toggle("is-selected", selected);
       card.dataset.selected = String(selected);
+      card.setAttribute("aria-current", String(selected));
       if (card.getAttribute("role") === "option") {
         card.setAttribute("aria-selected", String(selected));
       }
@@ -248,6 +250,7 @@
       if (!input) return;
       if (
         !input.matches("[data-routine-option]") &&
+        !input.matches("[data-routine-selector]") &&
         input.name !== "application-routine" &&
         input.name !== "routine"
       ) {
@@ -301,7 +304,13 @@
       trigger?.dataset.videoSrc ||
       video?.dataset.src ||
       video?.querySelector("source[data-src]")?.dataset.src ||
-      "";
+      `assets/video/${sku}-application.mp4`;
+    return typeof source === "string" ? source.trim() : "";
+  }
+
+  function resolveCaptionSource(card, sku) {
+    const source =
+      card.dataset.captionsSrc || `assets/video/${sku}-captions-en.vtt`;
     return typeof source === "string" ? source.trim() : "";
   }
 
@@ -385,6 +394,16 @@
     video.controls = true;
     video.preload = "none";
     if (!video.getAttribute("src")) video.src = source;
+    const captionSource = resolveCaptionSource(card, sku);
+    if (isSafeVideoUrl(captionSource) && !video.querySelector('track[kind="captions"]')) {
+      const captions = document.createElement("track");
+      captions.kind = "captions";
+      captions.srclang = "en";
+      captions.label = "English";
+      captions.src = captionSource;
+      captions.default = true;
+      video.append(captions);
+    }
     attachVideoEvents(video, sku);
     card.dataset.videoState = "hydrated";
     return video;
@@ -416,7 +435,9 @@
   }
 
   function bindFaqAnalytics() {
-    document.querySelectorAll("details[data-faq-item], [data-faq] details").forEach(
+    document.querySelectorAll(
+      "details[data-faq-item], [data-faq] details, .faq-list details, #faq details",
+    ).forEach(
       (details, index) => {
         details.addEventListener("toggle", () => {
           if (!details.open) return;
@@ -443,7 +464,24 @@
       element.hidden = false;
       element.removeAttribute("aria-hidden");
       if (element instanceof HTMLAnchorElement) element.href = `mailto:${email}`;
-      if (element.matches("[data-populate-email]")) element.textContent = email;
+      element.textContent = email;
+    });
+
+    document.querySelectorAll("[data-support-answer]").forEach((element) => {
+      if (!valid) {
+        element.textContent =
+          "Verified United States product-support details will be added before public launch.";
+        return;
+      }
+
+      const prefix = document.createTextNode("For product-use questions, email ");
+      const link = document.createElement("a");
+      link.href = `mailto:${email}`;
+      link.textContent = email;
+      const suffix = document.createTextNode(
+        ". For an Amazon order, use the support options shown with that order.",
+      );
+      element.replaceChildren(prefix, link, suffix);
     });
 
     document.querySelectorAll("[data-support-email-unavailable]").forEach((element) => {
@@ -497,12 +535,14 @@
   }
 
   function bindMobileSticky() {
-    const sticky = document.querySelector("[data-mobile-sticky]");
-    const hero = document.querySelector("[data-hero], #hero");
-    const finalChoice = document.querySelector("[data-final-cta], #final-choice");
+    const sticky = document.querySelector("[data-mobile-sticky], [data-mobile-purchase]");
+    const hero = document.querySelector("[data-hero], #hero, .hero, #top");
+    const finalChoice = document.querySelector(
+      "[data-final-cta], #final-choice, .final-choice, #shop",
+    );
     if (!sticky || !hero) return;
 
-    const media = window.matchMedia("(max-width: 767px)");
+    const media = window.matchMedia("(max-width: 719px)");
     const update = () => {
       const heroRect = hero.getBoundingClientRect();
       const finalRect = finalChoice?.getBoundingClientRect();
@@ -532,13 +572,15 @@
   }
 
   function bindMobileMenu() {
-    const toggle = document.querySelector("[data-menu-toggle]");
-    const menu = document.querySelector("[data-mobile-menu]");
+    const toggle = document.querySelector("[data-menu-toggle], [data-nav-toggle]");
+    const menu = document.querySelector("[data-mobile-menu], [data-site-nav]");
     if (!toggle || !menu) return;
 
     const setOpen = (open) => {
       toggle.setAttribute("aria-expanded", String(open));
-      menu.hidden = !open;
+      toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+      menu.classList.toggle("is-open", open);
+      menu.dataset.open = String(open);
       document.body.classList.toggle("menu-open", open);
     };
 
@@ -564,6 +606,13 @@
     document.querySelectorAll("[data-video-card]").forEach(prepareVideoCard);
   }
 
+  function populateCurrentYear() {
+    const currentYear = String(new Date().getFullYear());
+    document.querySelectorAll("[data-current-year]").forEach((element) => {
+      element.textContent = currentYear;
+    });
+  }
+
   function init() {
     const hashSku = window.location.hash.slice(1).toLowerCase();
     const initialSku = VALID_SKUS.has(hashSku) ? hashSku : "d204";
@@ -581,6 +630,7 @@
     bindMobileSticky();
     bindMobileMenu();
     populateSupportEmail();
+    populateCurrentYear();
     updateRobotsMeta();
     window.addEventListener("apgo:config-updated", refreshRuntimeConfig);
     track("us_referral_landing_view", {

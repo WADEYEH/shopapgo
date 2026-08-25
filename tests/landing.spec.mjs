@@ -17,6 +17,10 @@ function routineOption(page, sku) {
     .first();
 }
 
+async function selectRoutine(page, sku) {
+  await routineOption(page, sku).check({ force: true });
+}
+
 async function waitForRuntime(page) {
   await page.locator("html[data-apgo-ready='true']").waitFor();
 }
@@ -90,15 +94,26 @@ test("radio selection updates state, hash, live region, and dynamic CTAs", async
   page,
 }) => {
   await enableAmazonLinks(page);
-  await routineOption(page, "d215").check();
+  await selectRoutine(page, "d215");
 
   await expect(page.locator("body")).toHaveAttribute("data-selected-sku", "d215");
   await expect(page).toHaveURL(/#d215$/);
   await expect(page.locator("[data-selection-live]")).toContainText("D215 selected");
+  await expect(page.locator('[data-product-card="d204"]')).toHaveAttribute(
+    "aria-current",
+    "false",
+  );
+  await expect(page.locator('[data-product-card="d215"]')).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
 
   const dynamicCtas = page.locator("[data-selected-amazon-cta]");
   await expect(dynamicCtas.first()).toHaveAttribute("data-sku", "d215");
   await expect(dynamicCtas.first()).toHaveAttribute("href", /APGOD215/);
+  await expect(dynamicCtas.first().locator("[data-selected-cta-label]")).toHaveText(
+    "Buy D215 on Amazon",
+  );
 
   const selectionEvent = await page.evaluate(() =>
     window.dataLayer.find((item) => item.event === "fit_selector_answer"),
@@ -158,7 +173,7 @@ test("fixed and selected CTAs preserve exact SKU mapping", async ({ page }) => {
 
   const hero = page.locator('[data-amazon-cta][data-placement="hero"]').first();
   await expect(hero).toHaveAttribute("data-sku", "d204");
-  await routineOption(page, "d215").check();
+  await selectRoutine(page, "d215");
   await expect(hero).toHaveAttribute("href", /APGOD204/);
 
   const selected = page.locator("[data-selected-amazon-cta]");
@@ -169,7 +184,7 @@ test("an enabled referral click emits exactly one mapped analytics event", async
   page,
 }) => {
   await enableAmazonLinks(page);
-  const cta = page.locator('[data-amazon-cta][data-sku="d204"]').first();
+  const cta = page.locator('[data-amazon-cta][data-placement="hero"]').first();
   await cta.evaluate((element) => {
     document.addEventListener(
       "click",
@@ -196,11 +211,13 @@ test("mobile sticky follows selection and respects hero/final visibility", async
   await page.reload();
   await waitForRuntime(page);
   await enableAmazonLinks(page);
-  await routineOption(page, "d215").check();
+  await selectRoutine(page, "d215");
 
-  const sticky = page.locator("[data-mobile-sticky]");
-  const hero = page.locator("[data-hero], #hero").first();
-  const finalChoice = page.locator("[data-final-cta], #final-choice").first();
+  const sticky = page.locator("[data-mobile-sticky], [data-mobile-purchase]");
+  const hero = page.locator("[data-hero], #hero, .hero, #top").first();
+  const finalChoice = page
+    .locator("[data-final-cta], #final-choice, .final-choice, #shop")
+    .first();
   await expect(sticky).toHaveCount(1);
   await expect(sticky).toHaveAttribute("data-visible", "false");
 
@@ -234,7 +251,7 @@ test("video cards do not autoplay or request media on initial load", async ({ pa
     }),
   );
   for (const video of videos) {
-    expect(video.state).toBe("unavailable");
+    expect(video.state).toBe("ready");
     expect(video.autoplay).toBe(false);
     expect(video.autoplayAttribute).toBe(false);
     expect(video.src).toBe("");
@@ -269,6 +286,12 @@ test("ready videos hydrate only after click and a new play pauses the other", as
   await d215Trigger.click();
   await expect(page.locator('[data-video-card="d204"] video')).toHaveCount(1);
   await expect(page.locator('[data-video-card="d215"] video')).toHaveCount(1);
+  await expect(
+    page.locator('[data-video-card="d204"] track[kind="captions"]'),
+  ).toHaveAttribute("srclang", "en");
+  await expect(
+    page.locator('[data-video-card="d215"] track[kind="captions"]'),
+  ).toHaveAttribute("label", "English");
 
   const pauseObserved = await page.evaluate(() => {
     const first = document.querySelector('[data-video-card="d204"] video');
@@ -291,11 +314,59 @@ test("FAQ remains usable without JavaScript", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto("/");
-  const item = page.locator("details[data-faq-item], [data-faq] details").first();
+  const item = page
+    .locator("details[data-faq-item], [data-faq] details, .faq-list details, #faq details")
+    .first();
   await expect(item).toBeVisible();
   await item.locator("summary").click();
   await expect(item).toHaveAttribute("open", "");
   await context.close();
+});
+
+test("FAQ analytics, support email, current year, and mobile menu hooks integrate", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.APGO_CONFIG.supportEmail = "support@example.com";
+    window.dispatchEvent(new Event("apgo:config-updated"));
+  });
+
+  const supportFields = page.locator("[data-support-email]");
+  expect(await supportFields.count()).toBeGreaterThan(0);
+  for (let index = 0; index < (await supportFields.count()); index += 1) {
+    await expect(supportFields.nth(index)).toHaveText("support@example.com");
+    await expect(supportFields.nth(index)).not.toHaveAttribute("hidden", "");
+  }
+  await expect(page.locator("[data-support-answer] a")).toHaveAttribute(
+    "href",
+    "mailto:support@example.com",
+  );
+  await expect(page.locator("[data-current-year]")).toHaveText(
+    String(new Date().getFullYear()),
+  );
+
+  const faq = page
+    .locator("details[data-faq-item], [data-faq] details, .faq-list details, #faq details")
+    .first();
+  await faq.locator("summary").click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.dataLayer.filter((item) => item.event === "faq_expand").length,
+      ),
+    )
+    .toBe(1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const toggle = page.locator("[data-menu-toggle], [data-nav-toggle]").first();
+  const menu = page.locator("[data-mobile-menu], [data-site-nav]").first();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(menu).toHaveClass(/is-open/);
+  await expect(menu).toHaveAttribute("data-open", "true");
+  await page.keyboard.press("Escape");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(menu).toHaveAttribute("data-open", "false");
 });
 
 test("rendered page excludes local-market UI and unverified claims", async ({ page }) => {
@@ -334,7 +405,8 @@ test("images have dimensions, alt attributes, and loading policy", async ({ page
       width: image.getAttribute("width"),
       height: image.getAttribute("height"),
       loading: image.getAttribute("loading"),
-      inHero: Boolean(image.closest("[data-hero], #hero")),
+      inHero: Boolean(image.closest("[data-hero], #hero, .hero, #top")),
+      aboveFoldBrand: Boolean(image.closest(".site-header")),
     })),
   );
   expect(images.length).toBeGreaterThan(0);
@@ -342,7 +414,7 @@ test("images have dimensions, alt attributes, and loading policy", async ({ page
     expect(image.alt).not.toBeNull();
     expect(Number(image.width)).toBeGreaterThan(0);
     expect(Number(image.height)).toBeGreaterThan(0);
-    if (!image.inHero) expect(image.loading).toBe("lazy");
+    if (!image.inHero && !image.aboveFoldBrand) expect(image.loading).toBe("lazy");
   }
 });
 

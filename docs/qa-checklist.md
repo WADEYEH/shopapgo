@@ -84,6 +84,8 @@ screenshot alone.
 - [ ] Video has no autoplay attribute and begins only after a user action.
 - [ ] Starting one video pauses the other.
 - [ ] English captions and transcript are available.
+- [ ] D215 footage has documented rights for reuse on the public US page; local
+      prototype playback is not rights approval.
 - [ ] Missing/unapproved video remains a non-clickable pending state.
 - [ ] Video captions do not infer performance metrics from footage.
 
@@ -134,6 +136,7 @@ Do not switch `preview` to false until every item is confirmed:
 - [ ] Verified support email can receive and answer a test message.
 - [ ] Final US packaging, included items, origin, and safety copy are confirmed.
 - [ ] Every visible asset is official or explicitly approved.
+- [ ] D215 application-video US reuse rights are documented.
 - [ ] Privacy, Terms, Contact, legal entity, and order-support language are
       approved.
 - [ ] Signed-out US QA shows no Malaysian/Taiwan commerce leakage.

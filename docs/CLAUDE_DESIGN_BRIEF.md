@@ -189,6 +189,9 @@ Never generate hands, application results, water behavior, or evidence.
 
 - One 16:9 card for D204 and one for D215.
 - Real footage only.
+- The repository may provide local D204/D215 MP4 and English VTT files for
+  prototype playback. Treat D215 public US reuse rights as a release gate; local
+  availability is not publication approval.
 - Poster image first; load the video only after a deliberate click.
 - Never autoplay.
 - Pause one video when the other begins.

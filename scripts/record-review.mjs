@@ -40,11 +40,13 @@ try {
       const d215 = page.locator(
         'input[data-routine-option][value="d215"], input[name="application-routine"][value="d215"]',
       );
-      if ((await d215.count()) > 0) await d215.first().check();
+      if ((await d215.count()) > 0) await d215.first().check({ force: true });
     }
   }
 
-  const faq = page.locator("details[data-faq-item], [data-faq] details").first();
+  const faq = page
+    .locator("details[data-faq-item], [data-faq] details, .faq-list details, #faq details")
+    .first();
   if ((await faq.count()) > 0) {
     await faq.scrollIntoViewIfNeeded();
     await faq.locator("summary").click();

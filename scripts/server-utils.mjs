@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 
 export const BASE_URL = process.env.APGO_BASE_URL || "http://127.0.0.1:4173";
+const PROTOTYPE_DIRECTORY = process.env.APGO_PROTOTYPE_DIR || "prototype";
+const SERVER_PORT = new URL(BASE_URL).port || "4173";
 
 async function isReachable(url) {
   try {
@@ -24,7 +26,7 @@ export async function ensurePrototypeServer() {
 
   const server = spawn(
     "python3",
-    ["-m", "http.server", "4173", "-d", "prototype"],
+    ["-m", "http.server", SERVER_PORT, "-d", PROTOTYPE_DIRECTORY],
     {
       cwd: process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],

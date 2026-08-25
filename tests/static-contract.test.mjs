@@ -16,7 +16,7 @@ test("config defaults fail closed", async () => {
   for (const sku of ["d204", "d215"]) {
     assert.equal(config.products[sku].amazonUrl, "");
     assert.equal(config.products[sku].linkReady, false);
-    assert.equal(config.products[sku].videoReady, false);
+    assert.equal(config.products[sku].videoReady, true);
   }
 });
 

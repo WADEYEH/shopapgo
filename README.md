@@ -9,7 +9,8 @@ through Shopify or this prototype.
 
 - Local review only; no deployment is configured.
 - `preview: true` and `noindex,nofollow` are the safe defaults.
-- Amazon URLs, support email, and videos are intentionally blank/not ready.
+- Amazon URLs and support email are intentionally blank/not ready. Local
+  D204/D215 application videos are enabled for prototype review.
 - Missing external values produce disabled controls rather than placeholder
   links or invented media.
 - Product imagery must follow `docs/asset-map.md` after the asset lane completes
@@ -58,12 +59,12 @@ window.APGO_CONFIG = {
     d204: {
       amazonUrl: "",
       linkReady: false,
-      videoReady: false,
+      videoReady: true,
     },
     d215: {
       amazonUrl: "",
       linkReady: false,
-      videoReady: false,
+      videoReady: true,
     },
   },
 };
@@ -75,7 +76,11 @@ Rules:
 - Mark `linkReady:true` only after the exact SKU and its Attribution URL have
   been verified in a signed-out US session.
 - Put video paths on the matching `[data-video-card]` as `data-video-src`; mark
-  `videoReady:true` only after the footage/poster/captions are approved.
+  `videoReady:true` only after the footage/poster/captions are approved. The
+  prototype falls back to `assets/video/{sku}-application.mp4` and
+  `assets/video/{sku}-captions-en.vtt`.
+- D215 local playback does not itself approve US publication rights; record
+  evidence of those reuse rights before public handoff.
 - Supply only a real monitored support email.
 - Keep `preview:true` through visual, content, market, policy, analytics, and
   destination-link QA. Both product links are additionally required before the
@@ -93,6 +98,7 @@ email, video availability, and robots state without reloading.
 - Header/mobile sticky CTAs follow the selected SKU.
 - An unavailable URL has no `href` and no click analytics.
 - Mobile sticky appears only after the hero and hides over the final choice.
+- The sticky JavaScript breakpoint is 719 px, matching the prototype CSS.
 - Videos are hydrated only by a deliberate click, never autoplay on page load,
   and pause the other video on play.
 - FAQ uses native `<details>/<summary>` and works without JavaScript.
