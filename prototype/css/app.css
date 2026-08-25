@@ -4,6 +4,7 @@
   color-scheme: dark light;
   --apgo-orange: #f08417;
   --apgo-orange-bright: #ff9a31;
+  --apgo-orange-dark: #a64b00;
   --apgo-orange-soft: #fdf0e3;
   --d204-pink: #e99495;
   --d204-pink-soft: #fcf2f2;
@@ -223,6 +224,7 @@ h3 {
 
 .eyebrow--dark span {
   border-color: rgba(23, 23, 23, .2);
+  color: var(--apgo-orange-dark);
 }
 
 .micro-label {
