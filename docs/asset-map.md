@@ -28,14 +28,21 @@ Generated backgrounds must remain separate from official product truth. The page
 
 ## Application and video assets
 
-| Planned output | Source | Current status | Transform / restriction | Intended usage |
+| Output | Source | Status | Mechanical transform / restriction | Intended usage |
 |---|---|---|---|---|
-| `prototype/assets/application/d204-step-1.webp` through `d204-step-3.webp` | `/Users/wadeyeh/Desktop/Coloured Glaze.mp4` | In processing; official real footage located | Extract real frames for spray, spread and buff only; claim-free crop; no generated hands or effects | D204 application steps |
-| `prototype/assets/video/d204-poster.webp` | `/Users/wadeyeh/Desktop/Coloured Glaze.mp4` | In processing; official real footage located | Claim-free application frame; mechanical blurred-background composition for 16:9 only | D204 video poster |
-| `prototype/assets/video/d204-application.mp4` | `/Users/wadeyeh/Desktop/Coloured Glaze.mp4` | In processing | Web delivery transcode; exclude final unsupported claim card; retain real footage | Click-to-load D204 video |
-| `prototype/assets/application/d215-step-1.webp` through `d215-step-4.webp` | APGO Malaysia Shopify CDN video: `380dc7b0cfdd4b4ea8c7b8e8bedd9815.HD-1080p-7.2Mbps-81867711.mp4` | In processing; official public source located | Extract real wash, wet-surface, spray/spread and final-dry frames only; no generated substitutes | D215 application steps |
-| `prototype/assets/video/d215-poster.webp` | Same APGO Malaysia Shopify CDN video | In processing | Claim-free application frame; mechanical blurred-background composition for 16:9 only | D215 video poster |
-| `prototype/assets/video/d215-application.mp4` | Same APGO Malaysia Shopify CDN video | In processing; US reuse approval must be confirmed before publication | Web delivery transcode; exclude final unsupported claim card | Click-to-load D215 video |
+| `prototype/assets/application/d204-step-1.webp` | `/Users/wadeyeh/Desktop/Coloured Glaze.mp4`, 00:05.0 | Approved real source / ready for prototype | Exact real spray frame; center 4:3 crop; 1200 x 900 WebP | D204 `Spray` step |
+| `prototype/assets/application/d204-step-2.webp` | Same video, 00:06.5 | Approved real source / ready for prototype | Exact real coating-cloth frame; center 4:3 crop; 1200 x 900 WebP | D204 `Spread` step |
+| `prototype/assets/application/d204-step-3.webp` | Same video, 00:09.5 | Approved real source / ready for prototype | Exact real towel frame; center 4:3 crop; 1200 x 900 WebP | D204 `Buff` step |
+| `prototype/assets/video/d204-poster.webp` | Same video, 00:05.0 | Approved real source / ready for prototype | Real vertical frame centered over a mechanically blurred/darkened duplicate; 1600 x 900 WebP; no generated content | D204 video poster |
+| `prototype/assets/video/d204-application.mp4` | Same video | Approved real source / ready for prototype; publication rights confirmation remains required | Trim to 22.2 seconds before unsupported final title card; 720 x 1280 H.264/AAC; 30 fps; fast-start; metadata removed | Click-to-load D204 video |
+| `prototype/assets/video/d204-captions-en.vtt` | D204 video audio | Ready for prototype | Music cue only; no instructional narration transcribed | Caption track |
+| `prototype/assets/application/d215-step-1.webp` | APGO Malaysia Shopify CDN video, 00:00.5 | Approved real source / ready for prototype | Exact real rinse frame; center 4:3 crop; 1200 x 900 WebP | D215 `Wash` step |
+| `prototype/assets/application/d215-step-2.webp` | Same video, 00:06.0 | Approved real source / ready for prototype | Exact real wet-surface frame; center 4:3 crop; 1200 x 900 WebP | D215 `Keep paint wet` step |
+| `prototype/assets/application/d215-step-3.webp` | Same video, 00:10.0 | Approved real source / ready for prototype | Exact real spray frame; center 4:3 crop; 1200 x 900 WebP | D215 `Spray and spread` step |
+| `prototype/assets/application/d215-step-4.webp` | Same video, 00:13.0 | Approved real source / ready for prototype | Exact real final-towel frame; center 4:3 crop; 1200 x 900 WebP | D215 `Dry` step |
+| `prototype/assets/video/d215-poster.webp` | Same video, 00:10.0 | Approved real source / ready for prototype | Real vertical frame centered over a mechanically blurred/darkened duplicate; 1600 x 900 WebP; no generated content | D215 video poster |
+| `prototype/assets/video/d215-application.mp4` | APGO Malaysia Shopify CDN: `https://apgo.my/cdn/shop/videos/c/vp/380dc7b0cfdd4b4ea8c7b8e8bedd9815/380dc7b0cfdd4b4ea8c7b8e8bedd9815.HD-1080p-7.2Mbps-81867711.mp4?v=0` | Approved APGO-hosted source / ready for prototype; US reuse approval must be confirmed before publication | Trim to 22.2 seconds before unsupported final title card; 606 x 1080 H.264/AAC; 30 fps; fast-start; metadata removed | Click-to-load D215 video |
+| `prototype/assets/video/d215-captions-en.vtt` | D215 video audio | Ready for prototype | Music cue only; no instructional narration transcribed | Caption track |
 
 If an application frame cannot clearly represent the stated step, the page must use the HTML numbered-step fallback. It must not generate a replacement image.
 
@@ -65,4 +72,5 @@ D204 300 mL bottle with nozzle                    91724dee75251ee772b6c7b6ab82a9
 D215 box (原子釉.png)                              7f491d4efaf383a5ebcb232a97495631a0de570277a6754af489d496e405d0f6
 D215 200 mL bottle with nozzle                    7c28a675df5df6dbf9668c2ddb19b849e0523d0e61a2255576f9cb09cf4babe5
 Coloured Glaze.mp4                                5f08af5247231f3cc33a1387c01a66a2adbbf5ad3a9f51c65c17be64d91e224a
+D215 APGO Shopify CDN video                      4fdc407bc002109f0d15f22ca4df260de026cdebed628884f3101884f48e7b0e
 ```
