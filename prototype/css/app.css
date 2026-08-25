@@ -1325,6 +1325,12 @@ body[data-selected-sku="d215"] .product-card--d215 .selected-badge {
   grid-column: 1 / -1;
 }
 
+@media (min-width: 720px) {
+  .step-list--three li:last-child img {
+    aspect-ratio: 2.96 / 1;
+  }
+}
+
 .step-list figure {
   height: 100%;
   background: var(--warm-white);
