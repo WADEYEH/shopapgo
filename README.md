@@ -8,6 +8,12 @@ through Shopify or this prototype.
 ## Current state
 
 - Local review only; no deployment is configured.
+- A V2 content blueprint is available for owner review in
+  `docs/v2/README.md`. It proposes a six-section narrative, complete US-English
+  copy, an evidence-based claim ledger, and a revised CTA/analytics contract.
+  It has not been implemented in the prototype or published. The V1 runtime
+  contracts remain current until the V2 package is approved and replaced as one
+  coherent implementation change.
 - Source handoff is complete in the private repository
   `WADEYEH/apgo-us-amazon-landing` at tag `v1.0.0-design-handoff`.
 - `preview: true` and `noindex,nofollow` are the safe defaults.
