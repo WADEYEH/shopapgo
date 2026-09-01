@@ -10,6 +10,7 @@
     "test:static": "node --test tests/static-contract.test.mjs",
     "test:e2e": "playwright test",
     "capture": "node scripts/capture.mjs",
+    "capture:v2": "node scripts/capture-v2.mjs",
     "record": "node scripts/record-review.mjs"
   },
   "engines": {
