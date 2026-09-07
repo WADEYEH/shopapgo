@@ -82,7 +82,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 
 ### 之後要把美國站搬到根路徑
 
-- **只想 root 轉去 /us**：在 `next.config.mjs` 加 `redirects: async () => [{ source: "/", destination: "/us", permanent: true }]`。
+- **目前狀態**：`next.config.mjs` 已設定 `/` 308 轉到 `/us`。台灣站要用 root 時把那段 `redirects` 刪掉即可。
 - **真的搬到 /**：把 `lib/us/routes.js` 的 `US_BASE` 改成 `""`，把 `app/(us)/us/*` 移到 `app/(us)/*`，並為舊的 `/us/*` 加 redirect。
 
 ### 上線前待補（設計交付包列出的空缺）
