@@ -21,6 +21,9 @@ details[open] .faq-chev { transform: rotate(45deg); }
 .us-btn:hover { transform: translateY(-2px); }
 .us-btn-sm:hover { transform: translateY(-1px); }
 
+/* Outlined secondary button inside guide cards; fills on hover of the card link. */
+a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #080A0C !important; transform: translateY(-2px); }
+
 /* Landing footer leaves room for the mobile sticky CTA. */
 .us-landing-footer { padding-bottom: 0; }
 @media (max-width: 900px) { .us-landing-footer { padding-bottom: 96px; } }

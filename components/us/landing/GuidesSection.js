@@ -2,6 +2,7 @@ import Link from "next/link";
 import { routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { CARDS } from "@/components/us/guides/RelatedGuides";
+import GuideButton from "@/components/us/guides/GuideButton";
 import Eyebrow from "./Eyebrow";
 
 // Links the landing page to the four guides. Heading and lede reuse the guides hub copy;
@@ -81,7 +82,7 @@ export default function GuidesSection() {
                 <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 26, lineHeight: 0.95, textTransform: "uppercase" }}>
                   {c.title}
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: color.orange }}>{CTA[key]}</span>
+                <GuideButton>{CTA[key]}</GuideButton>
               </Link>
             );
           })}

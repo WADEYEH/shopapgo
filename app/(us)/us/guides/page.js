@@ -1,6 +1,7 @@
 import Link from "next/link";
 import GuideHeader from "@/components/us/guides/GuideHeader";
 import GuideFooter from "@/components/us/guides/GuideFooter";
+import GuideButton from "@/components/us/guides/GuideButton";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 
@@ -26,7 +27,6 @@ const sectionH2 = {
 const sectionP = { margin: 0, fontSize: 16, lineHeight: 1.55, color: color.tertiary };
 const cardLabel = (c) => ({ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: c, fontWeight: 700 });
 const cardExcerpt = { fontSize: 15, lineHeight: 1.5, color: color.tertiary };
-const cardMore = { fontSize: 14, fontWeight: 600, color: color.orange };
 
 export default function GuidesPage() {
   return (
@@ -138,7 +138,7 @@ export default function GuidesPage() {
                   Learn what to check after rinsing, how to prepare your towels, and when to apply a paint-care product. A
                   straightforward starting point, whether or not you use APGO.
                 </span>
-                <span style={cardMore}>Read the wash-care guide →</span>
+                <GuideButton>Read the wash-care guide →</GuideButton>
               </Link>
               <Link
                 href={routes.wetOrDry}
@@ -165,7 +165,7 @@ export default function GuidesPage() {
                   Atomic Colored Glaze goes on dry paint. Atomic Glaze Coating goes on wet paint. Compare the application steps and
                   tools before choosing—both routines include a final buff.
                 </span>
-                <span style={cardMore}>Compare the two routines →</span>
+                <GuideButton>Compare the two routines →</GuideButton>
               </Link>
             </div>
           </div>
@@ -222,7 +222,7 @@ export default function GuidesPage() {
                     Prepare clean, completely dry paint, apply a thin amount, spread, and buff. Learn how to recognize overapplication
                     and what APGO recommends after you finish.
                   </span>
-                  <span style={cardMore}>Read the dry-application guide →</span>
+                  <GuideButton>Read the dry-application guide →</GuideButton>
                 </span>
               </Link>
               <Link
@@ -250,7 +250,7 @@ export default function GuidesPage() {
                     Apply after washing and rinsing, while the paint is still wet. Follow the full sequence: spread with a damp
                     application cloth, towel-dry, then finish with a separate buffing towel.
                   </span>
-                  <span style={cardMore}>Read the wet-application guide →</span>
+                  <GuideButton>Read the wet-application guide →</GuideButton>
                 </span>
               </Link>
             </div>
