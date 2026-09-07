@@ -6,3 +6,5 @@ Next.js site for shopapgo.com, deployed on Vercel.
 npm install
 npm run dev
 ```
+
+Deployed automatically from the `main` branch via Vercel.
