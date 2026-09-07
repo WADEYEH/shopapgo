@@ -25,6 +25,11 @@ details[open] .faq-chev { transform: rotate(45deg); }
 .us-landing-footer { padding-bottom: 0; }
 @media (max-width: 900px) { .us-landing-footer { padding-bottom: 96px; } }
 
+/* Landing "Guides" cards: 4-up on desktop, 2-up on tablet, stacked on phones. */
+.us-guides-grid { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .us-guides-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 540px) { .us-guides-grid { grid-template-columns: 1fr; } }
+
 /* Visually hidden but available to screen readers. */
 .us-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 

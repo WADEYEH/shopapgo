@@ -3,7 +3,7 @@ import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 
 // Card data for the "Keep reading" grid. Labels, images and titles are identical on every page.
-const CARDS = {
+export const CARDS = {
   coloredGlaze: {
     href: routes.coloredGlaze,
     img: asset("application/d204-step-1.webp"),

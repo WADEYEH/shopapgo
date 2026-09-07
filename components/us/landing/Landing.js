@@ -12,6 +12,7 @@ import BrandSection from "./BrandSection";
 import TechnologySection from "./TechnologySection";
 import RoutineSection from "./RoutineSection";
 import FaqSection from "./FaqSection";
+import GuidesSection from "./GuidesSection";
 import FinalSection from "./FinalSection";
 
 const NAV = [
@@ -19,6 +20,7 @@ const NAV = [
   { href: "#technology", label: "Technology" },
   { href: "#compare", label: "Dry or Wet" },
   { href: "#faq", label: "FAQ" },
+  { href: routes.guides, label: "Guides" },
 ];
 
 export default function Landing() {
@@ -260,6 +262,7 @@ export default function Landing() {
         <TechnologySection />
         <RoutineSection sku={sku} onPick={pick} />
         <FaqSection />
+        <GuidesSection />
         <FinalSection />
       </main>
 
@@ -279,6 +282,7 @@ export default function Landing() {
         >
           <img src={asset("brand/apgo-logo.png")} alt="APGO" style={{ height: 24 }} />
           <nav aria-label="Legal" style={{ display: "flex", gap: 28, fontSize: 13, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <a href={routes.guides} className="us-nav-link" style={{ color: color.tertiary, textDecoration: "none" }}>Guides</a>
             <a href={routes.privacy} className="us-nav-link" style={{ color: color.tertiary, textDecoration: "none" }}>Privacy</a>
             <a href={routes.terms} className="us-nav-link" style={{ color: color.tertiary, textDecoration: "none" }}>Terms</a>
             <a href={routes.contact} className="us-nav-link" style={{ color: color.tertiary, textDecoration: "none" }}>Contact</a>
