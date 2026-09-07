@@ -1,0 +1,46 @@
+/* Global styles for the US site root layout (app/(us)). Scoped by being loaded only there. */
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: #080A0C;
+  color: #FBF8F4;
+  font-family: var(--font-barlow), "Barlow", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: #F08417; }
+a:hover { color: #FBF8F4; }
+summary::-webkit-details-marker { display: none; }
+summary { list-style: none; }
+details[open] .faq-chev { transform: rotate(45deg); }
+:focus-visible { outline: 3px solid #F08417; outline-offset: 3px; }
+
+/* Hover rules ported from style-hover attributes in the design files. */
+.us-nav-link:hover { color: #FBF8F4 !important; }
+.us-btn, .us-btn-sm { transition: transform .18s; }
+.us-btn:hover { transform: translateY(-2px); }
+.us-btn-sm:hover { transform: translateY(-1px); }
+
+/* Landing footer leaves room for the mobile sticky CTA. */
+.us-landing-footer { padding-bottom: 0; }
+@media (max-width: 900px) { .us-landing-footer { padding-bottom: 96px; } }
+
+/* Visually hidden but available to screen readers. */
+.us-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Skip link: visually hidden until focused. */
+.us-skip { position: absolute; left: -9999px; top: 0; background: #F08417; color: #080A0C; padding: 8px 12px; font-weight: 700; z-index: 100; }
+.us-skip:focus { left: 8px; top: 8px; }
+
+/* Responsive helpers for the landing page (breakpoint 900px). */
+.us-desktop-only { display: contents; }
+.us-mobile-only { display: none; }
+@media (max-width: 900px) {
+  .us-desktop-only { display: none; }
+  .us-mobile-only { display: contents; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  html { scroll-behavior: auto; }
+}

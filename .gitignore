@@ -4,3 +4,5 @@ out
 .env*
 .vercel
 .DS_Store
+.claude/
+!.env.example
