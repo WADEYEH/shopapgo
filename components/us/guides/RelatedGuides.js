@@ -51,6 +51,7 @@ export default function RelatedGuides({ items }) {
         <div style={{ color: color.orange, fontSize: 13, fontWeight: 700, letterSpacing: ".18em", textTransform: "uppercase" }}>
           Keep reading
         </div>
+        <Link href={routes.guides} className="us-text-link">All guides <span aria-hidden="true">→</span></Link>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,280px),1fr))", gap: 16 }}>
           {items.map((key) => {
             const c = CARDS[key];

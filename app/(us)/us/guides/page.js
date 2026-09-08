@@ -1,6 +1,4 @@
 import Link from "next/link";
-import GuideHeader from "@/components/us/guides/GuideHeader";
-import GuideFooter from "@/components/us/guides/GuideFooter";
 import GuideButton from "@/components/us/guides/GuideButton";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
@@ -31,8 +29,7 @@ const cardExcerpt = { fontSize: 15, lineHeight: 1.5, color: color.tertiary };
 export default function GuidesPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
-      <GuideHeader />
-      <main>
+      <main id="main">
         <section style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div
             style={{
@@ -58,6 +55,7 @@ export default function GuidesPage() {
             >
               <span style={{ width: 28, height: 2, background: color.orange }}></span>Guides
             </div>
+            <nav aria-label="Breadcrumb" className="us-breadcrumb"><Link href={routes.home}>Home</Link><span aria-hidden="true">›</span><span aria-current="page">Guides</span></nav>
             <h1
               style={{
                 margin: 0,
@@ -304,7 +302,7 @@ export default function GuidesPage() {
                 textDecoration: "none",
               }}
             >
-              Contact APGO <span aria-hidden="true">→</span>
+              View FAQs <span aria-hidden="true">→</span>
             </Link>
             <p style={{ margin: "8px 0 0", fontSize: 13, color: color.quiet2, lineHeight: 1.5 }}>
               These guides are published by APGO. Follow the current directions for your specific product and your vehicle's care
@@ -313,7 +311,6 @@ export default function GuidesPage() {
           </div>
         </section>
       </main>
-      <GuideFooter />
     </div>
   );
 }

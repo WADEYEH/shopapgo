@@ -1,10 +1,7 @@
 import Link from "next/link";
-import GuideHeader from "@/components/us/guides/GuideHeader";
-import GuideFooter from "@/components/us/guides/GuideFooter";
 import ArticleHead from "@/components/us/guides/ArticleHead";
 import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
-import OnThisPage from "@/components/us/guides/OnThisPage";
 import DashList from "@/components/us/guides/DashList";
 import FaqList from "@/components/us/guides/FaqList";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
@@ -70,11 +67,11 @@ export default function AfterWashingPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.afterWashing }), faqLd(FAQ)]} />
-      <GuideHeader />
-      <main>
+      <main id="main">
         <ArticleHead
+          toc={TOC}
           gradient="linear-gradient(160deg,#12151a 0%,#080A0C 55%)"
-          crumb="Basics"
+          crumb="After washing your car"
           tag="BASICS"
           tagColor={color.tertiary}
           tagLabel="Wash routine"
@@ -85,8 +82,7 @@ export default function AfterWashingPage() {
 
         <HeroFigure src={HERO} alt="Rinsing a car after washing" caption="Real footage · APGO" />
 
-        <ArticleBody>
-          <OnThisPage items={TOC} />
+        <ArticleBody toc={TOC}>
 
           <p style={lead}>
             You do not need to turn every wash into a full detailing session. A useful routine can be straightforward—and if you are
@@ -315,7 +311,6 @@ export default function AfterWashingPage() {
 
         <RelatedGuides items={["coloredGlaze", "glazeCoating", "wetOrDry"]} />
       </main>
-      <GuideFooter />
     </div>
   );
 }

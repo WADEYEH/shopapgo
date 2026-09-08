@@ -1,9 +1,6 @@
-import GuideHeader from "@/components/us/guides/GuideHeader";
-import GuideFooter from "@/components/us/guides/GuideFooter";
 import ArticleHead from "@/components/us/guides/ArticleHead";
 import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
-import OnThisPage from "@/components/us/guides/OnThisPage";
 import Callout from "@/components/us/guides/Callout";
 import StepRow from "@/components/us/guides/StepRow";
 import ProductAside from "@/components/us/guides/ProductAside";
@@ -101,11 +98,11 @@ export default function ColoredGlazePage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.coloredGlaze }), faqLd(FAQ)]} />
-      <GuideHeader />
-      <main>
+      <main id="main">
         <ArticleHead
+          toc={TOC}
           gradient="linear-gradient(160deg,#1a1214 0%,#080A0C 55%)"
-          crumb="How to apply"
+          crumb="Colored Glaze · DRY"
           tag="DRY"
           tagColor={color.dry}
           tagLabel="Atomic Colored Glaze · D204"
@@ -120,8 +117,7 @@ export default function ColoredGlazePage() {
           caption="Real application footage · APGO"
         />
 
-        <ArticleBody>
-          <OnThisPage items={TOC} />
+        <ArticleBody toc={TOC}>
 
           <p style={lead}>
             Atomic Colored Glaze is APGO's <strong style={strong}>dry-surface</strong> finish. You use it after the car has been washed
@@ -330,7 +326,6 @@ export default function ColoredGlazePage() {
 
         <RelatedGuides items={["glazeCoating", "wetOrDry", "afterWashing"]} />
       </main>
-      <GuideFooter />
     </div>
   );
 }

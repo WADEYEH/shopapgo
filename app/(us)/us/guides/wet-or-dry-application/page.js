@@ -1,6 +1,4 @@
 import { Fragment } from "react";
-import GuideHeader from "@/components/us/guides/GuideHeader";
-import GuideFooter from "@/components/us/guides/GuideFooter";
 import ArticleHead from "@/components/us/guides/ArticleHead";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import DashList from "@/components/us/guides/DashList";
@@ -88,15 +86,24 @@ const tableRowLabel = {
 const tableCell = { background: color.bg, padding: "12px 16px" };
 const marker = (accent) => ({ fontFamily: CONDENSED, fontWeight: 800, fontSize: 40, lineHeight: 1, color: accent, letterSpacing: ".04em" });
 
+const TOC = [
+  { href: "#compare", label: "Compare the two routines" },
+  { href: "#dry", label: "Dry application" },
+  { href: "#wet", label: "Wet application" },
+  { href: "#cloths", label: "Prepare the right cloths" },
+  { href: "#where", label: "Where you can use them" },
+  { href: "#faq", label: "Frequently asked questions" },
+];
+
 export default function WetOrDryPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.wetOrDry }), faqLd(FAQ)]} />
-      <GuideHeader />
-      <main>
+      <main id="main">
         <ArticleHead
+          toc={TOC}
           gradient="linear-gradient(160deg,#16120f 0%,#080A0C 55%)"
-          crumb="Compare"
+          crumb="Compare dry & wet"
           tag={
             <>
               <span style={{ color: color.dry }}>DRY</span>
@@ -132,7 +139,7 @@ export default function WetOrDryPage() {
           <div style={{ fontSize: 12, color: color.quiet2, paddingTop: 8, letterSpacing: ".06em" }}>Real application footage · APGO</div>
         </div>
 
-        <ArticleBody>
+        <ArticleBody toc={TOC}>
           <p style={lead}>
             <strong style={strong}>
               Atomic Colored Glaze goes on clean, completely dry paint. Atomic Glaze Coating goes on clean paint that is still wet
@@ -340,7 +347,6 @@ export default function WetOrDryPage() {
           note="U.S. launch preparation is underway. Explore the guides now; purchasing links will be added when the products are available."
         />
       </main>
-      <GuideFooter />
     </div>
   );
 }

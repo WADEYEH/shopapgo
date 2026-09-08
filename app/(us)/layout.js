@@ -1,5 +1,7 @@
 import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./us.css";
+import SiteChrome from "@/components/us/SiteChrome";
+import SiteFooter from "@/components/us/SiteFooter";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -25,7 +27,7 @@ export const metadata = {
 export default function USLayout({ children }) {
   return (
     <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
-      <body>{children}</body>
+      <body className="us-site"><SiteChrome footer={<SiteFooter />}>{children}</SiteChrome></body>
     </html>
   );
 }

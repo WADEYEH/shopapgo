@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
+import OnThisPage from "./OnThisPage";
 
 // Article head: breadcrumb, DRY/WET/BASICS tag row, H1, lede, author + read-time row.
 // `tag` is the big Condensed word (string or nodes for the "DRY / WET" compound);
 // `tagColor` colors it when the tag is a single word.
-export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, title, lede, readTime }) {
+export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, title, lede, readTime, toc }) {
   return (
     <section style={{ background: gradient, borderBottom: `1px solid ${color.hairline}` }}>
       <div
@@ -30,11 +31,13 @@ export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, 
             flexWrap: "wrap",
           }}
         >
+          <Link href={routes.home} className="us-nav-link" style={{ color: color.tertiary, textDecoration: "none" }}>Home</Link>
+          <span aria-hidden="true">›</span>
           <Link href={routes.guides} className="us-nav-link" style={{ color: color.tertiary, textDecoration: "none" }}>
             Guides
           </Link>
-          <span aria-hidden="true">/</span>
-          <span>{crumb}</span>
+          <span aria-hidden="true">›</span>
+          <span aria-current="page">{crumb}</span>
         </nav>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <span
@@ -107,6 +110,7 @@ export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, 
           </span>
           <span style={{ fontSize: 13, color: color.tertiary }}>Updated Sep 2026 · {readTime}</span>
         </div>
+        {toc && <div className="us-article-top-toc"><OnThisPage items={toc} /></div>}
       </div>
     </section>
   );

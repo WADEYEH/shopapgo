@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { asset } from "@/lib/us/routes";
+import Link from "next/link";
+import { asset, routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
 import { track } from "@/lib/us/analytics";
 import AmazonCta from "./AmazonCta";
+import RoutineSelector from "./RoutineSelector";
 
 // Per-product content for the routine section. Copy is FTC-reviewed; do not edit.
 const PANEL = {
@@ -267,6 +269,7 @@ function Panel({ sku, playing, onPlay }) {
             {p.cta}
           </AmazonCta>
           <span style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet }}>Opens Amazon.com</span>
+          <Link className="us-text-link" href={sku === "d204" ? routes.coloredGlaze : routes.glazeCoating}>Application guide <span aria-hidden="true">→</span></Link>
         </div>
       </div>
     </div>
@@ -315,6 +318,12 @@ export default function RoutineSection({ sku, onPick }) {
           <p style={{ margin: 0, fontSize: "clamp(16px,1.3vw,19px)", lineHeight: 1.5, color: color.tertiary, maxWidth: 520, textWrap: "pretty" }}>
             Both work the same way—spray, spread, towel. The only decision is <em style={{ color: color.text, fontStyle: "normal" }}>when</em> you apply.
           </p>
+        </div>
+        <div className="us-routine-picker">
+          <p id="routine-q">When do you prefer to apply?</p>
+          <RoutineSelector sku={sku} onPick={onPick} labelledBy="routine-q" />
+          <span className="us-sr-only" aria-live="polite">Selected · {PANEL[sku].name}</span>
+          <Link href={routes.wetOrDry} className="us-text-link">Compare dry &amp; wet <span aria-hidden="true">→</span></Link>
         </div>
         <div
           style={{

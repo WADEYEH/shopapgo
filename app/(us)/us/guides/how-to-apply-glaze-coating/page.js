@@ -1,9 +1,6 @@
-import GuideHeader from "@/components/us/guides/GuideHeader";
-import GuideFooter from "@/components/us/guides/GuideFooter";
 import ArticleHead from "@/components/us/guides/ArticleHead";
 import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
-import OnThisPage from "@/components/us/guides/OnThisPage";
 import Callout from "@/components/us/guides/Callout";
 import StepRow from "@/components/us/guides/StepRow";
 import ProductAside from "@/components/us/guides/ProductAside";
@@ -99,11 +96,11 @@ export default function GlazeCoatingPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.glazeCoating }), faqLd(FAQ)]} />
-      <GuideHeader />
-      <main>
+      <main id="main">
         <ArticleHead
+          toc={TOC}
           gradient="linear-gradient(200deg,#121a0e 0%,#080A0C 55%)"
-          crumb="How to apply"
+          crumb="Glaze Coating · WET"
           tag="WET"
           tagColor={color.wet}
           tagLabel="Atomic Glaze Coating · D215"
@@ -118,8 +115,7 @@ export default function GlazeCoatingPage() {
           caption="Real application footage · APGO"
         />
 
-        <ArticleBody>
-          <OnThisPage items={TOC} />
+        <ArticleBody toc={TOC}>
 
           <p style={lead}>
             APGO Atomic Glaze Coating is applied <strong style={strong}>after washing, while the paint is still wet</strong>. The
@@ -330,7 +326,6 @@ export default function GlazeCoatingPage() {
 
         <RelatedGuides items={["coloredGlaze", "wetOrDry", "afterWashing"]} />
       </main>
-      <GuideFooter />
     </div>
   );
 }

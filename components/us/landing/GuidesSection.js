@@ -58,6 +58,7 @@ export default function GuidesSection() {
             Practical guidance for what comes after the wash—from drying and choosing an application routine to using your APGO product.
           </p>
         </div>
+        <Link href={routes.guides} className="us-text-link">All guides <span aria-hidden="true">→</span></Link>
         <div className="us-guides-grid" style={{ display: "grid", gap: "clamp(16px,2vw,24px)" }}>
           {ORDER.map((key) => {
             const c = CARDS[key];
