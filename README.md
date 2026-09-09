@@ -54,6 +54,7 @@ components/us/
 lib/us/
   routes.js             # 所有站內連結與素材路徑的唯一來源（US_BASE = "/us"）
   navigation.js         # 主選單、頁尾共用的分組與短標題；首頁段落目錄
+  company.js            # apgo.tw 公開公司資料、電話、地址、營業時間與預設客服信箱
   tokens.js             # 設計 tokens：色票、字體、產品基本資料
   config.js             # 讀取 NEXT_PUBLIC_APGO_US_* 環境變數（Amazon 網址、開關）
   faq.js                # 首頁 FAQ 文案（FAQ 區與 JSON-LD 共用）
@@ -76,7 +77,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 | `NEXT_PUBLIC_APGO_US_D204_AMAZON_URL` / `..._D215_AMAZON_URL` | 商品頁網址，必須是 `https://*.amazon.com/` |
 | `NEXT_PUBLIC_APGO_US_D204_LINK_READY` / `..._D215_LINK_READY` | 單品開關 |
 | `NEXT_PUBLIC_APGO_US_VIDEO_READY` | 施作影片核准後設 `true`（影片檔放 `public/us/assets/video/{sku}-application.mp4` 與 `{sku}-captions-en.vtt`） |
-| `NEXT_PUBLIC_APGO_US_SUPPORT_EMAIL` | 客服信箱，設了會顯示在首頁 footer |
+| `NEXT_PUBLIC_APGO_US_SUPPORT_EMAIL` | 六頁共用客服信箱；未設定或空白時預設 services@apgo.com.tw |
 | `NEXT_PUBLIC_APGO_US_D204_WASH_RESISTANCE` / `..._D215_...` | 耐洗次數文字，空白顯示「—」 |
 | `NEXT_PUBLIC_APGO_US_RANK_SOURCE` | No.1 排名來源註記 |
 | `NEXT_PUBLIC_APGO_US_SHOW_ORIGIN` | `false` 則 hero eyebrow 不顯示「Made in Taiwan」 |
@@ -90,7 +91,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 - 本頁目錄獨立於全站選單；文章在 1100px 以上使用右側固定目錄，其餘寬度放在文章頂部，手機預設收起。
 - DRY / WET 選擇器位於產品比較區；`#d204` / `#d215` 保留深連結及瀏覽器歷史切換。
 - 首頁手機購買列在 Hero、最後產品區或 Footer 可見，以及 Menu 開啟時隱藏；指南頁不顯示購買列。
-- 尚為 `#` 的法律／聯絡連結不顯示，客服信箱設定後才顯示。導覽入口文字可調整，產品與文章正文仍維持原核准文案。
+- 尚為 `#` 的法律／聯絡連結不顯示。Footer 使用 `company.js` 的公開公司資料及預設信箱，並區分 APGO 產品支援與 Amazon 訂單支援。導覽入口文字可調整，產品與文章正文仍維持原核准文案。
 - `npm test` 檢查 Amazon CTA 開關、網址驗證與點擊事件；`npm run build` 檢查正式建置。
 - 瀏覽器驗證：六頁 × 360 / 390 / 768 / 1024 / 1440px；確認菜單鍵盤操作、跨頁／段落跳轉、產品切換與 Footer 避讓。
 
@@ -101,7 +102,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 
 ### 上線前待補（設計交付包列出的空缺）
 
-- 兩個 Amazon 商品網址、客服信箱。
+- 兩個 Amazon 商品網址。
 - Privacy / Terms / Contact 連結（`lib/us/routes.js` 目前是 `#`）。
 - 施作影片 MP4 與英文字幕 VTT。
 - 耐洗次數數值。
