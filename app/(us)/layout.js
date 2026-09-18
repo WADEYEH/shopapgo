@@ -2,6 +2,7 @@ import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./us.css";
 import SiteChrome from "@/components/us/SiteChrome";
 import SiteFooter from "@/components/us/SiteFooter";
+import GtmScripts from "@/components/us/GtmScripts";
 import { SITE_URL } from "@/lib/site";
 
 const barlow = Barlow({
@@ -28,7 +29,10 @@ export const metadata = {
 export default function USLayout({ children }) {
   return (
     <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
-      <body className="us-site"><SiteChrome footer={<SiteFooter />}>{children}</SiteChrome></body>
+      <body className="us-site">
+        <SiteChrome footer={<SiteFooter />}>{children}</SiteChrome>
+        <GtmScripts />
+      </body>
     </html>
   );
 }

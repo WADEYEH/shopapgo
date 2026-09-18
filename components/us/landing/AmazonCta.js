@@ -6,7 +6,7 @@ import { track } from "@/lib/us/analytics";
 // Outbound Amazon CTA. Enabled only when the runtime config gates pass (see lib/us/config.js);
 // otherwise it renders without an href, with aria-disabled, and swallows clicks.
 export default function AmazonCta({ sku, placement, children, style, className = "us-btn" }) {
-  const url = amazonUrlFor(sku);
+  const url = amazonUrlFor(sku, placement);
   const disabled = !url;
   const onClick = (e) => {
     if (disabled) {

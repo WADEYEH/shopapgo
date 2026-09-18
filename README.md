@@ -47,10 +47,16 @@ app/
         how-to-apply-colored-glaze/page.js
         how-to-apply-glaze-coating/page.js
 components/us/
+  GtmScripts.js         # GTM 容器載入器，兩道閘門都通過才輸出
   SiteChrome.js         # 六頁共用 header、手機抽屜與選單狀態
   SiteFooter.js         # 六頁共用完整站點導航與客服資訊
   landing/              # 首頁各區塊（client components，含 DRY/WET 選擇器狀態）
   guides/               # 指南共用 article、麵包屑、響應式目錄元件
+app/
+  robots.js             # /robots.txt（必須在 app 根目錄，放進 route group 會失效）
+  sitemap.js            # /sitemap.xml，六個可索引頁面，刻意不含 308 轉走的 /
+lib/
+  site.js               # SITE_URL：正式網域的唯一來源，metadataBase、JSON-LD、sitemap 共用
 lib/us/
   routes.js             # 所有站內連結與素材路徑的唯一來源（US_BASE = "/us"）
   navigation.js         # 主選單、頁尾共用的分組與短標題；首頁段落目錄
@@ -81,6 +87,10 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 | `NEXT_PUBLIC_APGO_US_D204_WASH_RESISTANCE` / `..._D215_...` | 耐洗次數文字，空白顯示「—」 |
 | `NEXT_PUBLIC_APGO_US_RANK_SOURCE` | No.1 排名來源註記 |
 | `NEXT_PUBLIC_APGO_US_SHOW_ORIGIN` | `false` 則 hero eyebrow 不顯示「Made in Taiwan」 |
+| `NEXT_PUBLIC_APGO_US_ANALYTICS_READY` | 分析總開關，只在 Vercel Production 設 `true`，預覽與本機留空才不會汙染 GA4 |
+| `NEXT_PUBLIC_APGO_US_GTM_ID` | GTM 容器 ID，格式 `GTM-XXXXXXX`；GA4 評估 ID 設在 GTM 後台，不進程式碼 |
+| `NEXT_PUBLIC_APGO_US_AMAZON_ATTRIBUTION` | 附加到商品網址的歸因查詢字串，無前置 `?`；支援 `{sku}` / `{placement}` |
+| `NEXT_PUBLIC_APGO_US_D204_AMAZON_ATTRIBUTION` / `..._D215_...` | 單品歸因，會覆寫上面那一項 |
 
 完整清單見 `.env.example`。
 
@@ -94,6 +104,20 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 - 尚為 `#` 的法律／聯絡連結不顯示。Footer 使用 `company.js` 的公開公司資料及預設信箱，並區分 APGO 產品支援與 Amazon 訂單支援。導覽入口文字可調整，產品與文章正文仍維持原核准文案。
 - `npm test` 檢查 Amazon CTA 開關、網址驗證與點擊事件；`npm run build` 檢查正式建置。
 - 瀏覽器驗證：六頁 × 360 / 390 / 768 / 1024 / 1440px；確認菜單鍵盤操作、跨頁／段落跳轉、產品切換與 Footer 避讓。
+
+### 分析與搜尋
+
+GA4 透過 GTM 載入，程式碼裡只有容器 ID。`lib/us/analytics.js` 推送六個事件到 `dataLayer`，
+GTM 後台再把它們對應成 GA4 事件：`us_referral_landing_view`、`scroll_depth`、
+`fit_selector_answer`、`amazon_referral_click`、`faq_expand`、`video_start`。
+**這些事件名稱是跟 GTM 容器之間的契約，改名會靜默弄壞後台的代碼，而且不會有任何建置錯誤。**
+
+容器只在 `NEXT_PUBLIC_APGO_US_ANALYTICS_READY=true` 且容器 ID 格式正確時載入，兩者都預設關閉。
+不要改用 `NODE_ENV` 判斷：Vercel 建預覽部署時 `NODE_ENV` 同樣是 `production`。
+
+`/robots.txt` 和 `/sitemap.xml` 由 `app/robots.js` 與 `app/sitemap.js` 產生。新增頁面時要一併加進
+`app/sitemap.js` 的 `pages` 陣列，忘了的話 `npm test` 會紅字。`lastModified` 是文案最後修改的日期，
+改樣式不用動。Search Console 用 Cloudflare DNS TXT 驗證的網域資源，那筆 TXT 記錄不能刪。
 
 ### 之後要把美國站搬到根路徑
 
