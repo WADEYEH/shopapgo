@@ -6,12 +6,14 @@ import Callout from "@/components/us/guides/Callout";
 import FaqList from "@/components/us/guides/FaqList";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import EndCtaBand from "@/components/us/guides/EndCtaBand";
-import JsonLd, { articleLd, faqLd } from "@/components/us/guides/JsonLd";
+import JsonLd, { articleLd, breadcrumbLd, faqLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { container, h2, h2Balance, h2Faq, h3, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
 
 const TITLE = "APGO paint protection: wet or dry application?";
+// Shared by the visible breadcrumb and the BreadcrumbList JSON-LD so they cannot drift.
+const CRUMB = "Compare dry & wet";
 const LEDE = "Atomic Colored Glaze or Atomic Glaze Coating? Start with your wash routine. The clearest difference is when you apply them.";
 const HERO = asset("application/d204-step-1.webp");
 
@@ -98,12 +100,18 @@ const TOC = [
 export default function WetOrDryPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
-      <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.wetOrDry }), faqLd(FAQ)]} />
+      <JsonLd
+        data={[
+          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.wetOrDry }),
+          breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
+          faqLd(FAQ),
+        ]}
+      />
       <main id="main">
         <ArticleHead
           toc={TOC}
           gradient="linear-gradient(160deg,#16120f 0%,#080A0C 55%)"
-          crumb="Compare dry & wet"
+          crumb={CRUMB}
           tag={
             <>
               <span style={{ color: color.dry }}>DRY</span>

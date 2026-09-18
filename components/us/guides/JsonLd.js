@@ -16,6 +16,21 @@ export function articleLd({ headline, description, image, route }) {
   };
 }
 
+// Breadcrumb trail matching the visible breadcrumb nav. `route` is a site-relative
+// path; leave it off the last item, which is the page the reader is already on.
+export function breadcrumbLd(trail) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map(({ name, route }, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name,
+      ...(route ? { item: SITE_URL + route } : {}),
+    })),
+  };
+}
+
 // FAQPage schema from the same [{ q, a }] array that renders the <details> rows.
 export function faqLd(items) {
   return {

@@ -9,12 +9,14 @@ import FaqList from "@/components/us/guides/FaqList";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import EndCtaBand from "@/components/us/guides/EndCtaBand";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
-import JsonLd, { articleLd, faqLd } from "@/components/us/guides/JsonLd";
+import JsonLd, { articleLd, breadcrumbLd, faqLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { h2, h2Faq, section, lead, body, strong, finePrint, chip } from "@/components/us/guides/styles";
 
 const TITLE = "How to apply APGO Atomic Glaze Coating";
+// Shared by the visible breadcrumb and the BreadcrumbList JSON-LD so they cannot drift.
+const CRUMB = "Glaze Coating · WET";
 const LEDE =
   "Apply it right after rinsing, while the paint is still wet—then towel-dry the car and finish with a coral-fleece buff. Here's the full routine, tool by tool.";
 const HERO = asset("application/d215-step-3.webp");
@@ -95,12 +97,18 @@ const PLACEHOLDER_LABEL = "Buffing the dry paint with a clean coral-fleece micro
 export default function GlazeCoatingPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
-      <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.glazeCoating }), faqLd(FAQ)]} />
+      <JsonLd
+        data={[
+          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.glazeCoating }),
+          breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
+          faqLd(FAQ),
+        ]}
+      />
       <main id="main">
         <ArticleHead
           toc={TOC}
           gradient="linear-gradient(200deg,#121a0e 0%,#080A0C 55%)"
-          crumb="Glaze Coating · WET"
+          crumb={CRUMB}
           tag="WET"
           tagColor={color.wet}
           tagLabel="Atomic Glaze Coating · D215"

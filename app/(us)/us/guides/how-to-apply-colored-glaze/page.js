@@ -9,12 +9,14 @@ import FaqList from "@/components/us/guides/FaqList";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import EndCtaBand from "@/components/us/guides/EndCtaBand";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
-import JsonLd, { articleLd, faqLd } from "@/components/us/guides/JsonLd";
+import JsonLd, { articleLd, breadcrumbLd, faqLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color } from "@/lib/us/tokens";
 import { h2, h2Faq, section, lead, body, strong, finePrint, chip, label } from "@/components/us/guides/styles";
 
 const TITLE = "How to apply APGO Atomic Colored Glaze";
+// Shared by the visible breadcrumb and the BreadcrumbList JSON-LD so they cannot drift.
+const CRUMB = "Colored Glaze · DRY";
 const LEDE =
   "The dry-surface routine, start to finish: how to prep the paint, how little product to use, when to buff, and what to do for the first 24 hours.";
 const HERO = asset("application/d204-step-1.webp");
@@ -97,12 +99,18 @@ const needList = { margin: 0, padding: 0, listStyle: "none", display: "flex", fl
 export default function ColoredGlazePage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
-      <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.coloredGlaze }), faqLd(FAQ)]} />
+      <JsonLd
+        data={[
+          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.coloredGlaze }),
+          breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
+          faqLd(FAQ),
+        ]}
+      />
       <main id="main">
         <ArticleHead
           toc={TOC}
           gradient="linear-gradient(160deg,#1a1214 0%,#080A0C 55%)"
-          crumb="Colored Glaze · DRY"
+          crumb={CRUMB}
           tag="DRY"
           tagColor={color.dry}
           tagLabel="Atomic Colored Glaze · D204"

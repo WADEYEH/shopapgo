@@ -1,9 +1,12 @@
 import Link from "next/link";
 import GuideButton from "@/components/us/guides/GuideButton";
+import JsonLd, { breadcrumbLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 
 const TITLE = "APGO car care guides";
+// Shared by the visible breadcrumb and the BreadcrumbList JSON-LD so they cannot drift.
+const CRUMB = "Guides";
 const DESCRIPTION =
   "Practical guidance for what comes after the wash—from drying and choosing an application routine to using your APGO product.";
 
@@ -29,6 +32,7 @@ const cardExcerpt = { fontSize: 15, lineHeight: 1.5, color: color.tertiary };
 export default function GuidesPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
+      <JsonLd data={breadcrumbLd([{ name: "Home", route: routes.home }, { name: CRUMB }])} />
       <main id="main">
         <section style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div
@@ -55,7 +59,7 @@ export default function GuidesPage() {
             >
               <span style={{ width: 28, height: 2, background: color.orange }}></span>Guides
             </div>
-            <nav aria-label="Breadcrumb" className="us-breadcrumb"><Link href={routes.home}>Home</Link><span aria-hidden="true">›</span><span aria-current="page">Guides</span></nav>
+            <nav aria-label="Breadcrumb" className="us-breadcrumb"><Link href={routes.home}>Home</Link><span aria-hidden="true">›</span><span aria-current="page">{CRUMB}</span></nav>
             <h1
               style={{
                 margin: 0,

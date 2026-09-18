@@ -6,12 +6,14 @@ import DashList from "@/components/us/guides/DashList";
 import FaqList from "@/components/us/guides/FaqList";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
-import JsonLd, { articleLd, faqLd } from "@/components/us/guides/JsonLd";
+import JsonLd, { articleLd, breadcrumbLd, faqLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { h2, h2Balance, h2Faq, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
 
 const TITLE = "What to do after washing your car";
+// Shared by the visible breadcrumb and the BreadcrumbList JSON-LD so they cannot drift.
+const CRUMB = "After washing your car";
 const LEDE =
   "A simple paint-care routine. After the final rinse, focus on three things: keeping the paint clean, removing the water, and following the correct directions for any care product you choose to use.";
 // Full lede (196 chars): trimming at the first sentence boundary would leave a meaningless description.
@@ -66,12 +68,18 @@ const routineCard = (accent) => ({
 export default function AfterWashingPage() {
   return (
     <div style={{ minHeight: "100vh", background: color.bg }}>
-      <JsonLd data={[articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.afterWashing }), faqLd(FAQ)]} />
+      <JsonLd
+        data={[
+          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.afterWashing }),
+          breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
+          faqLd(FAQ),
+        ]}
+      />
       <main id="main">
         <ArticleHead
           toc={TOC}
           gradient="linear-gradient(160deg,#12151a 0%,#080A0C 55%)"
-          crumb="After washing your car"
+          crumb={CRUMB}
           tag="BASICS"
           tagColor={color.tertiary}
           tagLabel="Wash routine"
