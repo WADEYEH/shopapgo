@@ -1,4 +1,4 @@
-export const SITE = "https://www.shopapgo.com";
+import { SITE_URL } from "@/lib/site";
 
 const ORG = { "@type": "Organization", name: "APGO" };
 
@@ -9,10 +9,10 @@ export function articleLd({ headline, description, image, route }) {
     "@type": "Article",
     headline,
     description,
-    image: SITE + image,
+    image: SITE_URL + image,
     author: ORG,
     publisher: ORG,
-    mainEntityOfPage: SITE + route,
+    mainEntityOfPage: SITE_URL + route,
   };
 }
 

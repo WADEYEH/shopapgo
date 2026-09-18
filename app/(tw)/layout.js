@@ -1,4 +1,7 @@
+import { SITE_URL } from "@/lib/site";
+
 export const metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Shop APGO",
   description: "APGO 汽車護理 官方商城",
 };

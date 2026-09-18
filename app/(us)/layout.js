@@ -2,6 +2,7 @@ import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./us.css";
 import SiteChrome from "@/components/us/SiteChrome";
 import SiteFooter from "@/components/us/SiteFooter";
+import { SITE_URL } from "@/lib/site";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -18,7 +19,7 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata = {
-  metadataBase: new URL("https://www.shopapgo.com"),
+  metadataBase: new URL(SITE_URL),
   title: { default: "APGO Auto Care · US", template: "%s · APGO" },
   description: "APGO Atomic Colored Glaze and Atomic Glaze Coating. Professional finish care, made simple. Available on Amazon.com.",
   openGraph: { siteName: "APGO", type: "website", locale: "en_US" },
