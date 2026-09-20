@@ -25,19 +25,24 @@ function routesOnDisk(dir = path.join(ROOT, "app"), segments = []) {
 }
 
 function sitemapEntries() {
-  const routes = compile("lib/us/routes.js");
-  const site = compile("lib/site.js");
   const { default: sitemap } = compile("app/sitemap.js", {
-    aliases: { "@/lib/us/routes": routes, "@/lib/site": site },
+    aliases: { "@/lib/us/routes": compile("lib/us/routes.js"), "@/lib/site": compile("lib/site.js") },
   });
   return sitemap();
 }
 
-// "/" is excluded on purpose: next.config.mjs 308s it to /us.
-const REDIRECTED = "/";
+// "/" is excluded from the sitemap only while next.config.mjs 308s it to the US home.
+// Derived rather than hardcoded: after the US_BASE = "" migration the README anticipates,
+// routes.home becomes "/" itself, the redirect goes away, and "/" must then be listed.
+// Without this the whole suite would fail misleadingly on the day of that migration.
+function redirectedRoot() {
+  const { routes } = compile("lib/us/routes.js");
+  return routes.home === "/" ? null : "/";
+}
 
 test("the sitemap lists every page on disk except the redirected root", () => {
-  const onDisk = new Set(routesOnDisk().filter((r) => r !== REDIRECTED));
+  const redirected = redirectedRoot();
+  const onDisk = new Set(routesOnDisk().filter((r) => r !== redirected));
   const inSitemap = new Set(sitemapEntries().map((e) => new URL(e.url).pathname));
   const missing = [...onDisk].filter((r) => !inSitemap.has(r));
   const extra = [...inSitemap].filter((r) => !onDisk.has(r));
@@ -45,8 +50,10 @@ test("the sitemap lists every page on disk except the redirected root", () => {
   assert.deepEqual(extra, [], `app/sitemap.js lists a URL with no page.js: ${extra.join(", ")}`);
 });
 
-test("the redirected root is never advertised", () => {
-  for (const { url } of sitemapEntries()) assert.notEqual(new URL(url).pathname, REDIRECTED);
+test("a root that only redirects is never advertised", () => {
+  const redirected = redirectedRoot();
+  if (redirected === null) return; // "/" is a real page; nothing to exclude.
+  for (const { url } of sitemapEntries()) assert.notEqual(new URL(url).pathname, redirected);
 });
 
 test("every entry is an absolute URL on the canonical origin with a valid lastModified", () => {

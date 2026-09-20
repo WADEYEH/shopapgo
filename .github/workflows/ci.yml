@@ -1,0 +1,23 @@
+# Vercel only runs `next build`, so without this workflow `npm test` never runs on a
+# push and the guards in tests/ are dead weight. The sitemap drift test in particular
+# only earns its keep if something executes it automatically: a new guide page that is
+# missing from app/sitemap.js otherwise builds green and ships with a silent indexing gap.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
