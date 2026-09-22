@@ -19,6 +19,7 @@ const pages = [
   { path: routes.wetOrDry, lastModified: "2026-09-08" },
   { path: routes.coloredGlaze, lastModified: "2026-09-08" },
   { path: routes.glazeCoating, lastModified: "2026-09-08" },
+  { path: routes.waxVsSprayCoating, lastModified: "2026-09-22" },
 ];
 
 export default function sitemap() {

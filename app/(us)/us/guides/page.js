@@ -169,6 +169,32 @@ export default function GuidesPage() {
                 </span>
                 <GuideButton>Compare the two routines →</GuideButton>
               </Link>
+              <Link
+                href={routes.waxVsSprayCoating}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: color.text,
+                  borderTop: `4px solid ${color.orange}`,
+                  paddingTop: 14,
+                }}
+              >
+                <img
+                  src={asset("generated/wax-vs-spray-coating-time-steps.png")}
+                  alt=""
+                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
+                />
+                <span style={cardLabel(color.orange)}>Compare · Finish strategies</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
+                  Car Wax vs Spray Ceramic Coating
+                </span>
+                <span style={cardExcerpt}>
+                  Compare traditional car wax and spray ceramic coating on time, steps, and how long the finish holds—without another how-to tutorial.
+                </span>
+                <GuideButton>Read the comparison →</GuideButton>
+              </Link>
             </div>
           </div>
         </section>
