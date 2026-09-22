@@ -1,7 +1,6 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import ArticleHead from "@/components/us/guides/ArticleHead";
-import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
@@ -83,9 +82,10 @@ export default function WaxVsSprayCoatingPage() {
           title={TITLE}
           lede={LEDE}
           readTime="5 min read"
+          heroSrc={COVER}
+          heroAlt="Car wax vs spray ceramic coating comparison"
+          heroCaption="Compare finish strategies"
         />
-
-        <HeroFigure src={COVER} alt="Car wax vs spray ceramic coating comparison" />
 
         <ArticleBody toc={TOC}>
           <p style={lead}>

@@ -1,5 +1,4 @@
 import ArticleHead from "@/components/us/guides/ArticleHead";
-import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import Callout from "@/components/us/guides/Callout";
 import StepRow from "@/components/us/guides/StepRow";
@@ -115,12 +114,9 @@ export default function GlazeCoatingPage() {
           title={TITLE}
           lede={LEDE}
           readTime="5 min read"
-        />
-
-        <HeroFigure
-          src={HERO}
-          alt="Spraying APGO Atomic Glaze Coating onto a hood that is still wet after rinsing"
-          caption="Real application footage · APGO"
+          heroSrc={HERO}
+          heroAlt="Spraying APGO Atomic Glaze Coating onto a hood that is still wet after rinsing"
+          heroCaption="Real application footage · APGO"
         />
 
         <ArticleBody toc={TOC}>

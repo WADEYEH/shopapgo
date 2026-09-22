@@ -1,6 +1,5 @@
 import { Fragment } from "react";
 import ArticleHead from "@/components/us/guides/ArticleHead";
-import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
@@ -110,9 +109,10 @@ export default function CoatingOverWaxPage() {
           title={TITLE}
           lede={LEDE}
           readTime="4 min read"
+          heroSrc={COVER}
+          heroAlt="Ceramic coating over wax compatibility guide"
+          heroCaption="Check before you spray"
         />
-
-        <HeroFigure src={COVER} alt="Ceramic coating over wax compatibility guide" />
 
         <ArticleBody toc={TOC}>
           <p style={lead}>

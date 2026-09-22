@@ -3,10 +3,11 @@ import { routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import OnThisPage from "./OnThisPage";
 
-// Article head: breadcrumb, DRY/WET/BASICS tag row, H1, lede, author + read-time row.
+// Article head: breadcrumb, DRY/WET/BASICS tag row, H1, lede, author + read-time row, optional hero, TOC.
 // `tag` is the big Condensed word (string or nodes for the "DRY / WET" compound);
 // `tagColor` colors it when the tag is a single word.
-export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, title, lede, readTime, toc }) {
+// `heroSrc`, `heroAlt`, `heroCaption` render a 16:9 cover image after the author row, before TOC.
+export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, title, lede, readTime, heroSrc, heroAlt, heroCaption, toc }) {
   return (
     <section style={{ background: gradient, borderBottom: `1px solid ${color.hairline}` }}>
       <div
@@ -110,6 +111,20 @@ export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, 
           </span>
           <span style={{ fontSize: 13, color: color.tertiary }}>Updated Sep 2026 · {readTime}</span>
         </div>
+        {heroSrc && (
+          <figure style={{ margin: 0 }}>
+            <img
+              src={heroSrc}
+              alt={heroAlt}
+              style={{ display: "block", width: "100%", aspectRatio: "16/9", objectFit: "cover" }}
+            />
+            {heroCaption && (
+              <figcaption style={{ fontSize: 12, color: color.quiet2, paddingTop: 8, letterSpacing: ".06em" }}>
+                {heroCaption}
+              </figcaption>
+            )}
+          </figure>
+        )}
         {toc && <div className="us-article-top-toc"><OnThisPage items={toc} /></div>}
       </div>
     </section>

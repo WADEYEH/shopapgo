@@ -1,7 +1,6 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import ArticleHead from "@/components/us/guides/ArticleHead";
-import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
@@ -114,9 +113,10 @@ export default function HowOftenReapplyPage() {
           title={TITLE}
           lede={LEDE}
           readTime="4 min read"
+          heroSrc={COVER}
+          heroAlt="How often to apply ceramic spray coating"
+          heroCaption="Follow the paint's signals"
         />
-
-        <HeroFigure src={COVER} alt="How often to apply ceramic spray coating" />
 
         <ArticleBody toc={TOC}>
           <p style={lead}>
