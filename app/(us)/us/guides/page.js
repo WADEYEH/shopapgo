@@ -195,6 +195,33 @@ export default function GuidesPage() {
                 </span>
                 <GuideButton>Read the comparison →</GuideButton>
               </Link>
+              <Link
+                href={routes.coatingOverWax}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: color.text,
+                  borderTop: `4px solid ${color.orange}`,
+                  paddingTop: 14,
+                }}
+              >
+                <img
+                  src={asset("generated/coating-over-wax-decision-checklist.png")}
+                  alt=""
+                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
+                />
+                <span style={cardLabel(color.orange)}>Check · Compatibility</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
+                  Can I apply ceramic coating over wax?
+                </span>
+                <span style={cardExcerpt}>
+                  Your paint may already have something on it. Use this checklist to decide whether to spray now or clear the surface
+                  first.
+                </span>
+                <GuideButton>Read the compatibility guide →</GuideButton>
+              </Link>
             </div>
           </div>
         </section>
