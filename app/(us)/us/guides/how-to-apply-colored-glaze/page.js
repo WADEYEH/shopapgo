@@ -1,5 +1,4 @@
 import ArticleHead from "@/components/us/guides/ArticleHead";
-import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import Callout from "@/components/us/guides/Callout";
 import StepRow from "@/components/us/guides/StepRow";
@@ -117,12 +116,9 @@ export default function ColoredGlazePage() {
           title={TITLE}
           lede={LEDE}
           readTime="6 min read"
-        />
-
-        <HeroFigure
-          src={HERO}
-          alt="Spraying a light mist of APGO Atomic Colored Glaze onto a clean, dry hood panel"
-          caption="Real application footage · APGO"
+          heroSrc={HERO}
+          heroAlt="Spraying a light mist of APGO Atomic Colored Glaze onto a clean, dry hood panel"
+          heroCaption="Real application footage · APGO"
         />
 
         <ArticleBody toc={TOC}>

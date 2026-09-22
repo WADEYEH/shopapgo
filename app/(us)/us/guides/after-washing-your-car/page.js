@@ -1,6 +1,5 @@
 import Link from "next/link";
 import ArticleHead from "@/components/us/guides/ArticleHead";
-import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import DashList from "@/components/us/guides/DashList";
 import FaqList from "@/components/us/guides/FaqList";
@@ -86,9 +85,10 @@ export default function AfterWashingPage() {
           title={TITLE}
           lede={LEDE}
           readTime="5 min read"
+          heroSrc={HERO}
+          heroAlt="Rinsing a car after washing"
+          heroCaption="Real footage · APGO"
         />
-
-        <HeroFigure src={HERO} alt="Rinsing a car after washing" caption="Real footage · APGO" />
 
         <ArticleBody toc={TOC}>
 
