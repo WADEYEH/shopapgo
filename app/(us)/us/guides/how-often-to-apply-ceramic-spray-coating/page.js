@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import ArticleHead from "@/components/us/guides/ArticleHead";
+import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
@@ -12,7 +13,8 @@ const TITLE = "How Often to Apply Ceramic Spray Coating";
 const CRUMB = "Reapply cadence";
 const LEDE =
   "Reapply ceramic spray coating when paint signals fade—not on a fixed month. Use D204's ~6-month ceiling as a landmark, then watch water beading and gloss.";
-const HERO = asset("generated/how-often-reapply-signals-checklist.png");
+const COVER = asset("generated/how-often-reapply-hero.png");
+const INLINE_CHECKLIST = asset("generated/how-often-reapply-signals-checklist.png");
 
 export const metadata = {
   title: `${TITLE} · APGO`,
@@ -22,7 +24,7 @@ export const metadata = {
     title: `${TITLE} · APGO`,
     description: LEDE,
     url: routes.howOftenReapply,
-    images: [HERO],
+    images: [COVER],
   },
 };
 
@@ -97,7 +99,7 @@ export default function HowOftenReapplyPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.howOftenReapply }),
+          articleLd({ headline: TITLE, description: LEDE, image: COVER, route: routes.howOftenReapply }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
         ]}
       />
@@ -113,6 +115,8 @@ export default function HowOftenReapplyPage() {
           lede={LEDE}
           readTime="4 min read"
         />
+
+        <HeroFigure src={COVER} alt="How often to apply ceramic spray coating" />
 
         <ArticleBody toc={TOC}>
           <p style={lead}>
@@ -196,7 +200,7 @@ export default function HowOftenReapplyPage() {
 
             <figure style={{ margin: "24px 0 0" }}>
               <img
-                src={asset("generated/how-often-reapply-signals-checklist.png")}
+                src={INLINE_CHECKLIST}
                 alt="Three reapply signals—weaker beading, flatter gloss, dirt sticks sooner—leading to Reapply or Keep monitoring"
                 style={{ display: "block", width: "100%", maxWidth: 680 }}
               />

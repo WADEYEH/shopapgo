@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import ArticleHead from "@/components/us/guides/ArticleHead";
+import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
@@ -12,13 +13,14 @@ const TITLE = "Can I Apply Ceramic Coating Over Wax?";
 const CRUMB = "Coating over wax";
 const LEDE =
   "Don't stack ceramic coating over wax by default. Use this checklist—bare paint, old wax, or unknown film—before you spray.";
-const HERO = asset("generated/coating-over-wax-decision-checklist.png");
+const COVER = asset("generated/coating-over-wax-hero.png");
+const INLINE_CHECKLIST = asset("generated/coating-over-wax-decision-checklist.png");
 
 export const metadata = {
   title: `${TITLE} · APGO`,
   description: LEDE,
   alternates: { canonical: routes.coatingOverWax },
-  openGraph: { title: `${TITLE} · APGO`, description: LEDE, url: routes.coatingOverWax, images: [HERO] },
+  openGraph: { title: `${TITLE} · APGO`, description: LEDE, url: routes.coatingOverWax, images: [COVER] },
 };
 
 const TOC = [
@@ -93,7 +95,7 @@ export default function CoatingOverWaxPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.coatingOverWax }),
+          articleLd({ headline: TITLE, description: LEDE, image: COVER, route: routes.coatingOverWax }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
         ]}
       />
@@ -109,6 +111,8 @@ export default function CoatingOverWaxPage() {
           lede={LEDE}
           readTime="4 min read"
         />
+
+        <HeroFigure src={COVER} alt="Ceramic coating over wax compatibility guide" />
 
         <ArticleBody toc={TOC}>
           <p style={lead}>
@@ -206,7 +210,7 @@ export default function CoatingOverWaxPage() {
 
             <figure style={{ margin: "24px 0 0" }}>
               <img
-                src={asset("generated/coating-over-wax-decision-checklist.png")}
+                src={INLINE_CHECKLIST}
                 alt="Decision checklist: bare clear coat vs traditional wax vs old or unknown coating"
                 style={{ display: "block", width: "100%", maxWidth: 680 }}
               />

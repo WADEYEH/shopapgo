@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import ArticleHead from "@/components/us/guides/ArticleHead";
+import HeroFigure from "@/components/us/guides/HeroFigure";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
@@ -12,7 +13,8 @@ const TITLE = "Car Wax vs Spray Ceramic Coating: Which Finish Is Worth Your Time
 const CRUMB = "Wax vs spray coating";
 const LEDE =
   "Compare traditional car wax and spray ceramic coating on time, steps, and how long the finish holds—without another how-to tutorial.";
-const HERO = asset("generated/wax-vs-spray-coating-time-steps.png");
+const COVER = asset("generated/car-wax-vs-spray-hero.png");
+const INLINE_COMPARISON = asset("generated/wax-vs-spray-coating-time-steps.png");
 
 export const metadata = {
   title: `${TITLE} · APGO`,
@@ -22,7 +24,7 @@ export const metadata = {
     title: `${TITLE} · APGO`,
     description: LEDE,
     url: routes.waxVsSprayCoating,
-    images: [HERO],
+    images: [COVER],
   },
 };
 
@@ -66,7 +68,7 @@ export default function WaxVsSprayCoatingPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: TITLE, description: LEDE, image: HERO, route: routes.waxVsSprayCoating }),
+          articleLd({ headline: TITLE, description: LEDE, image: COVER, route: routes.waxVsSprayCoating }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
         ]}
       />
@@ -82,6 +84,8 @@ export default function WaxVsSprayCoatingPage() {
           lede={LEDE}
           readTime="5 min read"
         />
+
+        <HeroFigure src={COVER} alt="Car wax vs spray ceramic coating comparison" />
 
         <ArticleBody toc={TOC}>
           <p style={lead}>
@@ -150,7 +154,7 @@ export default function WaxVsSprayCoatingPage() {
             </div>
             <figure style={{ margin: 0 }}>
               <img
-                src={asset("generated/wax-vs-spray-coating-time-steps.png")}
+                src={INLINE_COMPARISON}
                 alt="Side-by-side comparison: Traditional wax (Apply, Wait/haze, Buff, Often re-pass) vs Dry spray coating (Spray, Spread, Towel)"
                 style={{ display: "block", width: "100%", aspectRatio: "16/9", objectFit: "contain", background: color.raised }}
               />
