@@ -32,6 +32,13 @@ export const CARDS = {
     labelColor: color.tertiary,
     title: "What to do after washing your car",
   },
+  waxVsSprayCoating: {
+    href: routes.waxVsSprayCoating,
+    img: asset("generated/wax-vs-spray-coating-time-steps.png"),
+    label: "Compare",
+    labelColor: color.orange,
+    title: "Car Wax vs Spray Ceramic Coating",
+  },
 };
 
 // items: array of CARDS keys, in display order.
