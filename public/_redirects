@@ -1,0 +1,6 @@
+# Cloudflare Pages redirects
+# https://developers.cloudflare.com/pages/configuration/redirects/
+#
+# Root redirect to US landing page (was previously handled by next.config.mjs).
+# 301 = permanent redirect (matches the previous Next.js permanent:true behavior).
+/ /us 301

@@ -1,18 +1,58 @@
 # shopapgo
 
-shopapgo.com 的網站原始碼。Next.js (App Router) 專案，部署在 Vercel。
+shopapgo.com 的網站原始碼。Next.js (App Router) 專案，正在從 Vercel 遷移到 Cloudflare Pages 靜態匯出。
 
 ## 架構
 
 | 層 | 設定 |
 |---|---|
 | 程式碼 | GitHub `WADEYEH/shopapgo`，production 分支 `main` |
-| 部署 | Vercel 專案 `shopapgo`（team: wade's projects），已連結上方 repo |
+| 部署 | **遷移中**：Vercel 專案 `shopapgo` 仍接收流量；Cloudflare Pages 靜態匯出準備中 |
 | 域名 | `shopapgo.com` → 308 轉到 `www.shopapgo.com`；www 指向 Production |
-| DNS | Cloudflare 託管；`@` A 記錄 → Vercel、`www` CNAME → `cname.vercel-dns.com`，Proxy 關閉（DNS only） |
-| SSL | Vercel 自動簽發 |
+| DNS | Cloudflare 託管；**目前**仍指向 Vercel（`@` A 記錄、`www` CNAME → `cname.vercel-dns.com`） |
+| SSL | Vercel 自動簽發（切換 Cloudflare Pages 後由 Cloudflare 簽發） |
 
 Vercel 帳號的 GitHub 連結是 `WADEYEH`；本機 git 以 `anpuuuuu`（collaborator）推送。
+
+## Cloudflare Pages 遷移
+
+網站正在從 Vercel 遷移到 Cloudflare Pages 作為靜態 HTML 匯出。**DNS 尚未切換**，production 流量仍走 Vercel。
+
+### 靜態匯出設定
+
+`next.config.mjs` 設定 `output: "export"`，建置後產生 `out/` 目錄，適用於 Cloudflare Pages：
+
+| 設定 | 值 |
+|---|---|
+| Build command | `npm run build`（或 `npx next build`） |
+| Output directory | `out` |
+| Framework | Next.js (Static HTML Export) |
+
+### 根路徑重導（雙主機期間）
+
+原本 `next.config.mjs` 的 `redirects()` 函數（`/ → /us` 301）在靜態匯出模式不支援。
+遷移期間需要兩套重導向機制，分別給 Vercel 和 Cloudflare Pages 使用：
+
+| 檔案 | 平台 | 說明 |
+|------|------|------|
+| `vercel.json` | Vercel | DNS 切換前，Vercel production 使用此設定 |
+| `public/_redirects` | Cloudflare Pages | DNS 切換後，Cloudflare Pages 使用此設定 |
+
+兩者都設定 `/ → /us` 301 永久重導向。**DNS 切換到 Cloudflare Pages 後**，可選擇移除 `vercel.json` 中的 redirects 區塊（若不再需要 Vercel 部署）。
+
+### 遷移階段
+
+1. **Phase 1**（本 PR）：啟用靜態匯出、設定 `_redirects`、更新文件
+2. **Phase 2**：在 Cloudflare Dashboard 建立 Pages 專案、設定環境變數、驗證預覽部署
+3. **Phase 3**：切換 DNS（`www` CNAME → Pages 專案、`@` 轉址）、停用 Vercel 部署
+
+### 驗證靜態匯出
+
+```bash
+npm run build           # 產生 out/ 目錄
+ls out/                 # 確認 index.html、us.html、_redirects、sitemap.xml 等
+npx serve out           # 本地預覽（需另裝 serve）
+```
 
 ## 日常工作流
 
@@ -121,8 +161,8 @@ GTM 後台再把它們對應成 GA4 事件：`us_referral_landing_view`、`scrol
 
 ### 之後要把美國站搬到根路徑
 
-- **目前狀態**：`next.config.mjs` 已設定 `/` 308 轉到 `/us`。台灣站要用 root 時把那段 `redirects` 刪掉即可。
-- **真的搬到 /**：把 `lib/us/routes.js` 的 `US_BASE` 改成 `""`，把 `app/(us)/us/*` 移到 `app/(us)/*`，並為舊的 `/us/*` 加 redirect。
+- **目前狀態**：`public/_redirects` 設定 `/` 301 轉到 `/us`。台灣站要用 root 時把那行刪掉即可。
+- **真的搬到 /**：把 `lib/us/routes.js` 的 `US_BASE` 改成 `""`，把 `app/(us)/us/*` 移到 `app/(us)/*`，並在 `public/_redirects` 為舊的 `/us/*` 加 redirect。
 
 ### 上線前待補（設計交付包列出的空缺）
 

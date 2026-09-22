@@ -1,7 +1,10 @@
 import { routes } from "@/lib/us/routes";
 import { SITE_URL } from "@/lib/site";
 
-// Indexable pages only. "/" is left out on purpose: next.config.mjs 308s it to /us,
+// Required for Next.js static export (output: "export").
+export const dynamic = "force-static";
+
+// Indexable pages only. "/" is left out on purpose: public/_redirects 301s it to /us,
 // and a redirecting URL in a sitemap is a permanent "Page with redirect" row in
 // Search Console.
 //
