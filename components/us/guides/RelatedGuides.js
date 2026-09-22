@@ -39,6 +39,13 @@ export const CARDS = {
     labelColor: color.orange,
     title: "Car Wax vs Spray Ceramic Coating",
   },
+  coatingOverWax: {
+    href: routes.coatingOverWax,
+    img: asset("generated/coating-over-wax-decision-checklist.png"),
+    label: "Check",
+    labelColor: color.orange,
+    title: "Can I apply ceramic coating over wax?",
+  },
 };
 
 // items: array of CARDS keys, in display order.
