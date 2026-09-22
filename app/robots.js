@@ -1,5 +1,8 @@
 import { SITE_URL } from "@/lib/site";
 
+// Required for Next.js static export (output: "export").
+export const dynamic = "force-static";
+
 // Must live at app/ root. Next anchors the robots convention to the app directory,
 // so app/(us)/robots.js would silently produce no route at all.
 //
