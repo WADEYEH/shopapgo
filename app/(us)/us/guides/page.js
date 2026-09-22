@@ -222,6 +222,33 @@ export default function GuidesPage() {
                 </span>
                 <GuideButton>Read the compatibility guide →</GuideButton>
               </Link>
+              <Link
+                href={routes.howOftenReapply}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: color.text,
+                  borderTop: `4px solid ${color.orange}`,
+                  paddingTop: 14,
+                }}
+              >
+                <img
+                  src={asset("generated/how-often-reapply-signals-checklist.png")}
+                  alt=""
+                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
+                />
+                <span style={cardLabel(color.orange)}>Cadence · Reapply signals</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
+                  How Often to Apply Ceramic Spray Coating
+                </span>
+                <span style={cardExcerpt}>
+                  Reapply when paint signals fade—not on a fixed month. Use D204's ~6-month ceiling as a landmark, then watch water
+                  beading and gloss.
+                </span>
+                <GuideButton>Read the cadence guide →</GuideButton>
+              </Link>
             </div>
           </div>
         </section>

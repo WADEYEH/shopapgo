@@ -21,6 +21,7 @@ const pages = [
   { path: routes.glazeCoating, lastModified: "2026-09-08" },
   { path: routes.waxVsSprayCoating, lastModified: "2026-09-22" },
   { path: routes.coatingOverWax, lastModified: "2026-09-22" },
+  { path: routes.howOftenReapply, lastModified: "2026-09-23" },
 ];
 
 export default function sitemap() {
