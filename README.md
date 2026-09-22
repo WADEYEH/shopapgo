@@ -28,14 +28,17 @@ Vercel 帳號的 GitHub 連結是 `WADEYEH`；本機 git 以 `anpuuuuu`（collab
 | Output directory | `out` |
 | Framework | Next.js (Static HTML Export) |
 
-### 根路徑重導
+### 根路徑重導（雙主機期間）
 
 原本 `next.config.mjs` 的 `redirects()` 函數（`/ → /us` 301）在靜態匯出模式不支援。
-改用 `public/_redirects` 檔案，Cloudflare Pages 會自動處理：
+遷移期間需要兩套重導向機制，分別給 Vercel 和 Cloudflare Pages 使用：
 
-```
-/ /us 301
-```
+| 檔案 | 平台 | 說明 |
+|------|------|------|
+| `vercel.json` | Vercel | DNS 切換前，Vercel production 使用此設定 |
+| `public/_redirects` | Cloudflare Pages | DNS 切換後，Cloudflare Pages 使用此設定 |
+
+兩者都設定 `/ → /us` 301 永久重導向。**DNS 切換到 Cloudflare Pages 後**，可選擇移除 `vercel.json` 中的 redirects 區塊（若不再需要 Vercel 部署）。
 
 ### 遷移階段
 
