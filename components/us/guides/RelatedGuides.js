@@ -46,6 +46,13 @@ export const CARDS = {
     labelColor: color.orange,
     title: "Can I apply ceramic coating over wax?",
   },
+  howOftenReapply: {
+    href: routes.howOftenReapply,
+    img: asset("generated/how-often-reapply-signals-checklist.png"),
+    label: "Cadence",
+    labelColor: color.orange,
+    title: "How Often to Apply Ceramic Spray Coating",
+  },
 };
 
 // items: array of CARDS keys, in display order.
