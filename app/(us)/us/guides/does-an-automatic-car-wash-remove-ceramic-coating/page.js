@@ -246,7 +246,7 @@ export default function AutoWashCoatingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "howOftenReapply", "coatingOverWax"]} />
+        <RelatedGuides items={["afterWashing", "rainDamageCoating", "howOftenReapply"]} />
       </main>
     </div>
   );

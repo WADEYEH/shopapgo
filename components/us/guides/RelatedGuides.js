@@ -55,14 +55,14 @@ export const CARDS = {
   },
   autoWashCoating: {
     href: routes.autoWashCoating,
-    img: asset("generated/auto-wash-vs-hand-wash.png"),
+    img: asset("generated/auto-wash-hero.png"),
     label: "Wash",
     labelColor: color.orange,
     title: "Does an Automatic Car Wash Remove Ceramic Coating?",
   },
   rainDamageCoating: {
     href: routes.rainDamageCoating,
-    img: asset("generated/rain-vs-salt-spots.png"),
+    img: asset("generated/rain-salt-hero.png"),
     label: "Weather",
     labelColor: color.orange,
     title: "Does Rain Damage Ceramic Coating?",
