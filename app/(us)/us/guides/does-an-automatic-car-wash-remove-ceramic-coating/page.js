@@ -15,7 +15,7 @@ const LEDE =
 const INLINE_COMPARE = asset("generated/auto-wash-vs-hand-wash.png");
 
 export const metadata = {
-  title: `${TITLE} · APGO`,
+  title: TITLE,
   description: LEDE,
   alternates: { canonical: routes.autoWashCoating },
   openGraph: {

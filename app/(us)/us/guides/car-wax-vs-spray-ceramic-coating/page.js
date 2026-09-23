@@ -16,7 +16,7 @@ const COVER = asset("generated/car-wax-vs-spray-hero.png");
 const INLINE_COMPARISON = asset("generated/wax-vs-spray-coating-time-steps.png");
 
 export const metadata = {
-  title: `${TITLE} · APGO`,
+  title: TITLE,
   description: LEDE,
   alternates: { canonical: routes.waxVsSprayCoating },
   openGraph: {

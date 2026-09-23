@@ -16,7 +16,7 @@ const COVER = asset("generated/coating-over-wax-hero.png");
 const INLINE_CHECKLIST = asset("generated/coating-over-wax-decision-checklist.png");
 
 export const metadata = {
-  title: `${TITLE} · APGO`,
+  title: TITLE,
   description: LEDE,
   alternates: { canonical: routes.coatingOverWax },
   openGraph: { title: `${TITLE} · APGO`, description: LEDE, url: routes.coatingOverWax, images: [COVER] },
