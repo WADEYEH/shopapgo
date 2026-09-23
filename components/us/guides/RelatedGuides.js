@@ -53,6 +53,13 @@ export const CARDS = {
     labelColor: color.orange,
     title: "How Often to Apply Ceramic Spray Coating",
   },
+  autoWashCoating: {
+    href: routes.autoWashCoating,
+    img: asset("generated/auto-wash-vs-hand-wash.png"),
+    label: "Wash",
+    labelColor: color.orange,
+    title: "Does an Automatic Car Wash Remove Ceramic Coating?",
+  },
 };
 
 // items: array of CARDS keys, in display order.
