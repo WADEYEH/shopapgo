@@ -328,7 +328,7 @@ export default function ColoredGlazePage() {
           ]}
         />
 
-        <RelatedGuides items={["glazeCoating", "wetOrDry", "afterWashing"]} />
+        <RelatedGuides items={["coatingOverWax", "howOftenReapply", "wetOrDry", "afterWashing"]} />
       </main>
     </div>
   );

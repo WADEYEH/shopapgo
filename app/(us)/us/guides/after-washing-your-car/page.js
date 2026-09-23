@@ -170,7 +170,9 @@ export default function AfterWashingPage() {
             </p>
             <p style={body}>
               Where possible, work in the shade and avoid hot paint. Heat can cause water and cleaning solutions to dry quickly,
-              leaving spots or residue. Removing the water rather than leaving it to evaporate helps reduce that risk.{" "}
+              leaving spots or residue. Removing the water rather than leaving it to evaporate helps reduce that risk—and if you've
+              applied a spray coating, understanding{" "}
+              <Link href={routes.rainDamageCoating}>what rain and water spots do to ceramic coatings</Link> can help you decide when a rinse is enough.{" "}
               <a href="https://www.midstates.aaa.com/automotive/10-car-wash-dos-and-donts" target="_blank" rel="noopener noreferrer">
                 AAA's car-washing do's and don'ts
               </a>
@@ -256,7 +258,8 @@ export default function AfterWashingPage() {
             </p>
             <p style={body}>
               A routine wash also does not automatically mean that every protective product needs to be reapplied. Follow the
-              maintenance guidance for the product already on your vehicle.
+              maintenance guidance for the product already on your vehicle—if you're using a spray ceramic coating,{" "}
+              <Link href={routes.howOftenReapply}>knowing when to reapply</Link> depends on surface signals, not a fixed calendar.
             </p>
           </section>
 
@@ -317,7 +320,7 @@ export default function AfterWashingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["autoWashCoating", "rainDamageCoating", "coloredGlaze", "glazeCoating"]} />
+<RelatedGuides items={["autoWashCoating", "rainDamageCoating", "howOftenReapply", "wetOrDry"]} />
       </main>
     </div>
   );

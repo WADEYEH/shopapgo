@@ -266,7 +266,7 @@ export default function CoatingOverWaxPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "howOftenReapply"]} />
+<RelatedGuides items={["waxVsSprayCoating", "howOftenReapply", "coloredGlaze", "wetOrDry"]} />
       </main>
     </div>
   );

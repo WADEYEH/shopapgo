@@ -5,15 +5,22 @@ import { CARDS } from "@/components/us/guides/RelatedGuides";
 import GuideButton from "@/components/us/guides/GuideButton";
 import Eyebrow from "./Eyebrow";
 
-// Links the landing page to the four guides. Heading and lede reuse the guides hub copy;
-// card labels/titles reuse the "Keep reading" cards; the CTA lines reuse the hub's card CTAs.
-const ORDER = ["afterWashing", "wetOrDry", "coloredGlaze", "glazeCoating"];
+// Links the landing page to all guides. Featured guides show as full cards with images;
+// additional guides display as a plain-text link list for crawlability.
+const FEATURED = ["afterWashing", "wetOrDry", "coloredGlaze", "glazeCoating"];
 const CTA = {
   afterWashing: "Read the wash-care guide →",
   wetOrDry: "Compare the two routines →",
   coloredGlaze: "Read the dry-application guide →",
   glazeCoating: "Read the wet-application guide →",
 };
+const MORE_GUIDES = [
+  { key: "waxVsSprayCoating", label: "Car wax vs spray ceramic coating" },
+  { key: "coatingOverWax", label: "Can I apply ceramic coating over wax?" },
+  { key: "howOftenReapply", label: "How often to apply ceramic spray coating" },
+  { key: "autoWashCoating", label: "Does an automatic car wash remove ceramic coating?" },
+  { key: "rainDamageCoating", label: "Does rain damage ceramic coating?" },
+];
 
 export default function GuidesSection() {
   return (
@@ -60,7 +67,7 @@ export default function GuidesSection() {
         </div>
         <Link href={routes.guides} className="us-text-link">All guides <span aria-hidden="true">→</span></Link>
         <div className="us-guides-grid" style={{ display: "grid", gap: "clamp(16px,2vw,24px)" }}>
-          {ORDER.map((key) => {
+          {FEATURED.map((key) => {
             const c = CARDS[key];
             return (
               <Link
@@ -87,6 +94,16 @@ export default function GuidesSection() {
               </Link>
             );
           })}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: "clamp(12px,2vw,20px)" }}>
+          <span style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: color.quiet2, fontWeight: 700 }}>More guides</span>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+            {MORE_GUIDES.map(({ key, label }) => (
+              <li key={key}>
+                <Link href={CARDS[key].href} className="us-text-link" style={{ fontSize: 15 }}>{label}</Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

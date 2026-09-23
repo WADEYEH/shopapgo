@@ -6,6 +6,7 @@ import Callout from "@/components/us/guides/Callout";
 import FaqList from "@/components/us/guides/FaqList";
 import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import EndCtaBand from "@/components/us/guides/EndCtaBand";
+import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd, faqLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
@@ -354,6 +355,8 @@ export default function WetOrDryPage() {
           ]}
           note="U.S. launch preparation is underway. Explore the guides now; purchasing links will be added when the products are available."
         />
+
+        <RelatedGuides items={["waxVsSprayCoating", "coatingOverWax", "howOftenReapply", "afterWashing"]} />
       </main>
     </div>
   );
