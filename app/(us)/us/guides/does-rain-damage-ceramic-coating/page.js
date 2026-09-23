@@ -43,7 +43,7 @@ const TABLE = [
   {
     row: "Dirty water / water spots",
     what: "Minerals, fallout, dried rings",
-    risk: "Medium—spots etch look and weaken "fresh" beading if left on",
+    risk: "Medium—spots etch look and weaken \"fresh\" beading if left on",
     takeaway: "Rinse or wash before spots bake on",
   },
   {
