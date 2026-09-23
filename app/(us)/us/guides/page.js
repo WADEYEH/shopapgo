@@ -276,6 +276,33 @@ export default function GuidesPage() {
                 </span>
                 <GuideButton>Read the wash care guide →</GuideButton>
               </Link>
+              <Link
+                href={routes.rainDamageCoating}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: color.text,
+                  borderTop: `4px solid ${color.orange}`,
+                  paddingTop: 14,
+                }}
+              >
+                <img
+                  src={asset("generated/rain-vs-salt-spots.png")}
+                  alt=""
+                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
+                />
+                <span style={cardLabel(color.orange)}>Weather · Care</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
+                  Does Rain Damage Ceramic Coating?
+                </span>
+                <span style={cardExcerpt}>
+                  Clean rain rarely ruins a spray coating in one shower—dirty water spots and winter road salt that sit on paint
+                  are the real risks. Know what to rinse and when.
+                </span>
+                <GuideButton>Read the weather care guide →</GuideButton>
+              </Link>
             </div>
           </div>
         </section>

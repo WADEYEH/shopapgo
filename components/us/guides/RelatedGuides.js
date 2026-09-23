@@ -60,6 +60,13 @@ export const CARDS = {
     labelColor: color.orange,
     title: "Does an Automatic Car Wash Remove Ceramic Coating?",
   },
+  rainDamageCoating: {
+    href: routes.rainDamageCoating,
+    img: asset("generated/rain-vs-salt-spots.png"),
+    label: "Weather",
+    labelColor: color.orange,
+    title: "Does Rain Damage Ceramic Coating?",
+  },
 };
 
 // items: array of CARDS keys, in display order.
