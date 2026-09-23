@@ -182,7 +182,7 @@ export default function GuidesPage() {
                 }}
               >
                 <img
-                  src={asset("generated/wax-vs-spray-coating-time-steps.png")}
+                  src={asset("generated/car-wax-vs-spray-hero.png")}
                   alt=""
                   style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
                 />
@@ -208,7 +208,7 @@ export default function GuidesPage() {
                 }}
               >
                 <img
-                  src={asset("generated/coating-over-wax-decision-checklist.png")}
+                  src={asset("generated/coating-over-wax-hero.png")}
                   alt=""
                   style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
                 />
@@ -235,7 +235,7 @@ export default function GuidesPage() {
                 }}
               >
                 <img
-                  src={asset("generated/how-often-reapply-signals-checklist.png")}
+                  src={asset("generated/how-often-reapply-hero.png")}
                   alt=""
                   style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
                 />
