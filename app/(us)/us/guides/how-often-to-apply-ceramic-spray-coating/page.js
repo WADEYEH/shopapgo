@@ -16,7 +16,7 @@ const COVER = asset("generated/how-often-reapply-hero.png");
 const INLINE_CHECKLIST = asset("generated/how-often-reapply-signals-checklist.png");
 
 export const metadata = {
-  title: `${TITLE} · APGO`,
+  title: TITLE,
   description: LEDE,
   alternates: { canonical: routes.howOftenReapply },
   openGraph: {
