@@ -12,6 +12,7 @@ const TITLE = "Does Rain Damage Ceramic Coating?";
 const CRUMB = "Rain & coating";
 const LEDE =
   "Clean rain rarely ruins a spray coating in one shower—dirty water spots and winter road salt that sit on paint are the real risks. Know what to rinse and when.";
+const COVER = asset("generated/rain-salt-hero.png");
 const INLINE_COMPARE = asset("generated/rain-vs-salt-spots.png");
 
 export const metadata = {
@@ -22,6 +23,7 @@ export const metadata = {
     title: `${TITLE} · APGO`,
     description: LEDE,
     url: routes.rainDamageCoating,
+    images: [COVER],
   },
 };
 
@@ -81,7 +83,7 @@ export default function RainDamageCoatingPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: TITLE, description: LEDE, route: routes.rainDamageCoating }),
+          articleLd({ headline: TITLE, description: LEDE, image: COVER, route: routes.rainDamageCoating }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
         ]}
       />
@@ -96,6 +98,9 @@ export default function RainDamageCoatingPage() {
           title={TITLE}
           lede={LEDE}
           readTime="4 min read"
+          heroSrc={COVER}
+          heroAlt="Rain alone vs what stays on paint—dirty spots and road salt"
+          heroCaption="Rain alone isn't the enemy"
         />
 
         <ArticleBody toc={TOC}>

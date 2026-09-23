@@ -12,6 +12,7 @@ const TITLE = "Does an Automatic Car Wash Remove Ceramic Coating?";
 const CRUMB = "Auto wash & coating";
 const LEDE =
   "An automatic wash rarely strips spray coating in one pass—but brushes, strong soap, and repeat friction wear it down sooner. Compare tunnel risk vs a gentler hand wash.";
+const COVER = asset("generated/auto-wash-hero.png");
 const INLINE_COMPARE = asset("generated/auto-wash-vs-hand-wash.png");
 
 export const metadata = {
@@ -22,6 +23,7 @@ export const metadata = {
     title: `${TITLE} · APGO`,
     description: LEDE,
     url: routes.autoWashCoating,
+    images: [COVER],
   },
 };
 
@@ -96,7 +98,7 @@ export default function AutoWashCoatingPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: TITLE, description: LEDE, route: routes.autoWashCoating }),
+          articleLd({ headline: TITLE, description: LEDE, image: COVER, route: routes.autoWashCoating }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
         ]}
       />
@@ -111,6 +113,9 @@ export default function AutoWashCoatingPage() {
           title={TITLE}
           lede={LEDE}
           readTime="4 min read"
+          heroSrc={COVER}
+          heroAlt="Automatic wash wears coating faster—brushes, strong soap, repeat friction"
+          heroCaption="Automatic wash wears faster"
         />
 
         <ArticleBody toc={TOC}>
