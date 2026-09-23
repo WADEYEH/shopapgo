@@ -317,7 +317,7 @@ export default function AfterWashingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["coloredGlaze", "glazeCoating", "wetOrDry"]} />
+        <RelatedGuides items={["autoWashCoating", "rainDamageCoating", "coloredGlaze", "glazeCoating"]} />
       </main>
     </div>
   );
