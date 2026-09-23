@@ -89,6 +89,48 @@ export default function GuidesPage() {
           </div>
         </section>
 
+        {/* BROWSE BY TOPIC */}
+        <section style={{ borderBottom: `1px solid ${color.hairline}` }}>
+          <div
+            style={{
+              maxWidth: 1100,
+              margin: "0 auto",
+              padding: "clamp(32px,4vw,48px) 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+            }}
+          >
+            <h2 style={{ ...sectionH2, fontSize: "clamp(24px,3vw,32px)" }}>Browse by topic</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,280px),1fr))", gap: "clamp(20px,3vw,32px)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <span style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: color.tertiary, fontWeight: 700 }}>Basics & choosing</span>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <li><Link href={routes.afterWashing} className="us-text-link">What to do after washing your car</Link></li>
+                  <li><Link href={routes.wetOrDry} className="us-text-link">Wet or dry application?</Link></li>
+                  <li><Link href={routes.waxVsSprayCoating} className="us-text-link">Car wax vs spray ceramic coating</Link></li>
+                  <li><Link href={routes.coatingOverWax} className="us-text-link">Can I apply ceramic coating over wax?</Link></li>
+                </ul>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <span style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: color.orange, fontWeight: 700 }}>Care & coating Q&A</span>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <li><Link href={routes.howOftenReapply} className="us-text-link">How often to apply ceramic spray coating</Link></li>
+                  <li><Link href={routes.autoWashCoating} className="us-text-link">Does an automatic car wash remove ceramic coating?</Link></li>
+                  <li><Link href={routes.rainDamageCoating} className="us-text-link">Does rain damage ceramic coating?</Link></li>
+                </ul>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <span style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: color.dry, fontWeight: 700 }}>Application guides</span>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <li><Link href={routes.coloredGlaze} className="us-text-link">How to apply Atomic Colored Glaze (dry)</Link></li>
+                  <li><Link href={routes.glazeCoating} className="us-text-link">How to apply Atomic Glaze Coating (wet)</Link></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* START HERE */}
         <section style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div

@@ -17,7 +17,7 @@ export const dynamic = "force-static";
 // tests/us-sitemap.test.cjs fails if a page.js exists that is missing from this list.
 const pages = [
   { path: routes.home, lastModified: "2026-09-07" },
-  { path: routes.guides, lastModified: "2026-09-08" },
+  { path: routes.guides, lastModified: "2026-09-23" },
   { path: routes.afterWashing, lastModified: "2026-09-08" },
   { path: routes.wetOrDry, lastModified: "2026-09-08" },
   { path: routes.coloredGlaze, lastModified: "2026-09-08" },
