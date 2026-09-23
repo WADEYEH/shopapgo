@@ -249,6 +249,33 @@ export default function GuidesPage() {
                 </span>
                 <GuideButton>Read the cadence guide →</GuideButton>
               </Link>
+              <Link
+                href={routes.autoWashCoating}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: color.text,
+                  borderTop: `4px solid ${color.orange}`,
+                  paddingTop: 14,
+                }}
+              >
+                <img
+                  src={asset("generated/auto-wash-vs-hand-wash.png")}
+                  alt=""
+                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
+                />
+                <span style={cardLabel(color.orange)}>Wash · Care</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
+                  Does an Automatic Car Wash Remove Ceramic Coating?
+                </span>
+                <span style={cardExcerpt}>
+                  An automatic wash rarely strips spray coating in one pass—but brushes, strong soap, and repeat friction wear it
+                  down sooner. Compare tunnel risk vs a gentler hand wash.
+                </span>
+                <GuideButton>Read the wash care guide →</GuideButton>
+              </Link>
             </div>
           </div>
         </section>
