@@ -15,7 +15,7 @@ const LEDE =
 const INLINE_COMPARE = asset("generated/rain-vs-salt-spots.png");
 
 export const metadata = {
-  title: `${TITLE} · APGO`,
+  title: TITLE,
   description: LEDE,
   alternates: { canonical: routes.rainDamageCoating },
   openGraph: {
