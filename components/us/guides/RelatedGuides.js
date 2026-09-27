@@ -55,7 +55,7 @@ export const CARDS = {
   },
   autoWashCoating: {
     href: routes.autoWashCoating,
-    img: asset("generated/auto-wash-hero.png"),
+    img: asset("generated/auto-wash-hero-title.png"),
     label: "Wash",
     labelColor: color.orange,
     title: "Does an Automatic Car Wash Remove Ceramic Coating?",
@@ -69,7 +69,7 @@ export const CARDS = {
   },
   diyVsPro: {
     href: routes.diyVsPro,
-    img: asset("generated/diy-vs-pro-hero.png"),
+    img: asset("generated/diy-vs-pro-hero-title.png"),
     label: "Compare",
     labelColor: color.orange,
     title: "DIY Ceramic Coating vs Professional",
