@@ -13,8 +13,7 @@ const H1 = "DIY Ceramic Coating vs Professional: What’s Actually Worth It?";
 const CRUMB = "DIY vs pro coating";
 const LEDE =
   "DIY spray coating buys a redoable afternoon at home; a pro shop buys bay time and a longer package. Compare time, cost, and effort before you choose.";
-const HERO = asset("generated/diy-vs-pro-hero.png");
-const HERO_TITLE = asset("generated/diy-vs-pro-hero-title.png");
+const COVER = asset("generated/diy-vs-pro-hero-title.png");
 const HERO_ALT = "Clean dark car paint with a microfiber towel in a home garage at dusk, with a professional detailing bay lit up in the distance";
 const INLINE_IMAGE = asset("generated/diy-afternoon-vs-pro-bay.png");
 
@@ -26,7 +25,7 @@ export const metadata = {
     title: H1,
     description: LEDE,
     url: routes.diyVsPro,
-    images: [HERO_TITLE],
+    images: [COVER],
   },
 };
 
@@ -118,7 +117,7 @@ export default function DiyVsProPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: LEDE, image: HERO_TITLE, route: routes.diyVsPro }),
+          articleLd({ headline: H1, description: LEDE, image: COVER, route: routes.diyVsPro }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
         ]}
       />
@@ -133,9 +132,8 @@ export default function DiyVsProPage() {
           title={H1}
           lede={LEDE}
           readTime="6 min read"
-          heroSrc={HERO}
+          heroSrc={COVER}
           heroAlt={HERO_ALT}
-          heroOverlayTitle
         />
 
         <ArticleBody toc={TOC}>

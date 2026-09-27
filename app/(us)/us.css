@@ -160,32 +160,3 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   *, *::before, *::after { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto; }
 }
-
-/* Hero overlay title: single H1, positioned over the hero image on >=720px, above it on mobile. */
-.us-hero-overlay {
-  position: relative;
-}
-.us-hero-overlay-h1 {
-  margin: 0;
-  font-family: var(--font-barlow-condensed), "Barlow Condensed", system-ui, sans-serif;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: #FBF8F4;
-  position: absolute;
-  left: clamp(20px, 3vw, 40px);
-  bottom: clamp(20px, 3vw, 40px);
-  max-width: 70%;
-  font-size: clamp(36px, 5.2vw, 64px);
-  line-height: 0.9;
-  z-index: 1;
-}
-@media (max-width: 719px) {
-  .us-hero-overlay-h1 {
-    position: static;
-    max-width: 900px;
-    font-size: clamp(44px, 7vw, 88px);
-    line-height: 0.88;
-    margin-bottom: 20px;
-    text-wrap: balance;
-  }
-}

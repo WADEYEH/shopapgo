@@ -359,7 +359,7 @@ export default function GuidesPage() {
                 }}
               >
                 <img
-                  src={asset("generated/diy-vs-pro-hero.png")}
+                  src={asset("generated/diy-vs-pro-hero-title.png")}
                   alt=""
                   style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
                 />

@@ -12,7 +12,7 @@ const TITLE = "Does an Automatic Car Wash Remove Ceramic Coating?";
 const CRUMB = "Auto wash & coating";
 const LEDE =
   "An automatic wash rarely strips spray coating in one pass—but brushes, strong soap, and repeat friction wear it down sooner. Compare tunnel risk vs a gentler hand wash.";
-const COVER = asset("generated/auto-wash-hero.png");
+const COVER = asset("generated/auto-wash-hero-title.png");
 const INLINE_COMPARE = asset("generated/auto-wash-vs-hand-wash.png");
 
 export const metadata = {
