@@ -56,7 +56,7 @@ const FAQ = [
   { q: "Can I apply it over wax?", a: "We don't recommend it. Start with paint that has no wax on it." },
   {
     q: "Where on the car can I use it?",
-    a: "Anywhere on the exterior: paint, chrome, plastic trim, mirror housings, piano-black trim, wheels, and glass. On the front windshield, remove any oil film first. Follow the current product label.",
+    a: "On paint, wraps, glass, and wheels. On the front windshield, remove any oil film first. For trim or any other surface, check the current label or contact APGO.",
   },
 ];
 
@@ -90,7 +90,7 @@ const TOC = [
   { href: "#faq", label: "10. FAQ" },
 ];
 
-const SURFACES = ["Paint", "Chrome trim", "Plastic trim", "Mirror housings", "Piano-black trim", "Wheels", "Glass"];
+const SURFACES = ["Paint", "Wraps", "Glass", "Wheels"];
 
 const needCard = { border: `1px solid ${color.border}`, padding: 18, display: "flex", flexDirection: "column", gap: 12 };
 const needList = { margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8, fontSize: 15, lineHeight: 1.45 };
@@ -195,7 +195,7 @@ export default function ColoredGlazePage() {
           <section id="where" style={section}>
             <h2 style={h2}>4. Where you can use it</h2>
             <p style={body}>
-              Atomic Colored Glaze can be used on the <strong style={strong}>whole exterior</strong>—not just the paint.
+              Atomic Colored Glaze can be used on <strong style={strong}>paint, wraps, glass, and wheels</strong>.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {SURFACES.map((s) => (
@@ -206,7 +206,9 @@ export default function ColoredGlazePage() {
             </div>
             <Callout accent={color.dry}>
               <strong style={strong}>Windshield:</strong> remove any oil film from the front windshield before applying. On a
-              windshield that hasn't been de-filmed, the result won't be clean.
+              windshield that hasn't been de-filmed, the result won't be clean.{" "}
+              <strong style={strong}>Other surfaces:</strong> for trim or anything not listed above, check the current label or
+              contact APGO before use.
             </Callout>
           </section>
 
