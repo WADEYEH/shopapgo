@@ -78,7 +78,7 @@ const TOC = [
   { href: "#dry", label: "7. Product details and related guides" },
 ];
 
-const SURFACES = ["Paint", "Chrome trim", "Plastic trim", "Mirror housings", "Piano-black trim", "Wheels", "Side and rear glass"];
+const SURFACES = ["Paint", "Wraps"];
 
 const needRow = {
   display: "grid",
@@ -179,13 +179,13 @@ export default function GlazeCoatingPage() {
               straight to application.
             </p>
             <Callout accent={color.orange}>
-              Skip the front windshield—Glaze Coating isn't recommended there. See "Where you can use it" below.
+              Use Glaze Coating on paint and wraps only. See "Where you can use it" below.
             </Callout>
           </section>
 
           <section id="where" style={section}>
             <h2 style={h2}>3. Where you can use it</h2>
-            <p style={body}>Atomic Glaze Coating can be used across the exterior—paint and the other materials around it.</p>
+            <p style={body}>Atomic Glaze Coating is for painted body panels and wraps.</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {SURFACES.map((s) => (
                 <span key={s} style={chip}>
@@ -194,8 +194,8 @@ export default function GlazeCoatingPage() {
               ))}
             </div>
             <Callout accent={color.wet}>
-              <strong style={strong}>Not for the front windshield.</strong> We don't recommend using Glaze Coating on the windshield.
-              Everywhere else on the exterior is fine.
+              <strong style={strong}>Paint and wraps only.</strong> For glass (including the front windshield), trim, wheels, or any
+              other surface, check the current label or contact APGO before use.
             </Callout>
           </section>
 

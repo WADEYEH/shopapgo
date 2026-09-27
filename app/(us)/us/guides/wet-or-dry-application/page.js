@@ -40,7 +40,7 @@ const FAQ = [
   },
   {
     q: "Can I use them on trim, wheels, and glass?",
-    a: "Yes—both can be used across the exterior: paint, chrome, plastic trim, mirror housings, piano-black trim, wheels, and glass. On the front windshield, only Atomic Colored Glaze is recommended, and only after removing any oil film.",
+    a: "It depends on the product. Atomic Colored Glaze can be used on paint, wraps, glass, and wheels; on the front windshield, remove any oil film first. Atomic Glaze Coating is for paint and wraps. For trim or any other surface, check the current label or contact APGO.",
   },
   {
     q: 'Does "wet application" mean I can skip washing?',
@@ -54,7 +54,7 @@ const COMPARE = [
   ["Main sequence", "Spray → spread → buff", "Spray → spread → towel-dry → buff"],
   ["Spreading tool", "Application cloth", "Damp application cloth"],
   ["Final step", "Buff with a clean coral-fleece microfiber towel", "After drying, buff with a clean coral-fleece microfiber towel"],
-  ["Where you can use it", "Whole exterior, including the windshield (remove oil film first)", "Whole exterior, except the front windshield"],
+  ["Where you can use it", "Paint, wraps, glass, wheels (windshield: remove oil film first)", "Paint, wraps"],
   ["Bottle size", "300 mL", "200 mL"],
 ];
 
@@ -298,15 +298,17 @@ export default function WetOrDryPage() {
           <section id="where" style={section}>
             <h2 style={h2}>Where you can use them</h2>
             <p style={body}>
-              Both products work across the exterior—paint, chrome trim, plastic trim, mirror housings, piano-black trim, wheels, and
-              glass. The one place they differ is the <strong style={strong}>front windshield</strong>.
+              Both products can be used on paint and wraps. Atomic Colored Glaze can also be used on{" "}
+              <strong style={strong}>glass and wheels</strong>. For trim or any other surface, check the current label or contact
+              APGO before use.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,280px),1fr))", gap: 16 }}>
               <Callout accent={color.dry}>
                 <strong style={strong}>Atomic Colored Glaze:</strong> can be used on the windshield—remove any oil film first.
               </Callout>
               <Callout accent={color.wet}>
-                <strong style={strong}>Atomic Glaze Coating:</strong> not recommended on the front windshield.
+                <strong style={strong}>Atomic Glaze Coating:</strong> paint and wraps only. For glass (including the front
+                windshield) or wheels, check the current label or contact APGO.
               </Callout>
             </div>
           </section>

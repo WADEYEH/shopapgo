@@ -505,7 +505,7 @@ export default function GuidesPage() {
                   How Often to Apply Ceramic Spray Coating
                 </span>
                 <span style={cardExcerpt}>
-                  Reapply when paint signals fade—not on a fixed month. Use D204's ~6-month ceiling as a landmark, then watch water
+                  Reapply when paint signals fade—not on a fixed month. Treat the label's figure as a ceiling, then watch water
                   beading and gloss.
                 </span>
                 <GuideButton>Read the cadence guide →</GuideButton>

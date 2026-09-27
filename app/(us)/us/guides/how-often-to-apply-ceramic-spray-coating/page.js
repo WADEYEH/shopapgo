@@ -11,7 +11,7 @@ import { h2, h2Balance, section, lead, body, strong, finePrint } from "@/compone
 const TITLE = "How Often to Apply Ceramic Spray Coating";
 const CRUMB = "Reapply cadence";
 const LEDE =
-  "Reapply ceramic spray coating when paint signals fade—not on a fixed month. Use D204's ~6-month ceiling as a landmark, then watch water beading and gloss.";
+  "Reapply ceramic spray coating when paint signals fade—not on a fixed month. Treat the label's figure as a ceiling, then watch water beading and gloss.";
 const COVER = asset("generated/how-often-reapply-hero.png");
 const INLINE_CHECKLIST = asset("generated/how-often-reapply-signals-checklist.png");
 
@@ -132,12 +132,13 @@ export default function HowOftenReapplyPage() {
           <section id="label-ceiling" style={section}>
             <h2 style={h2Balance}>The label ceiling is not your calendar</h2>
             <p style={body}>
-              Product pages often cite a best-case window. For APGO Atomic Colored Glaze (D204), the U.S. page states wash resistance
-              lasting <strong style={strong}>up to about 6 months</strong> under good conditions. That is a ceiling, not an alarm
-              clock.
+              Product pages often cite a best-case window. That figure is a ceiling, not an alarm clock. For reference, APGO's
+              dry-surface option is a silicone-based spray glaze rather than a ceramic spray: Atomic Colored Glaze (D204), applied to
+              dry paint, is rated on the U.S. product page to last <strong style={strong}>up to about 6 months (180 days)</strong>{" "}
+              under good conditions (see <Link href={routes.compare} className="us-text-link">compare the options</Link>).
             </p>
             <p style={body}>
-              Climate, wash style, and how the paint was prepared all move the real date. Treat "about 6 months" as the upper bound
+              Climate, wash style, and how the paint was prepared all move the real date. Treat the label's figure as the upper bound
               you might see when everything goes well—not a fixed day on the calendar you must wait for, or a promise that every car
               will get there.
             </p>
@@ -190,8 +191,8 @@ export default function HowOftenReapplyPage() {
               </li>
               <li style={{ ...body, ...bulletItem }}>
                 <span style={bulletMarker}>•</span>
-                You are approaching the product's stated upper window (for D204, up to about 6 months) <strong style={strong}>and</strong> the
-                signals above are showing up.
+                You are approaching the product's stated upper window <strong style={strong}>and</strong> the signals above are
+                showing up.
               </li>
             </ul>
             <p style={body}>
@@ -232,10 +233,11 @@ export default function HowOftenReapplyPage() {
               </li>
             </ol>
             <p style={body}>
-              For a <strong style={strong}>dry-surface</strong> spray glaze such as D204, reapply still means the panel is clean and
-              dry first; the <Link href={routes.coloredGlaze} className="us-text-link">dry-application guide</Link> covers the how. If
-              your routine is wet-surface instead, use the <Link href={routes.glazeCoating} className="us-text-link">wet-application guide</Link> for
-              that product's steps—this article only sets cadence.
+              If you use APGO's silicone-based spray glaze instead: Atomic Colored Glaze (D204) goes on{" "}
+              <strong style={strong}>dry</strong> paint, so reapply still means the panel is clean and dry first; the{" "}
+              <Link href={routes.coloredGlaze} className="us-text-link">dry-application guide</Link> covers the how. If your routine
+              is wet-surface instead, use the <Link href={routes.glazeCoating} className="us-text-link">wet-application guide</Link>{" "}
+              for that product's steps—this article only sets cadence.
             </p>
           </section>
 
@@ -253,8 +255,8 @@ export default function HowOftenReapplyPage() {
             <h2 style={h2}>Bottom line</h2>
             <p style={body}>
               <code style={{ fontSize: 14, background: color.raised, padding: "2px 6px", borderRadius: 4 }}>How often to apply ceramic spray coating</code> is
-              answered by the paint in front of you plus the product's upper window—not by a single universal month. Use D204's "up
-              to about 6 months" as a ceiling landmark, shorten or stretch with wash and climate reality, and reapply when the
+              answered by the paint in front of you plus the product's upper window—not by a single universal month. Treat the
+              label's upper window as a ceiling landmark, shorten or stretch with wash and climate reality, and reapply when the
               signals say the last layer is done working.
             </p>
           </section>
