@@ -27,6 +27,7 @@ const pages = [
   { path: routes.howOftenReapply, lastModified: "2026-09-23" },
   { path: routes.autoWashCoating, lastModified: "2026-09-23" },
   { path: routes.rainDamageCoating, lastModified: "2026-09-23" },
+  { path: routes.diyVsPro, lastModified: "2026-09-27" },
 ];
 
 export default function sitemap() {

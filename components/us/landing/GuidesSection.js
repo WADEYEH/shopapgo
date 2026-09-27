@@ -20,6 +20,7 @@ const MORE_GUIDES = [
   { key: "howOftenReapply", label: "How often to apply ceramic spray coating" },
   { key: "autoWashCoating", label: "Does an automatic car wash remove ceramic coating?" },
   { key: "rainDamageCoating", label: "Does rain damage ceramic coating?" },
+  { key: "diyVsPro", label: "DIY ceramic coating vs professional" },
 ];
 
 export default function GuidesSection() {
