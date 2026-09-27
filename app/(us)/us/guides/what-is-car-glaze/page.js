@@ -231,7 +231,7 @@ export default function WhatIsCarGlazePage() {
               Ceramic products, whether sprays or liquid coatings, are typically marketed on silica-based chemistry, and durability is usually their headline claim. How long a given ceramic product lasts depends on that product and on the prep, so its label is the place to check.
             </p>
             <p style={body}>
-              Glaze is a separate category. The APGO products covered below are a silicone-based spray glaze, not a ceramic coating. For the full range of options beyond glaze and ceramic, see <Link href={routes.typesOfCarPaintProtection} className="us-text-link">types of car paint protection</Link>.
+              Glaze is a separate category. The APGO products covered below are a silicone-based spray glaze, not a ceramic coating. For the full range of options beyond glaze and ceramic, see <Link href={routes.paintProtectionTypes} className="us-text-link">types of car paint protection</Link>.
             </p>
           </section>
 

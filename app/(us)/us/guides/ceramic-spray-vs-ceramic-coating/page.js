@@ -19,11 +19,11 @@ const HERO_ALT = "Hand gliding a microfiber towel over a freshly misted car hood
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.ceramicSprayVsCoating },
+  alternates: { canonical: routes.sprayVsCoating },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.ceramicSprayVsCoating,
+    url: routes.sprayVsCoating,
     images: [COVER],
   },
   twitter: {
@@ -116,7 +116,7 @@ export default function CeramicSprayVsCoatingPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.ceramicSprayVsCoating }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.sprayVsCoating }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -147,7 +147,7 @@ export default function CeramicSprayVsCoatingPage() {
               Short answer: same family of names, different format, different job. A ceramic spray is a thin layer you can apply quickly after a wash and redo whenever it fades. A liquid ceramic coating asks for more demanding prep and a more careful application, and it's usually marketed as the longer-term option.
             </p>
             <p style={body}>
-              If you'd like the full definition of the spray side first, see our guide on <Link href={routes.whatIsSprayCeramicCoating} className="us-text-link">what spray ceramic coating is</Link>.
+              If you'd like the full definition of the spray side first, see our guide on <Link href={routes.whatIsSprayCeramic} className="us-text-link">what spray ceramic coating is</Link>.
             </p>
           </section>
 
@@ -203,7 +203,7 @@ export default function CeramicSprayVsCoatingPage() {
               With a liquid coating, you typically work one panel at a time and level and wipe off the product within the window its label specifies. Miss that window and you can end up with high spots: raised, uneven patches that catch the light.
             </p>
             <p style={body}>
-              A spray follows a looser spray, spread, and buff rhythm. It's more forgiving, but not foolproof. Too much product or a dirty cloth can still leave streaks or haze. If that happens, see our guide to <Link href={routes.ceramicSprayStreaksHighSpots} className="us-text-link">fixing streaks and high spots</Link>.
+              A spray follows a looser spray, spread, and buff rhythm. It's more forgiving, but not foolproof. Too much product or a dirty cloth can still leave streaks or haze. If that happens, see our guide to <Link href={routes.streaksHighSpots} className="us-text-link">fixing streaks and high spots</Link>.
             </p>
 
             <h3 style={h3}>Mistakes and Redos</h3>
@@ -282,7 +282,7 @@ export default function CeramicSprayVsCoatingPage() {
           <section id="bottom-line" style={section}>
             <h2 style={h2}>Bottom Line</h2>
             <p style={body}>
-              The difference in ceramic spray vs ceramic coating isn't the name on the bottle. It's the prep load, how forgiving the application is, how you fix mistakes, and what you expect over time. Start with your available time and your wash habits, pick the format that matches, and follow that product's label. For the wider view, see <Link href={routes.typesOfCarPaintProtection} className="us-text-link">all types of car paint protection</Link>.
+              The difference in ceramic spray vs ceramic coating isn't the name on the bottle. It's the prep load, how forgiving the application is, how you fix mistakes, and what you expect over time. Start with your available time and your wash habits, pick the format that matches, and follow that product's label. For the wider view, see <Link href={routes.paintProtectionTypes} className="us-text-link">all types of car paint protection</Link>.
             </p>
           </section>
 

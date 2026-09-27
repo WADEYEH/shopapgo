@@ -5,7 +5,6 @@ import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 
 const TITLE = "APGO car care guides";
-// Shared by the visible breadcrumb and the BreadcrumbList JSON-LD so they cannot drift.
 const CRUMB = "Guides";
 const DESCRIPTION =
   "Practical guidance for what comes after the wash—from drying and choosing an application routine to using your APGO product.";
@@ -22,19 +21,19 @@ const GUIDE_GROUPS = [
     id: "compare-and-choose",
     label: "Compare & choose",
     labelColor: color.tertiary,
-    items: [routes.waxVsSprayCoating, routes.diyVsPro],
+    items: [routes.paintProtectionTypes, routes.whatIsSprayCeramic, routes.whatIsCarGlaze, routes.sprayVsCoating, routes.waxVsSprayCoating, routes.diyVsPro],
   },
   {
     id: "prep-and-application",
     label: "Prep & application",
     labelColor: color.orange,
-    items: [routes.wetOrDry, routes.coatingOverWax, routes.coloredGlaze, routes.glazeCoating],
+    items: [routes.prepForSpray, routes.wetOrDry, routes.coatingOverWax, routes.removeWaxFirst, routes.waitToWash, routes.coloredGlaze, routes.glazeCoating],
   },
   {
     id: "wash-and-care",
     label: "Wash & care",
     labelColor: color.dry,
-    items: [routes.afterWashing, routes.autoWashCoating],
+    items: [routes.coatingMaintenance, routes.washCoatedCar, routes.afterWashing, routes.autoWashCoating],
   },
   {
     id: "durability-and-weather",
@@ -42,19 +41,35 @@ const GUIDE_GROUPS = [
     labelColor: color.wet,
     items: [routes.howOftenReapply, routes.rainDamageCoating],
   },
+  {
+    id: "troubleshooting",
+    label: "Troubleshooting",
+    labelColor: color.orange,
+    items: [routes.streaksHighSpots],
+  },
 ];
 
 const JUMP_LINK_LABELS = {
-  [routes.waxVsSprayCoating]: "Car wax vs spray ceramic coating",
+  [routes.paintProtectionTypes]: "Types of paint protection",
+  [routes.whatIsSprayCeramic]: "What is spray ceramic?",
+  [routes.whatIsCarGlaze]: "What is car glaze?",
+  [routes.sprayVsCoating]: "Ceramic spray vs coating",
+  [routes.waxVsSprayCoating]: "Wax vs spray coating",
   [routes.diyVsPro]: "DIY ceramic coating vs professional",
-  [routes.wetOrDry]: "Wet or dry application?",
-  [routes.coatingOverWax]: "Can I apply ceramic coating over wax?",
-  [routes.coloredGlaze]: "How to apply Atomic Colored Glaze (dry)",
-  [routes.glazeCoating]: "How to apply Atomic Glaze Coating (wet)",
-  [routes.afterWashing]: "What to do after washing your car",
-  [routes.autoWashCoating]: "Does an automatic car wash remove ceramic coating?",
-  [routes.howOftenReapply]: "How often to apply ceramic spray coating",
-  [routes.rainDamageCoating]: "Does rain damage ceramic coating?",
+  [routes.prepForSpray]: "Prep for ceramic spray",
+  [routes.wetOrDry]: "Compare dry & wet",
+  [routes.coatingOverWax]: "Coating over wax?",
+  [routes.removeWaxFirst]: "Remove wax first",
+  [routes.waitToWash]: "When to wash after spraying",
+  [routes.coloredGlaze]: "Colored Glaze · DRY",
+  [routes.glazeCoating]: "Glaze Coating · WET",
+  [routes.coatingMaintenance]: "Coating maintenance",
+  [routes.washCoatedCar]: "Wash a coated car",
+  [routes.afterWashing]: "After washing your car",
+  [routes.autoWashCoating]: "Auto wash & coating",
+  [routes.howOftenReapply]: "How often to reapply",
+  [routes.rainDamageCoating]: "Rain & coating",
+  [routes.streaksHighSpots]: "Streaks & high spots",
 };
 
 const sectionH2 = {
@@ -68,6 +83,17 @@ const sectionH2 = {
 const sectionP = { margin: 0, fontSize: 16, lineHeight: 1.55, color: color.tertiary };
 const cardLabel = (c) => ({ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: c, fontWeight: 700 });
 const cardExcerpt = { fontSize: 15, lineHeight: 1.5, color: color.tertiary };
+const cardTitle = { fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" };
+const cardStyle = (borderColor) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  textDecoration: "none",
+  color: color.text,
+  borderTop: `4px solid ${borderColor}`,
+  paddingTop: 14,
+});
+const cardImg = { width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" };
 
 export default function GuidesPage() {
   return (
@@ -189,56 +215,52 @@ export default function GuidesPage() {
                 gap: "clamp(16px,2vw,24px)",
               }}
             >
-              <Link
-                href={routes.waxVsSprayCoating}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/car-wax-vs-spray-hero.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              {/* #11 types-of-car-paint-protection */}
+              <Link href={routes.paintProtectionTypes} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/types-of-car-paint-protection-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Compare · Protection options</span>
+                <span style={cardTitle}>Types of Car Paint Protection: Wax, Sealant, Spray Glaze, Ceramic & PPF</span>
+                <span style={cardExcerpt}>Compare the types of car paint protection: wax, sealant, spray glaze, spray ceramic, ceramic coating and PPF, by effort, how you renew it and who it suits.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #12 what-is-spray-ceramic-coating */}
+              <Link href={routes.whatIsSprayCeramic} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/what-is-spray-ceramic-coating-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Basics · Spray ceramic</span>
+                <span style={cardTitle}>What Is Spray Ceramic Coating? How It Works and What It Won't Do</span>
+                <span style={cardExcerpt}>What is spray ceramic coating? Learn how ceramic spray works on paint, what it won't do, like fix scratches or stop rock chips, and why the label matters most.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #15 what-is-car-glaze */}
+              <Link href={routes.whatIsCarGlaze} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/what-is-car-glaze-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Basics · Car glaze</span>
+                <span style={cardTitle}>What Is Car Glaze? Glaze vs Wax vs Sealant, Explained</span>
+                <span style={cardExcerpt}>What is car glaze? See how traditional glaze differs from polish, wax and sealant, how glaze differs from ceramic, and what APGO means by a spray glaze.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #14 ceramic-spray-vs-ceramic-coating */}
+              <Link href={routes.sprayVsCoating} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/ceramic-spray-vs-ceramic-coating-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Compare · Spray vs liquid</span>
+                <span style={cardTitle}>Ceramic Spray vs Ceramic Coating: What's Actually Different?</span>
+                <span style={cardExcerpt}>Ceramic spray vs ceramic coating: compare prep load, application window, fixing mistakes and durability expectations, then pick the format that fits your wash.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* existing: car-wax-vs-spray-ceramic-coating */}
+              <Link href={routes.waxVsSprayCoating} style={cardStyle(color.orange)}>
+                <img src={asset("generated/car-wax-vs-spray-hero.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Compare · Finish strategies</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  Car Wax vs Spray Ceramic Coating
-                </span>
-                <span style={cardExcerpt}>
-                  Compare traditional car wax and spray ceramic coating on time, steps, and how long the finish holds—without another how-to tutorial.
-                </span>
+                <span style={cardTitle}>Car Wax vs Spray Ceramic Coating</span>
+                <span style={cardExcerpt}>Compare traditional car wax and spray ceramic coating on time, steps, and how long the finish holds—without another how-to tutorial.</span>
                 <GuideButton>Read the comparison →</GuideButton>
               </Link>
-              <Link
-                href={routes.diyVsPro}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/diy-vs-pro-hero-title.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              {/* existing: diy-ceramic-coating-vs-professional */}
+              <Link href={routes.diyVsPro} style={cardStyle(color.orange)}>
+                <img src={asset("generated/diy-vs-pro-hero-title.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Compare · Buying decision</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  DIY Ceramic Coating vs Professional
-                </span>
-                <span style={cardExcerpt}>
-                  DIY spray coating buys a redoable afternoon at home; a pro shop buys bay time and a longer package. Compare time, cost, and effort before you choose.
-                </span>
+                <span style={cardTitle}>DIY Ceramic Coating vs Professional</span>
+                <span style={cardExcerpt}>DIY spray coating buys a redoable afternoon at home; a pro shop buys bay time and a longer package. Compare time, cost, and effort before you choose.</span>
                 <GuideButton>Read the comparison →</GuideButton>
               </Link>
             </div>
@@ -271,60 +293,47 @@ export default function GuidesPage() {
                 gap: "clamp(16px,2vw,24px)",
               }}
             >
-              <Link
-                href={routes.wetOrDry}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/atomic-layers-macro.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              {/* #24 how-to-prep-car-for-ceramic-spray */}
+              <Link href={routes.prepForSpray} style={cardStyle(color.orange)}>
+                <img src={asset("generated/how-to-prep-car-for-ceramic-spray-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.orange)}>Prep · Wash, decon, dry</span>
+                <span style={cardTitle}>How to Prep Your Car for Ceramic Spray (Wash, Decon, Dry)</span>
+                <span style={cardExcerpt}>How to prep car for ceramic spray: wash, check for bonded contamination, decon only if needed, confirm there's no old wax, then dry or leave wet per your label.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* existing: wet-or-dry-application */}
+              <Link href={routes.wetOrDry} style={cardStyle(color.orange)}>
+                <img src={asset("generated/atomic-layers-macro.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Compare · Choose your routine</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  APGO paint protection: wet or dry application?
-                </span>
-                <span style={cardExcerpt}>
-                  Atomic Colored Glaze goes on dry paint. Atomic Glaze Coating goes on wet paint. Compare the application steps and
-                  tools before choosing—both routines include a final buff.
-                </span>
+                <span style={cardTitle}>APGO paint protection: wet or dry application?</span>
+                <span style={cardExcerpt}>Atomic Colored Glaze goes on dry paint. Atomic Glaze Coating goes on wet paint. Compare the application steps and tools before choosing—both routines include a final buff.</span>
                 <GuideButton>Compare the two routines →</GuideButton>
               </Link>
-              <Link
-                href={routes.coatingOverWax}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/coating-over-wax-hero.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              {/* existing: can-i-apply-ceramic-coating-over-wax */}
+              <Link href={routes.coatingOverWax} style={cardStyle(color.orange)}>
+                <img src={asset("generated/coating-over-wax-hero.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Check · Compatibility</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  Can I apply ceramic coating over wax?
-                </span>
-                <span style={cardExcerpt}>
-                  Your paint may already have something on it. Use this checklist to decide whether to spray now or clear the surface
-                  first.
-                </span>
+                <span style={cardTitle}>Can I apply ceramic coating over wax?</span>
+                <span style={cardExcerpt}>Your paint may already have something on it. Use this checklist to decide whether to spray now or clear the surface first.</span>
                 <GuideButton>Read the compatibility guide →</GuideButton>
               </Link>
+              {/* #25 how-to-remove-wax-before-ceramic-coating */}
+              <Link href={routes.removeWaxFirst} style={cardStyle(color.orange)}>
+                <img src={asset("generated/how-to-remove-wax-before-ceramic-coating-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.orange)}>Prep · Wax removal</span>
+                <span style={cardTitle}>How to Remove Wax Before Ceramic Coating</span>
+                <span style={cardExcerpt}>How to remove wax before ceramic coating or a spray finish: gentle-to-heavy options, how to test first and protect trim, and how to check the wax is gone.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #28 how-long-to-wait-to-wash-after-ceramic-spray */}
+              <Link href={routes.waitToWash} style={cardStyle(color.orange)}>
+                <img src={asset("generated/how-long-to-wait-to-wash-after-ceramic-spray-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.orange)}>Timing · First wash</span>
+                <span style={cardTitle}>How Long After Ceramic Coating to Wash Your Car: Waiting Out a Fresh Spray</span>
+                <span style={cardExcerpt}>How long after ceramic coating to wash car? There's no universal wait, so check your label. What to look for, what to do if it rains, and your first wash.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* existing: how-to-apply-colored-glaze (packshot card) */}
               <Link
                 href={routes.coloredGlaze}
                 style={{
@@ -353,6 +362,7 @@ export default function GuidesPage() {
                   <GuideButton>Read the dry-application guide →</GuideButton>
                 </span>
               </Link>
+              {/* existing: how-to-apply-glaze-coating (packshot card) */}
               <Link
                 href={routes.glazeCoating}
                 style={{
@@ -405,58 +415,36 @@ export default function GuidesPage() {
                 gap: "clamp(16px,2vw,24px)",
               }}
             >
-              <Link
-                href={routes.afterWashing}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.tertiary}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("application/d215-step-1.webp")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              {/* #32 ceramic-coating-maintenance */}
+              <Link href={routes.coatingMaintenance} style={cardStyle(color.dry)}>
+                <img src={asset("generated/ceramic-coating-maintenance-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.dry)}>Care · Maintenance routine</span>
+                <span style={cardTitle}>Ceramic Coating Maintenance: A Simple Routine That Keeps Spray Coatings Working</span>
+                <span style={cardExcerpt}>Ceramic coating maintenance made simple: wash gently, dry the car, clear contamination fast, watch water behavior and gloss, and top up as your label says.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #33 how-to-wash-a-ceramic-coated-car */}
+              <Link href={routes.washCoatedCar} style={cardStyle(color.dry)}>
+                <img src={asset("generated/how-to-wash-a-ceramic-coated-car-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.dry)}>Wash · Step by step</span>
+                <span style={cardTitle}>How to Wash a Ceramic Coated Car at Home</span>
+                <span style={cardExcerpt}>How to wash a ceramic coated car at home: shade and cool paint, a top-down pre-rinse, wheels first, pH-neutral shampoo and two buckets, then a final rinse.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* existing: after-washing-your-car */}
+              <Link href={routes.afterWashing} style={cardStyle(color.tertiary)}>
+                <img src={asset("application/d215-step-1.webp")} alt="" style={cardImg} />
                 <span style={cardLabel(color.tertiary)}>Basics · Wash & care</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  What to do after washing your car
-                </span>
-                <span style={cardExcerpt}>
-                  Learn what to check after rinsing, how to prepare your towels, and when to apply a paint-care product. A
-                  straightforward starting point, whether or not you use APGO.
-                </span>
+                <span style={cardTitle}>What to do after washing your car</span>
+                <span style={cardExcerpt}>Learn what to check after rinsing, how to prepare your towels, and when to apply a paint-care product. A straightforward starting point, whether or not you use APGO.</span>
                 <GuideButton>Read the wash-care guide →</GuideButton>
               </Link>
-              <Link
-                href={routes.autoWashCoating}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/auto-wash-vs-hand-wash.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              {/* existing: does-an-automatic-car-wash-remove-ceramic-coating */}
+              <Link href={routes.autoWashCoating} style={cardStyle(color.orange)}>
+                <img src={asset("generated/auto-wash-vs-hand-wash.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Wash · Care</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  Does an Automatic Car Wash Remove Ceramic Coating?
-                </span>
-                <span style={cardExcerpt}>
-                  An automatic wash rarely strips spray coating in one pass—but brushes, strong soap, and repeat friction wear it
-                  down sooner. Compare tunnel risk vs a gentler hand wash.
-                </span>
+                <span style={cardTitle}>Does an Automatic Car Wash Remove Ceramic Coating?</span>
+                <span style={cardExcerpt}>An automatic wash rarely strips spray coating in one pass—but brushes, strong soap, and repeat friction wear it down sooner. Compare tunnel risk vs a gentler hand wash.</span>
                 <GuideButton>Read the wash care guide →</GuideButton>
               </Link>
             </div>
@@ -483,59 +471,51 @@ export default function GuidesPage() {
                 gap: "clamp(16px,2vw,24px)",
               }}
             >
-              <Link
-                href={routes.howOftenReapply}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/how-often-reapply-hero.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              <Link href={routes.howOftenReapply} style={cardStyle(color.orange)}>
+                <img src={asset("generated/how-often-reapply-hero.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Cadence · Reapply signals</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  How Often to Apply Ceramic Spray Coating
-                </span>
-                <span style={cardExcerpt}>
-                  Reapply when paint signals fade—not on a fixed month. Treat the label's figure as a ceiling, then watch water
-                  beading and gloss.
-                </span>
+                <span style={cardTitle}>How Often to Apply Ceramic Spray Coating</span>
+                <span style={cardExcerpt}>Reapply when paint signals fade—not on a fixed month. Treat the label's figure as a ceiling, then watch water beading and gloss.</span>
                 <GuideButton>Read the cadence guide →</GuideButton>
               </Link>
-              <Link
-                href={routes.rainDamageCoating}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: color.text,
-                  borderTop: `4px solid ${color.orange}`,
-                  paddingTop: 14,
-                }}
-              >
-                <img
-                  src={asset("generated/rain-vs-salt-spots.png")}
-                  alt=""
-                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
-                />
+              <Link href={routes.rainDamageCoating} style={cardStyle(color.orange)}>
+                <img src={asset("generated/rain-vs-salt-spots.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Weather · Care</span>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
-                  Does Rain Damage Ceramic Coating?
-                </span>
-                <span style={cardExcerpt}>
-                  Clean rain rarely ruins a spray coating in one shower—dirty water spots and winter road salt that sit on paint
-                  are the real risks. Know what to rinse and when.
-                </span>
+                <span style={cardTitle}>Does Rain Damage Ceramic Coating?</span>
+                <span style={cardExcerpt}>Clean rain rarely ruins a spray coating in one shower—dirty water spots and winter road salt that sit on paint are the real risks. Know what to rinse and when.</span>
                 <GuideButton>Read the weather care guide →</GuideButton>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* TROUBLESHOOTING */}
+        <section id="troubleshooting" style={{ borderBottom: `1px solid ${color.hairline}` }}>
+          <div
+            style={{
+              maxWidth: 1100,
+              margin: "0 auto",
+              padding: "clamp(40px,5vw,72px) 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 24,
+            }}
+          >
+            <h2 style={sectionH2}>Troubleshooting</h2>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))",
+                gap: "clamp(16px,2vw,24px)",
+              }}
+            >
+              {/* #47 ceramic-spray-streaks-high-spots */}
+              <Link href={routes.streaksHighSpots} style={cardStyle(color.orange)}>
+                <img src={asset("generated/ceramic-spray-streaks-high-spots-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.orange)}>Fix · Streaks & haze</span>
+                <span style={cardTitle}>Ceramic Coating Streaks, Haze or High Spots? How to Fix Them</span>
+                <span style={cardExcerpt}>Ceramic coating streaks, haze or high spots after a spray? Learn which problem you have, then fix it from gentle to heavy, starting with a clean re-buff.</span>
+                <GuideButton>Read the guide →</GuideButton>
               </Link>
             </div>
           </div>

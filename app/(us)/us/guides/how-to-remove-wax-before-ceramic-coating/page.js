@@ -20,11 +20,11 @@ const INLINE_IMAGE = asset("generated/how-to-remove-wax-before-ceramic-coating-3
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.howToRemoveWaxBeforeCeramicCoating },
+  alternates: { canonical: routes.removeWaxFirst },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.howToRemoveWaxBeforeCeramicCoating,
+    url: routes.removeWaxFirst,
     images: [COVER],
   },
   twitter: {
@@ -106,7 +106,7 @@ export default function HowToRemoveWaxBeforeCeramicCoatingPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.howToRemoveWaxBeforeCeramicCoating }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.removeWaxFirst }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -213,7 +213,7 @@ export default function HowToRemoveWaxBeforeCeramicCoatingPage() {
 
             <h3 style={h3}>Option 1: A Wax-Stripping Car Wash</h3>
             <p style={body}>
-              If you're wondering how to strip wax off a car with the least effort, start here. A wax-stripping car wash is a shampoo formulated to break down wax. Wash the car the way you normally would, following that product's label, then rinse thoroughly. It suits a car with a single, ordinary layer of wax and anyone who wants to start with the mildest approach. The wash routine itself is covered in <Link href={routes.howToWashCeramicCoatedCar} className="us-text-link">how to wash a ceramic coated car</Link>.
+              If you're wondering how to strip wax off a car with the least effort, start here. A wax-stripping car wash is a shampoo formulated to break down wax. Wash the car the way you normally would, following that product's label, then rinse thoroughly. It suits a car with a single, ordinary layer of wax and anyone who wants to start with the mildest approach. The wash routine itself is covered in <Link href={routes.washCoatedCar} className="us-text-link">how to wash a ceramic coated car</Link>.
             </p>
             <p style={body}>
               Skip dish soap; use a product designed for automotive paint instead.
@@ -286,7 +286,7 @@ export default function HowToRemoveWaxBeforeCeramicCoatingPage() {
           <section id="next" style={section}>
             <h2 style={h2Balance}>What to Do Next</h2>
             <p style={body}>
-              With the wax gone, finish the rest of your prep, including washing, decontamination, and drying or leaving the paint wet as your label says; see <Link href={routes.howToPrepCarForCeramicSpray} className="us-text-link">how to prep your car for ceramic spray</Link>. Then apply your product according to its label.
+              With the wax gone, finish the rest of your prep, including washing, decontamination, and drying or leaving the paint wet as your label says; see <Link href={routes.prepForSpray} className="us-text-link">how to prep your car for ceramic spray</Link>. Then apply your product according to its label.
             </p>
             <p style={body}>
               If you're using APGO Atomic Colored Glaze (D204), a silicone-based spray glaze applied after the car is washed and completely dried, follow <Link href={routes.coloredGlaze} className="us-text-link">how to apply APGO Atomic Colored Glaze</Link>. D204 and APGO Atomic Glaze Coating (D215), a silicone-based spray glaze applied to wet paint, are alternative routines, not a two-product layering system, so contact APGO before combining them. You can compare both on <Link href={routes.compare} className="us-text-link">APGO's silicone-based spray glaze</Link> page.

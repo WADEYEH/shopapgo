@@ -19,11 +19,11 @@ const HERO_ALT = "Foam sliding down a dark car door during a hand wash in mornin
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.howToWashCeramicCoatedCar },
+  alternates: { canonical: routes.washCoatedCar },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.howToWashCeramicCoatedCar,
+    url: routes.washCoatedCar,
     images: [COVER],
   },
   twitter: {
@@ -116,7 +116,7 @@ export default function HowToWashCeramicCoatedCarPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.howToWashCeramicCoatedCar }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.washCoatedCar }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -230,7 +230,7 @@ export default function HowToWashCeramicCoatedCarPage() {
               APGO Atomic Glaze Coating (D215) is one of them. It's a silicone-based spray glaze applied after washing and rinsing, while the paint is still wet. "Wet" here means freshly washed and rinsed; it doesn't mean wet from rain or still dusty. You spread it with a damp application cloth, towel-dry the car, and then buff with a clean coral-fleece microfiber towel. The details are in <Link href={routes.glazeCoating} className="us-text-link">how to apply APGO Atomic Glaze Coating</Link>, and you can compare <Link href={routes.compare} className="us-text-link">APGO's silicone-based spray glaze</Link> options side by side.
             </p>
             <p style={body}>
-              If you've just applied any spray product and are still inside its waiting period, see <Link href={routes.howLongToWaitToWashAfterCeramicSpray} className="us-text-link">how long to wait before washing after a spray</Link>.
+              If you've just applied any spray product and are still inside its waiting period, see <Link href={routes.waitToWash} className="us-text-link">how long to wait before washing after a spray</Link>.
             </p>
           </section>
 
@@ -269,7 +269,7 @@ export default function HowToWashCeramicCoatedCarPage() {
               ))}
             </div>
             <p style={body}>
-              For the bigger picture of keeping a coating in shape between washes, see <Link href={routes.ceramicCoatingMaintenance} className="us-text-link">ceramic coating maintenance</Link>.
+              For the bigger picture of keeping a coating in shape between washes, see <Link href={routes.coatingMaintenance} className="us-text-link">ceramic coating maintenance</Link>.
             </p>
           </section>
 
@@ -280,7 +280,7 @@ export default function HowToWashCeramicCoatedCarPage() {
               a: item.q === "Can I take a ceramic coated car through an automatic car wash?"
                 ? <>You can, but brushes, strong detergents, and frequent visits usually wear the protection down faster. For details, see <Link href={routes.autoWashCoating} className="us-text-link">does an automatic car wash remove ceramic coating</Link>.</>
                 : item.q === "How soon can I wash after applying a ceramic spray?"
-                ? <>Check that product's label. Our guide on <Link href={routes.howLongToWaitToWashAfterCeramicSpray} className="us-text-link">how long to wait to wash after a spray</Link> explains what to look for.</>
+                ? <>Check that product's label. Our guide on <Link href={routes.waitToWash} className="us-text-link">how long to wait to wash after a spray</Link> explains what to look for.</>
                 : item.q === "Do I need to wash the car after it rains?"
                 ? <>Not necessarily right away, but don't let dirty rain residue or road salt dry and sit on the paint. For more, read <Link href={routes.rainDamageCoating} className="us-text-link">does rain damage ceramic coating</Link>.</>
                 : item.a

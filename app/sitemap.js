@@ -29,16 +29,16 @@ const pages = [
   { path: routes.rainDamageCoating, lastModified: "2026-09-23" },
   { path: routes.diyVsPro, lastModified: "2026-09-27" },
   // Batch 1 guides
-  { path: routes.typesOfCarPaintProtection, lastModified: "2026-09-28" },
-  { path: routes.whatIsSprayCeramicCoating, lastModified: "2026-09-28" },
-  { path: routes.ceramicSprayVsCoating, lastModified: "2026-09-28" },
+  { path: routes.paintProtectionTypes, lastModified: "2026-09-28" },
+  { path: routes.whatIsSprayCeramic, lastModified: "2026-09-28" },
+  { path: routes.sprayVsCoating, lastModified: "2026-09-28" },
   { path: routes.whatIsCarGlaze, lastModified: "2026-09-28" },
-  { path: routes.howToPrepCarForCeramicSpray, lastModified: "2026-09-28" },
-  { path: routes.howToRemoveWaxBeforeCeramicCoating, lastModified: "2026-09-28" },
-  { path: routes.howLongToWaitToWashAfterCeramicSpray, lastModified: "2026-09-28" },
-  { path: routes.ceramicCoatingMaintenance, lastModified: "2026-09-28" },
-  { path: routes.howToWashCeramicCoatedCar, lastModified: "2026-09-28" },
-  { path: routes.ceramicSprayStreaksHighSpots, lastModified: "2026-09-28" },
+  { path: routes.prepForSpray, lastModified: "2026-09-28" },
+  { path: routes.removeWaxFirst, lastModified: "2026-09-28" },
+  { path: routes.waitToWash, lastModified: "2026-09-28" },
+  { path: routes.coatingMaintenance, lastModified: "2026-09-28" },
+  { path: routes.washCoatedCar, lastModified: "2026-09-28" },
+  { path: routes.streaksHighSpots, lastModified: "2026-09-28" },
 ];
 
 export default function sitemap() {

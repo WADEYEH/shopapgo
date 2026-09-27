@@ -19,11 +19,11 @@ const INLINE_IMAGE = asset("generated/what-is-spray-ceramic-coating-does-wont.pn
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.whatIsSprayCeramicCoating },
+  alternates: { canonical: routes.whatIsSprayCeramic },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.whatIsSprayCeramicCoating,
+    url: routes.whatIsSprayCeramic,
     images: [COVER],
   },
   twitter: {
@@ -72,7 +72,7 @@ export default function WhatIsSprayCeramicCoatingPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.whatIsSprayCeramicCoating }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.whatIsSprayCeramic }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -106,7 +106,7 @@ export default function WhatIsSprayCeramicCoatingPage() {
               If you've looked up what is ceramic spray for cars, you've probably seen the same idea under several names: ceramic spray, spray ceramic coating, ceramic detail spray, and more. The names aren't standardized, so the directions on a specific label tell you more than the name on the front of the bottle.
             </p>
             <p style={body}>
-              Spray ceramics belong to the same broad family as bottled liquid ceramic coatings, but the form, the prep, and what you can expect from them are different. We compare the two directly in <Link href={routes.ceramicSprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>. For where sprays sit among all the other ways to protect paint, see <Link href={routes.typesOfCarPaintProtection} className="us-text-link">types of car paint protection</Link>.
+              Spray ceramics belong to the same broad family as bottled liquid ceramic coatings, but the form, the prep, and what you can expect from them are different. We compare the two directly in <Link href={routes.sprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>. For where sprays sit among all the other ways to protect paint, see <Link href={routes.paintProtectionTypes} className="us-text-link">types of car paint protection</Link>.
             </p>
           </section>
 
@@ -211,7 +211,7 @@ export default function WhatIsSprayCeramicCoatingPage() {
             <FaqList items={FAQ.map((item) => ({
               q: item.q,
               a: item.q === "Is ceramic spray a real ceramic coating?"
-                ? <>It's the spray form of the ceramic category. Compared with a bottled liquid coating, it differs in form, prep, and what you can expect from it; <Link href={routes.ceramicSprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link> walks through the differences.</>
+                ? <>It's the spray form of the ceramic category. Compared with a bottled liquid coating, it differs in form, prep, and what you can expect from it; <Link href={routes.sprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link> walks through the differences.</>
                 : item.q === "How long does spray ceramic coating last?"
                 ? <>It depends on the product's label and on how you wash and where you drive. Watch the paint's signals to decide <Link href={routes.howOftenReapply} className="us-text-link">when to reapply a spray coating</Link>.</>
                 : item.q === "Can you put ceramic spray over wax?"

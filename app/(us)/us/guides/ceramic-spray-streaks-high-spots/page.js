@@ -20,11 +20,11 @@ const INLINE_IMAGE = asset("generated/ceramic-spray-streaks-high-spots-too-much-
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.ceramicSprayStreaksHighSpots },
+  alternates: { canonical: routes.streaksHighSpots },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.ceramicSprayStreaksHighSpots,
+    url: routes.streaksHighSpots,
     images: [COVER],
   },
   twitter: {
@@ -112,7 +112,7 @@ export default function CeramicSprayStreaksHighSpotsPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.ceramicSprayStreaksHighSpots }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.streaksHighSpots }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -212,7 +212,7 @@ export default function CeramicSprayStreaksHighSpotsPage() {
               A high spot forms when product in one area isn't leveled and wiped off, then dries into a thicker, darker patch. High spots are more common with liquid ceramic coatings, whose application windows are strict. With spray products they're less common and usually come from too much product in one place.
             </p>
             <p style={body}>
-              The fix follows the same ladder: re-buff, check the label, ask the maker, and only then consider polishing. A high spot that has already hardened is harder to deal with on your own. For more on how liquid coatings and sprays differ, see <Link href={routes.ceramicSprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>.
+              The fix follows the same ladder: re-buff, check the label, ask the maker, and only then consider polishing. A high spot that has already hardened is harder to deal with on your own. For more on how liquid coatings and sprays differ, see <Link href={routes.sprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>.
             </p>
           </section>
 
@@ -240,7 +240,7 @@ export default function CeramicSprayStreaksHighSpotsPage() {
               </li>
               <li style={{ ...body, margin: 0, padding: "0 0 0 20px", position: "relative" }}>
                 <span style={{ position: "absolute", left: 0, color: color.orange }}>•</span>
-                <strong style={strong}>Paint that wasn't ready.</strong> Leftover dirt or contamination causes trouble, so see <Link href={routes.howToPrepCarForCeramicSpray} className="us-text-link">how to prep your car for ceramic spray</Link>. So does old wax underneath; see <Link href={routes.howToRemoveWaxBeforeCeramicCoating} className="us-text-link">how to remove wax before ceramic coating</Link>.
+                <strong style={strong}>Paint that wasn't ready.</strong> Leftover dirt or contamination causes trouble, so see <Link href={routes.prepForSpray} className="us-text-link">how to prep your car for ceramic spray</Link>. So does old wax underneath; see <Link href={routes.removeWaxFirst} className="us-text-link">how to remove wax before ceramic coating</Link>.
               </li>
             </ul>
             <figure style={{ margin: 0 }}>

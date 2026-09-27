@@ -19,11 +19,11 @@ const HERO_ALT = "Gleaming car in a driveway on a relaxed morning with water bea
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.ceramicCoatingMaintenance },
+  alternates: { canonical: routes.coatingMaintenance },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.ceramicCoatingMaintenance,
+    url: routes.coatingMaintenance,
     images: [COVER],
   },
   twitter: {
@@ -72,7 +72,7 @@ const TABLE_CHECKLIST = [
     task: "Gentle hand wash",
     when: "Every wash",
     why: "Removes grit without stripping or scratching the finish",
-    deeper: { text: "how to wash a ceramic coated car at home", route: routes.howToWashCeramicCoatedCar },
+    deeper: { text: "how to wash a ceramic coated car at home", route: routes.washCoatedCar },
   },
   {
     task: "Dry with a clean towel",
@@ -116,7 +116,7 @@ export default function CeramicCoatingMaintenancePage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.ceramicCoatingMaintenance }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.coatingMaintenance }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -165,7 +165,7 @@ export default function CeramicCoatingMaintenancePage() {
               Use a mild, pH-neutral car shampoo and a clean wash mitt. Skip strong degreasers, harsh household cleaners, and stiff brushes, which strip and scratch rather than clean. Wash often enough that dirt doesn't sit and bake onto the paint. There's no magic number; it depends on how you drive and where you park.
             </p>
             <p style={body}>
-              The step-by-step wash itself is covered in <Link href={routes.howToWashCeramicCoatedCar} className="us-text-link">how to wash a ceramic coated car at home</Link>. If you rely on drive-through washes, know that brushes, strong detergents, and repeated friction tend to wear a spray finish down faster; our guide on <Link href={routes.autoWashCoating} className="us-text-link">does an automatic car wash remove ceramic coating</Link> explains why.
+              The step-by-step wash itself is covered in <Link href={routes.washCoatedCar} className="us-text-link">how to wash a ceramic coated car at home</Link>. If you rely on drive-through washes, know that brushes, strong detergents, and repeated friction tend to wear a spray finish down faster; our guide on <Link href={routes.autoWashCoating} className="us-text-link">does an automatic car wash remove ceramic coating</Link> explains why.
             </p>
 
             <h3 style={h3}>Dry It Instead of Letting It Air-Dry</h3>
@@ -194,7 +194,7 @@ export default function CeramicCoatingMaintenancePage() {
               For APGO users, here's what that looks like. APGO Atomic Colored Glaze (D204) is a silicone-based spray glaze, not a ceramic coating. Once the car is washed and fully dried, you can apply another thin layer as upkeep. It's optional, not required at every wash, and a thicker coat isn't better. The full routine is in <Link href={routes.coloredGlaze} className="us-text-link">how to apply APGO Atomic Colored Glaze</Link>. For APGO Atomic Glaze Coating (D215), follow the current label for when to reapply.
             </p>
             <p style={body}>
-              D204 lasts up to about 6 months (180 days), and D215 lasts up to about 4 months (120 days). Both figures are ceilings, not promises. How long your finish actually lasts depends on how you wash, your weather, and where the car is parked. For the first wash after a fresh application, see <Link href={routes.howLongToWaitToWashAfterCeramicSpray} className="us-text-link">how long to wait before washing after a spray finish</Link>.
+              D204 lasts up to about 6 months (180 days), and D215 lasts up to about 4 months (120 days). Both figures are ceilings, not promises. How long your finish actually lasts depends on how you wash, your weather, and where the car is parked. For the first wash after a fresh application, see <Link href={routes.waitToWash} className="us-text-link">how long to wait before washing after a spray finish</Link>.
             </p>
           </section>
 
@@ -264,7 +264,7 @@ export default function CeramicCoatingMaintenancePage() {
               </li>
               <li style={{ ...body, margin: 0, padding: "0 0 0 20px", position: "relative" }}>
                 <span style={{ position: "absolute", left: 0, color: color.orange }}>•</span>
-                <strong style={strong}>Spraying extra to "boost" protection.</strong> A heavier coat is usually just harder to buff and more likely to haze. If you already see haze or streaks, see <Link href={routes.ceramicSprayStreaksHighSpots} className="us-text-link">fixing streaks or haze from a spray finish</Link>.
+                <strong style={strong}>Spraying extra to "boost" protection.</strong> A heavier coat is usually just harder to buff and more likely to haze. If you already see haze or streaks, see <Link href={routes.streaksHighSpots} className="us-text-link">fixing streaks or haze from a spray finish</Link>.
               </li>
               <li style={{ ...body, margin: 0, padding: "0 0 0 20px", position: "relative" }}>
                 <span style={{ position: "absolute", left: 0, color: color.orange }}>•</span>

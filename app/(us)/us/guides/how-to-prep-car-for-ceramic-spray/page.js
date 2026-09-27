@@ -20,11 +20,11 @@ const INLINE_IMAGE = asset("generated/how-to-prep-car-for-ceramic-spray-ready-ch
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.howToPrepCarForCeramicSpray },
+  alternates: { canonical: routes.prepForSpray },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.howToPrepCarForCeramicSpray,
+    url: routes.prepForSpray,
     images: [COVER],
   },
   twitter: {
@@ -121,7 +121,7 @@ export default function HowToPrepCarForCeramicSprayPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.howToPrepCarForCeramicSpray }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.prepForSpray }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -167,7 +167,7 @@ export default function HowToPrepCarForCeramicSprayPage() {
               Use a dedicated car shampoo and clean tools to lift grit, dust, and road film, then rinse until no soap is left. Soap residue sits between the paint and whatever you spray next, so the rinse matters as much as the wash. Give extra attention to the lower panels, the areas behind the wheels, and the edges around badges and trim, where dirt tends to hide.
             </p>
             <p style={body}>
-              The wash routine itself, from the pre-rinse to the order you work around the car, is a topic of its own. We cover it in <Link href={routes.howToWashCeramicCoatedCar} className="us-text-link">how to wash a ceramic coated car</Link>.
+              The wash routine itself, from the pre-rinse to the order you work around the car, is a topic of its own. We cover it in <Link href={routes.washCoatedCar} className="us-text-link">how to wash a ceramic coated car</Link>.
             </p>
 
             <h3 style={h3}>2. Feel and Look for Bonded Contamination</h3>
@@ -194,7 +194,7 @@ export default function HowToPrepCarForCeramicSprayPage() {
               A spray finish is designed to go onto clean paint. When old wax sits in between, the common results are uneven application, haze, and a finish that doesn't last as long as it should.
             </p>
             <p style={body}>
-              If you don't know what's on the paint, maybe because you bought the car used or can't remember the last product you applied, treat that as a question to answer first rather than something to spray over. Our <Link href={routes.coatingOverWax} className="us-text-link">coating-over-wax checklist</Link> helps you decide what to do, and the removal itself is covered in <Link href={routes.howToRemoveWaxBeforeCeramicCoating} className="us-text-link">how to remove wax before ceramic coating</Link>.
+              If you don't know what's on the paint, maybe because you bought the car used or can't remember the last product you applied, treat that as a question to answer first rather than something to spray over. Our <Link href={routes.coatingOverWax} className="us-text-link">coating-over-wax checklist</Link> helps you decide what to do, and the removal itself is covered in <Link href={routes.removeWaxFirst} className="us-text-link">how to remove wax before ceramic coating</Link>.
             </p>
             <p style={body}>
               For APGO products specifically, APGO does not recommend applying Atomic Colored Glaze (D204) over an existing wax layer. If the car already carries some other spray product, or you're not sure what it is, check the current label or contact APGO support before you apply an APGO glaze.
@@ -219,7 +219,7 @@ export default function HowToPrepCarForCeramicSprayPage() {
               Be realistic about what you find. Dirt, water spots, and scratches are three different problems. Dirt means another pass with the wash. Mineral water spots and existing scratches need their own fixes, and no spray finish should be expected to handle all three.
             </p>
             <p style={body}>
-              Work in the shade, on paint that isn't hot to the touch. If you end up with streaks or haze after applying, see our guide to <Link href={routes.ceramicSprayStreaksHighSpots} className="us-text-link">fixing streaks or high spots after a spray finish</Link>.
+              Work in the shade, on paint that isn't hot to the touch. If you end up with streaks or haze after applying, see our guide to <Link href={routes.streaksHighSpots} className="us-text-link">fixing streaks or high spots after a spray finish</Link>.
             </p>
             <figure style={{ margin: 0 }}>
               <img

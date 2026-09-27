@@ -19,11 +19,11 @@ const HERO_ALT = "Glossy car hood with water beads in a driveway at golden hour"
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.typesOfCarPaintProtection },
+  alternates: { canonical: routes.paintProtectionTypes },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.typesOfCarPaintProtection,
+    url: routes.paintProtectionTypes,
     images: [COVER],
   },
   twitter: {
@@ -123,7 +123,7 @@ export default function TypesOfCarPaintProtectionPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.typesOfCarPaintProtection }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.paintProtectionTypes }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -224,7 +224,7 @@ export default function TypesOfCarPaintProtectionPage() {
 
             <h3 style={h3}>Spray Ceramic Coating</h3>
             <p style={body}>
-              Spray ceramic coating is the spray-on branch of the ceramic category. These products are marketed on ceramic chemistry, which is typically silica-based, and they usually go on the same way: spray, spread, buff. The exact form and rules depend on each brand's label, and so does how long a given product lasts. They suit DIYers who want a ceramic product without booking a full coating job. For a fuller explanation, see our guide on <Link href={routes.whatIsSprayCeramicCoating} className="us-text-link">what spray ceramic coating is</Link>.
+              Spray ceramic coating is the spray-on branch of the ceramic category. These products are marketed on ceramic chemistry, which is typically silica-based, and they usually go on the same way: spray, spread, buff. The exact form and rules depend on each brand's label, and so does how long a given product lasts. They suit DIYers who want a ceramic product without booking a full coating job. For a fuller explanation, see our guide on <Link href={routes.whatIsSprayCeramic} className="us-text-link">what spray ceramic coating is</Link>.
             </p>
             <p style={body}>
               Spray glaze and spray ceramic are different categories, even when the application looks similar. A silicone-based spray glaze is not a ceramic product. For timing either way, see <Link href={routes.howOftenReapply} className="us-text-link">how often to reapply a spray coating</Link>.
@@ -232,7 +232,7 @@ export default function TypesOfCarPaintProtectionPage() {
 
             <h3 style={h3}>Liquid or Professional Ceramic Coating</h3>
             <p style={body}>
-              This is the bottled, liquid form of ceramic coating. You can apply it yourself with a DIY kit or have a detailer do it. Either way, the prep is demanding and the application process is less forgiving than a spray. Durability is often sold as a years-scale package, so check that maker's label or the shop's written terms rather than assuming a number. It fits owners who will invest in careful prep, or who would rather pay a shop to own it. If you are deciding who should do the work, see <Link href={routes.diyVsPro} className="us-text-link">DIY ceramic coating vs professional</Link>. The practical differences between the spray and liquid forms are covered in <Link href={routes.ceramicSprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>.
+              This is the bottled, liquid form of ceramic coating. You can apply it yourself with a DIY kit or have a detailer do it. Either way, the prep is demanding and the application process is less forgiving than a spray. Durability is often sold as a years-scale package, so check that maker's label or the shop's written terms rather than assuming a number. It fits owners who will invest in careful prep, or who would rather pay a shop to own it. If you are deciding who should do the work, see <Link href={routes.diyVsPro} className="us-text-link">DIY ceramic coating vs professional</Link>. The practical differences between the spray and liquid forms are covered in <Link href={routes.sprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>.
             </p>
 
             <h3 style={h3}>Paint Protection Film (PPF)</h3>
@@ -277,7 +277,7 @@ export default function TypesOfCarPaintProtectionPage() {
             <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
               <li style={{ ...body, margin: 0, padding: "0 0 0 20px", position: "relative" }}>
                 <span style={{ position: "absolute", left: 0, color: color.orange }}>•</span>
-                <strong style={strong}>They all need clean paint.</strong> Every option works best on a properly washed, contaminant-free surface. Prep is a topic of its own, covered in <Link href={routes.howToPrepCarForCeramicSpray} className="us-text-link">how to prep your car for a spray finish</Link>.
+                <strong style={strong}>They all need clean paint.</strong> Every option works best on a properly washed, contaminant-free surface. Prep is a topic of its own, covered in <Link href={routes.prepForSpray} className="us-text-link">how to prep your car for a spray finish</Link>.
               </li>
               <li style={{ ...body, margin: 0, padding: "0 0 0 20px", position: "relative" }}>
                 <span style={{ position: "absolute", left: 0, color: color.orange }}>•</span>

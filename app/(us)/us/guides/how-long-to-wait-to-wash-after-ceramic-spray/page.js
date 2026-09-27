@@ -18,11 +18,11 @@ const HERO_ALT = "Glossy dry car parked under a carport while light rain falls o
 export const metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: routes.howLongToWaitToWashAfterCeramicSpray },
+  alternates: { canonical: routes.waitToWash },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: routes.howLongToWaitToWashAfterCeramicSpray,
+    url: routes.waitToWash,
     images: [COVER],
   },
   twitter: {
@@ -68,7 +68,7 @@ export default function HowLongToWaitToWashAfterCeramicSprayPage() {
     <div style={{ minHeight: "100vh", background: color.bg }}>
       <JsonLd
         data={[
-          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.howLongToWaitToWashAfterCeramicSpray }),
+          articleLd({ headline: H1, description: DESCRIPTION, image: COVER, route: routes.waitToWash }),
           breadcrumbLd([{ name: "Home", route: routes.home }, { name: "Guides", route: routes.guides }, { name: CRUMB }]),
           faqLd(FAQ),
         ]}
@@ -165,7 +165,7 @@ export default function HowLongToWaitToWashAfterCeramicSprayPage() {
               First, don't rush to wipe. Until your label says the car can be washed, avoid dry-wiping dust or rain marks, which can drag grit across the fresh layer.
             </p>
             <p style={body}>
-              Once washing is allowed, clean the car gently. The full method is covered in <Link href={routes.howToWashCeramicCoatedCar} className="us-text-link">how to wash a ceramic coated car</Link>, and if you usually use a drive-through, read <Link href={routes.autoWashCoating} className="us-text-link">what an automatic car wash does to a spray coating</Link> first.
+              Once washing is allowed, clean the car gently. The full method is covered in <Link href={routes.washCoatedCar} className="us-text-link">how to wash a ceramic coated car</Link>, and if you usually use a drive-through, read <Link href={routes.autoWashCoating} className="us-text-link">what an automatic car wash does to a spray coating</Link> first.
             </p>
             <p style={body}>
               Contamination that sits and dries, like bird droppings, is the exception worth watching. As soon as your product allows contact with water, soften it and lift it off gently rather than scrubbing. For how everyday rain, water spots, and road salt affect a protective layer over time, see <Link href={routes.rainDamageCoating} className="us-text-link">does rain damage ceramic coating</Link>.
@@ -191,7 +191,7 @@ export default function HowLongToWaitToWashAfterCeramicSprayPage() {
           <section id="first-wash" style={section}>
             <h2 style={h2Balance}>Your First Wash After the Wait</h2>
             <p style={body}>
-              When the waiting period is over, keep the first wash gentle: a hand wash with a pH-neutral car shampoo and clean tools. The step-by-step method is in <Link href={routes.howToWashCeramicCoatedCar} className="us-text-link">how to wash a ceramic coated car at home</Link>, and the longer-term routine is covered in <Link href={routes.ceramicCoatingMaintenance} className="us-text-link">ceramic coating maintenance</Link>.
+              When the waiting period is over, keep the first wash gentle: a hand wash with a pH-neutral car shampoo and clean tools. The step-by-step method is in <Link href={routes.washCoatedCar} className="us-text-link">how to wash a ceramic coated car at home</Link>, and the longer-term routine is covered in <Link href={routes.coatingMaintenance} className="us-text-link">ceramic coating maintenance</Link>.
             </p>
           </section>
 
