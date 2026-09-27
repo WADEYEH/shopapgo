@@ -5,9 +5,15 @@ import { config } from "@/lib/us/config";
 import { homeLink, guideGroups } from "@/lib/us/navigation";
 import { company } from "@/lib/us/company";
 
+const productHowToRoutes = new Set([routes.coloredGlaze, routes.glazeCoating]);
+
 export default function SiteFooter() {
   const supportEmail = config.supportEmail.trim() || company.email;
-  const explore = [homeLink, ...guideGroups[0].items, ...guideGroups[1].items, ...guideGroups[2].items];
+  const explore = [
+    homeLink,
+    ...guideGroups.flatMap((g) => g.items).filter((item) => !productHowToRoutes.has(item.href)),
+  ];
+  const applicationGuides = guideGroups.flatMap((g) => g.items).filter((item) => productHowToRoutes.has(item.href));
   const legal = [
     { label: "Privacy Policy", href: routes.privacy },
     { label: "Terms", href: routes.terms },
@@ -28,7 +34,7 @@ export default function SiteFooter() {
             </div>
           </div>
           <nav aria-label="Explore"><h2>Explore</h2><ul>{explore.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></nav>
-          <nav aria-label="Application guides"><h2>Application guides</h2><ul>{guideGroups[3].items.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></nav>
+          <nav aria-label="Application guides"><h2>Application guides</h2><ul>{applicationGuides.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></nav>
           <section className="us-footer-support" aria-labelledby="us-footer-support-title">
             <h2 id="us-footer-support-title">Support</h2>
             <div className="us-footer-contact">
