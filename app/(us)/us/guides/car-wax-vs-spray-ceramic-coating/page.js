@@ -105,9 +105,9 @@ export default function WaxVsSprayCoatingPage() {
               pass.
             </p>
             <p style={body}>
-              <strong style={strong}>Spray ceramic / glaze coating</strong> (in this article, a dry-surface spray finish such as APGO
-              Atomic Colored Glaze D204) is a thin spray you spread and towel-finish on clean, dry paint. The point of the comparison
-              is the workflow and upkeep, not the chemistry jargon on the bottle.
+              <strong style={strong}>Spray ceramic / glaze coating</strong> (in this article, a dry-surface spray finish) is a thin
+              spray you spread and towel-finish on clean, dry paint. The point of the comparison is the workflow and upkeep, not the
+              chemistry jargon on the bottle.
             </p>
             <p style={body}>
               If you came here looking for wet-vs-dry product choice or a how-to for one SKU, that already lives in APGO's other
@@ -142,7 +142,7 @@ export default function WaxVsSprayCoatingPage() {
                 <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>Traditional wax</span>
               </div>
               <div style={tableHead(color.dry)}>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>Dry spray coating (e.g. D204)</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>Dry spray coating</span>
               </div>
               {COMPARE.map(([label, wax, spray]) => (
                 <Fragment key={label}>
@@ -171,9 +171,11 @@ export default function WaxVsSprayCoatingPage() {
               good conditions, not a guarantee.
             </p>
             <p style={body}>
-              For a dry-surface spray glaze like <strong style={strong}>APGO Atomic Colored Glaze (D204)</strong>, the U.S. product
-              page states wash resistance lasting <strong style={strong}>up to about 6 months</strong>. That is the only specific
-              duration we cite here.
+              If you'd rather use a silicone-based spray glaze than a ceramic spray,{" "}
+              <strong style={strong}>APGO Atomic Colored Glaze (D204)</strong> is one option. It goes on dry paint, and the U.S.
+              product page rates it to last <strong style={strong}>up to about 6 months (180 days)</strong>; see{" "}
+              <Link href={routes.compare} className="us-text-link">compare the options</Link>. That is the only specific duration we
+              cite here.
             </p>
             <p style={body}>
               Traditional wax is different: many drivers find they need to reapply more often to keep the same look and water
@@ -210,8 +212,8 @@ export default function WaxVsSprayCoatingPage() {
             <p style={body}>
               <strong style={strong}>Spray coating wins when</strong> your constraint is time: you already washed and dried the car,
               you want protection without a second project, and you'd rather stretch the interval before the next full protection
-              session. A dry spray glaze such as D204 is one example of that path—not the only spray on the market, but a clear
-              instance of "finish after drying" without traditional wax labor.
+              session. APGO's own option here is a silicone-based spray glaze rather than a ceramic spray: Atomic Colored Glaze
+              (D204) follows the same "finish after drying" rhythm without traditional wax labor.
             </p>
             <p style={body}>Neither choice replaces washing, drying, or reading the label for surfaces the product is approved for.</p>
           </section>

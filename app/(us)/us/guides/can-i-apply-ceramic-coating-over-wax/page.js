@@ -162,8 +162,8 @@ export default function CoatingOverWaxPage() {
               ))}
             </div>
             <p style={body}>
-              Clean, bare clear coat with no old wax or coating is a different case: that is when a dry-surface spray (for example
-              APGO Atomic Colored Glaze D204) is in scope—still only on surfaces the current label allows.
+              Clean, bare clear coat with no old wax or coating is a different case: that is when a new spray product is in
+              scope—still only on surfaces its current label allows.
             </p>
           </section>
 
@@ -236,10 +236,11 @@ export default function CoatingOverWaxPage() {
           <section id="d204" style={section}>
             <h2 style={h2}>Where D204 fits</h2>
             <p style={body}>
-              APGO Atomic Colored Glaze (D204) is one example of a <strong style={strong}>dry-surface</strong> spray glaze: it
-              belongs on clean paint after drying, when the surface is ready—not as a guaranteed topper over old wax. The U.S. page
-              cites wash resistance up to about 6 months under good conditions; that number does not change the compatibility rule
-              above. How to spray it is covered in the dry-application guide, not here.
+              APGO Atomic Colored Glaze (D204) is a silicone-based spray glaze, not a ceramic coating, and it goes on{" "}
+              <strong style={strong}>dry</strong> paint: it belongs on clean paint after drying, when the surface is ready. APGO does
+              not recommend applying it over an existing wax layer. The U.S. product page rates it to last up to about 6 months (180
+              days) under good conditions; that number does not change the compatibility rule above. How to spray it is covered in
+              the dry-application guide, not here.
             </p>
             <GuideLinkCard
               href={routes.coloredGlaze}
