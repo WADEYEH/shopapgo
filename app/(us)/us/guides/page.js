@@ -68,7 +68,6 @@ const sectionH2 = {
 const sectionP = { margin: 0, fontSize: 16, lineHeight: 1.55, color: color.tertiary };
 const cardLabel = (c) => ({ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: c, fontWeight: 700 });
 const cardExcerpt = { fontSize: 15, lineHeight: 1.5, color: color.tertiary };
-const groupSection = { scrollMarginTop: 80 };
 
 export default function GuidesPage() {
   return (
@@ -171,7 +170,7 @@ export default function GuidesPage() {
         </section>
 
         {/* COMPARE & CHOOSE */}
-        <section id="compare-and-choose" style={{ ...groupSection, borderBottom: `1px solid ${color.hairline}` }}>
+        <section id="compare-and-choose" style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div
             style={{
               maxWidth: 1100,
@@ -247,7 +246,7 @@ export default function GuidesPage() {
         </section>
 
         {/* PREP & APPLICATION */}
-        <section id="prep-and-application" style={{ ...groupSection, borderBottom: `1px solid ${color.hairline}` }}>
+        <section id="prep-and-application" style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div
             style={{
               maxWidth: 1100,
@@ -387,7 +386,7 @@ export default function GuidesPage() {
         </section>
 
         {/* WASH & CARE */}
-        <section id="wash-and-care" style={{ ...groupSection, borderBottom: `1px solid ${color.hairline}` }}>
+        <section id="wash-and-care" style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div
             style={{
               maxWidth: 1100,
@@ -465,7 +464,7 @@ export default function GuidesPage() {
         </section>
 
         {/* DURABILITY & WEATHER */}
-        <section id="durability-and-weather" style={{ ...groupSection, borderBottom: `1px solid ${color.hairline}` }}>
+        <section id="durability-and-weather" style={{ borderBottom: `1px solid ${color.hairline}` }}>
           <div
             style={{
               maxWidth: 1100,
