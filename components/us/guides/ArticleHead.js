@@ -60,52 +60,14 @@ export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, 
           </span>
         </div>
         {heroOverlayTitle && heroSrc ? (
-          <div className="us-hero-overlay-wrapper">
-            <h1
-              className="us-hero-overlay-h1-mobile"
-              style={{
-                margin: 0,
-                fontFamily: CONDENSED,
-                fontWeight: 800,
-                fontSize: "clamp(44px,7vw,88px)",
-                lineHeight: 0.88,
-                textTransform: "uppercase",
-                textWrap: "balance",
-                maxWidth: 900,
-              }}
-            >
-              {title}
-            </h1>
-            <figure
-              style={{
-                margin: 0,
-                position: "relative",
-                borderTop: `4px solid ${color.orange}`,
-              }}
-            >
+          <div className="us-hero-overlay">
+            <h1 className="us-hero-overlay-h1">{title}</h1>
+            <figure style={{ margin: 0, borderTop: `4px solid ${color.orange}` }}>
               <img
                 src={heroSrc}
                 alt={heroAlt}
                 style={{ display: "block", width: "100%", aspectRatio: "16/9", objectFit: "cover" }}
               />
-              <h1
-                className="us-hero-overlay-h1"
-                style={{
-                  margin: 0,
-                  fontFamily: CONDENSED,
-                  fontWeight: 800,
-                  fontSize: "clamp(36px,5.2vw,64px)",
-                  lineHeight: 0.9,
-                  textTransform: "uppercase",
-                  color: color.text,
-                  position: "absolute",
-                  left: "clamp(20px,3vw,40px)",
-                  bottom: "clamp(20px,3vw,40px)",
-                  maxWidth: "70%",
-                }}
-              >
-                {title}
-              </h1>
             </figure>
           </div>
         ) : (

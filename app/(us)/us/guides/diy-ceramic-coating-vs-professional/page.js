@@ -6,10 +6,10 @@ import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
-import { h2, h2Balance, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
+import { h2, h2Balance, section, lead, body, strong } from "@/components/us/guides/styles";
 
 const TITLE = "DIY Ceramic Coating vs Professional";
-const H1 = "DIY Ceramic Coating vs Professional: What's Actually Worth It?";
+const H1 = "DIY Ceramic Coating vs Professional: What’s Actually Worth It?";
 const CRUMB = "DIY vs pro coating";
 const LEDE =
   "DIY spray coating buys a redoable afternoon at home; a pro shop buys bay time and a longer package. Compare time, cost, and effort before you choose.";
@@ -31,7 +31,7 @@ export const metadata = {
 };
 
 const TOC = [
-  { href: "#comparing", label: "What you're comparing" },
+  { href: "#comparing", label: "What you’re comparing" },
   { href: "#time-cost-effort", label: "Time, cost, and effort" },
   { href: "#how-long", label: "How long each path usually lasts" },
   { href: "#who-fits", label: "Who DIY spray is for vs who should go pro" },
@@ -76,7 +76,7 @@ const TABLE2 = [
   {
     factor: "Control",
     diy: "Full control of timing",
-    pro: "Depends on the shop's calendar and package rules",
+    pro: "Depends on the shop’s calendar and package rules",
   },
 ];
 
@@ -147,7 +147,7 @@ export default function DiyVsProPage() {
           </p>
 
           <section id="comparing" style={section}>
-            <h2 style={h2Balance}>What you're comparing</h2>
+            <h2 style={h2Balance}>What you’re comparing</h2>
             <p style={body}>There are two different routes to paint protection:</p>
             <div
               style={{
@@ -179,7 +179,7 @@ export default function DiyVsProPage() {
               ))}
             </div>
             <p style={body}>
-              We are comparing paths, not writing a white paper. Product labels, shop quotes, and APGO support still beat any generic "DIY is always enough" or "pro is always required" claim.
+              We are comparing paths, not writing a white paper. Product labels, shop quotes, and APGO support still beat any generic “DIY is always enough” or “pro is always required” claim.
             </p>
           </section>
 
@@ -218,7 +218,7 @@ export default function DiyVsProPage() {
               ))}
             </div>
             <p style={body}>
-              If your real constraint is "I need protection before next week and I can spend a Saturday," DIY spray is usually the reachable path. If your constraint is "I want the shop to own prep and a longer service relationship," pro is what you are shopping for, not a different spray bottle with a fancier name.
+              If your real constraint is “I need protection before next week and I can spend a Saturday,” DIY spray is usually the reachable path. If your constraint is “I want the shop to own prep and a longer service relationship,” pro is what you are shopping for, not a different spray bottle with a fancier name.
             </p>
             <figure style={{ margin: 0 }}>
               <img
@@ -322,13 +322,9 @@ export default function DiyVsProPage() {
               DIY versus professional ceramic coating is a purchase decision between redoable convenience and paid bay labor with a longer package. DIY spray, with D204 as one dry-surface example rated up to about six months on the U.S. product page, fits drivers who will prep honestly and refresh when the finish fades. Pro fits drivers who want to buy prep, time, and a years-scale package, based on a written shop quote.
             </p>
             <p style={body}>
-              Pick the path that matches your calendar and your patience for redos, then follow the product label or the shop's written package terms.
+              Pick the path that matches your calendar and your patience for redos, then follow the product label or the shop’s written package terms.
             </p>
           </section>
-
-          <p style={finePrint}>
-            This article is published by APGO. General paint-care guidance does not replace your vehicle's care instructions or the directions for a specific product.
-          </p>
         </ArticleBody>
 
         <RelatedGuides items={["waxVsSprayCoating", "howOftenReapply", "coatingOverWax"]} />
