@@ -9,7 +9,7 @@ import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { h2, h2Balance, h3, h2Faq, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
 
-const TITLE = "How to Prep Car for Ceramic Spray: Wash, Decon, Dry";
+const TITLE = "How to Prep Your Car for Ceramic Spray";
 const H1 = "How to Prep Your Car for Ceramic Spray (Wash, Decon, Dry)";
 const CRUMB = "Prep for ceramic spray";
 const DESCRIPTION = "How to prep car for ceramic spray: wash, check for bonded contamination, decon only if needed, confirm there's no old wax, then dry or leave wet per your label.";

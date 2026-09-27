@@ -8,7 +8,7 @@ import { routes, asset } from "@/lib/us/routes";
 import { color } from "@/lib/us/tokens";
 import { h2, h2Balance, h2Faq, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
 
-const TITLE = "How Long After Ceramic Coating to Wash Car?";
+const TITLE = "How Long to Wait to Wash After Ceramic Spray";
 const H1 = "How Long After Ceramic Coating to Wash Your Car: Waiting Out a Fresh Spray";
 const CRUMB = "Wait to wash";
 const DESCRIPTION = "How long after ceramic coating to wash car? There's no universal wait, so check your label. What to look for, what to do if it rains, and your first wash.";
