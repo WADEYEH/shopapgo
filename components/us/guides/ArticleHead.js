@@ -7,7 +7,9 @@ import OnThisPage from "./OnThisPage";
 // `tag` is the big Condensed word (string or nodes for the "DRY / WET" compound);
 // `tagColor` colors it when the tag is a single word.
 // `heroSrc`, `heroAlt`, `heroCaption` render a 16:9 cover image after the author row, before TOC.
-export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, title, lede, readTime, heroSrc, heroAlt, heroCaption, toc }) {
+// `heroOverlayTitle` (boolean): when true, renders the hero image after the tag row with H1 overlaid at bottom-left.
+// On viewports below 720px, H1 shows as normal text above the image instead of overlaid.
+export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, title, lede, readTime, heroSrc, heroAlt, heroCaption, toc, heroOverlayTitle }) {
   return (
     <section style={{ background: gradient, borderBottom: `1px solid ${color.hairline}` }}>
       <div
@@ -57,20 +59,71 @@ export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, 
             {tagLabel}
           </span>
         </div>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: CONDENSED,
-            fontWeight: 800,
-            fontSize: "clamp(44px,7vw,88px)",
-            lineHeight: 0.88,
-            textTransform: "uppercase",
-            textWrap: "balance",
-            maxWidth: 900,
-          }}
-        >
-          {title}
-        </h1>
+        {heroOverlayTitle && heroSrc ? (
+          <div className="us-hero-overlay-wrapper">
+            <h1
+              className="us-hero-overlay-h1-mobile"
+              style={{
+                margin: 0,
+                fontFamily: CONDENSED,
+                fontWeight: 800,
+                fontSize: "clamp(44px,7vw,88px)",
+                lineHeight: 0.88,
+                textTransform: "uppercase",
+                textWrap: "balance",
+                maxWidth: 900,
+              }}
+            >
+              {title}
+            </h1>
+            <figure
+              style={{
+                margin: 0,
+                position: "relative",
+                borderTop: `4px solid ${color.orange}`,
+              }}
+            >
+              <img
+                src={heroSrc}
+                alt={heroAlt}
+                style={{ display: "block", width: "100%", aspectRatio: "16/9", objectFit: "cover" }}
+              />
+              <h1
+                className="us-hero-overlay-h1"
+                style={{
+                  margin: 0,
+                  fontFamily: CONDENSED,
+                  fontWeight: 800,
+                  fontSize: "clamp(36px,5.2vw,64px)",
+                  lineHeight: 0.9,
+                  textTransform: "uppercase",
+                  color: color.text,
+                  position: "absolute",
+                  left: "clamp(20px,3vw,40px)",
+                  bottom: "clamp(20px,3vw,40px)",
+                  maxWidth: "70%",
+                }}
+              >
+                {title}
+              </h1>
+            </figure>
+          </div>
+        ) : (
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: CONDENSED,
+              fontWeight: 800,
+              fontSize: "clamp(44px,7vw,88px)",
+              lineHeight: 0.88,
+              textTransform: "uppercase",
+              textWrap: "balance",
+              maxWidth: 900,
+            }}
+          >
+            {title}
+          </h1>
+        )}
         <p
           style={{
             margin: 0,
@@ -111,7 +164,7 @@ export default function ArticleHead({ gradient, crumb, tag, tagColor, tagLabel, 
           </span>
           <span style={{ fontSize: 13, color: color.tertiary }}>Updated Sep 2026 · {readTime}</span>
         </div>
-        {heroSrc && (
+        {heroSrc && !heroOverlayTitle && (
           <figure style={{ margin: 0 }}>
             <img
               src={heroSrc}

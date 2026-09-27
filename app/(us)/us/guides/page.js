@@ -110,6 +110,7 @@ export default function GuidesPage() {
                   <li><Link href={routes.wetOrDry} className="us-text-link">Wet or dry application?</Link></li>
                   <li><Link href={routes.waxVsSprayCoating} className="us-text-link">Car wax vs spray ceramic coating</Link></li>
                   <li><Link href={routes.coatingOverWax} className="us-text-link">Can I apply ceramic coating over wax?</Link></li>
+                  <li><Link href={routes.diyVsPro} className="us-text-link">DIY ceramic coating vs professional</Link></li>
                 </ul>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -344,6 +345,32 @@ export default function GuidesPage() {
                   are the real risks. Know what to rinse and when.
                 </span>
                 <GuideButton>Read the weather care guide →</GuideButton>
+              </Link>
+              <Link
+                href={routes.diyVsPro}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: color.text,
+                  borderTop: `4px solid ${color.orange}`,
+                  paddingTop: 14,
+                }}
+              >
+                <img
+                  src={asset("generated/diy-vs-pro-hero.png")}
+                  alt=""
+                  style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }}
+                />
+                <span style={cardLabel(color.orange)}>Compare · Buying decision</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 30, lineHeight: 0.95, textTransform: "uppercase" }}>
+                  DIY Ceramic Coating vs Professional
+                </span>
+                <span style={cardExcerpt}>
+                  DIY spray coating buys a redoable afternoon at home; a pro shop buys bay time and a longer package. Compare time, cost, and effort before you choose.
+                </span>
+                <GuideButton>Read the comparison →</GuideButton>
               </Link>
             </div>
           </div>

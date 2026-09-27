@@ -160,3 +160,11 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   *, *::before, *::after { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto; }
 }
+
+/* Hero overlay title: H1 positioned over the hero image on larger viewports. */
+.us-hero-overlay-wrapper .us-hero-overlay-h1-mobile { display: none; }
+.us-hero-overlay-wrapper .us-hero-overlay-h1 { display: block; }
+@media (max-width: 719px) {
+  .us-hero-overlay-wrapper .us-hero-overlay-h1-mobile { display: block; }
+  .us-hero-overlay-wrapper .us-hero-overlay-h1 { display: none; }
+}

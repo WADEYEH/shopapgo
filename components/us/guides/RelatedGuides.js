@@ -67,6 +67,13 @@ export const CARDS = {
     labelColor: color.orange,
     title: "Does Rain Damage Ceramic Coating?",
   },
+  diyVsPro: {
+    href: routes.diyVsPro,
+    img: asset("generated/diy-vs-pro-hero.png"),
+    label: "Compare",
+    labelColor: color.orange,
+    title: "DIY Ceramic Coating vs Professional",
+  },
 };
 
 // items: array of CARDS keys, in display order.
