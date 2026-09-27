@@ -40,8 +40,8 @@ const TOC = [
 
 const TABLE1 = [
   {
-    path: "DIY spray ceramic / glaze",
-    means: "A consumer spray you apply after a wash day (example: APGO Atomic Colored Glaze, D204, on clean, dry paint)",
+    path: "DIY spray coating",
+    means: "A consumer spray product you apply yourself on a clean, dry car after a wash day",
     treats: "Convenience you can repeat on your own schedule",
   },
   {
@@ -138,7 +138,7 @@ export default function DiyVsProPage() {
 
         <ArticleBody toc={TOC}>
           <p style={lead}>
-            You are not choosing a chemistry lecture. You are choosing a path: a garage DIY spray ceramic (or glaze) you can redo yourself, versus a pro shop ceramic coating job you book and leave to the bay.
+            You are not choosing a chemistry lecture. You are choosing a path: a DIY spray coating you apply in your own garage and can redo yourself, versus a pro shop ceramic coating job you book and leave to the bay.
           </p>
           <p style={body}>
             This guide compares time, cost scale, durability expectations, and who each path fits. It is not a how-to-spray guide. If you are still deciding between traditional wax and spray coating as finish strategies, start with our <Link href={routes.waxVsSprayCoating} className="us-text-link">car wax vs spray ceramic coating</Link> guide, then come back to the DIY-versus-pro decision.
@@ -202,7 +202,7 @@ export default function DiyVsProPage() {
                 <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>Factor</span>
               </div>
               <div style={tableHead(color.orange)}>
-                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>DIY spray ceramic / glaze</span>
+                <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>DIY spray coating</span>
               </div>
               <div style={tableHead(color.dry)}>
                 <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 16, textTransform: "uppercase" }}>Professional shop ceramic</span>
@@ -236,7 +236,7 @@ export default function DiyVsProPage() {
               Durability is where DIY and pro marketing tend to talk past each other, so keep the claims honest.
             </p>
             <p style={body}>
-              <strong style={strong}>DIY spray / glaze (example: D204).</strong> The U.S. product page says Atomic Colored Glaze lasts up to about 6 months. Treat that as a ceiling, not a promise that every car reaches six months regardless of how it is washed or stored. When water beading and gloss fade, reassess; our guide on <Link href={routes.howOftenReapply} className="us-text-link">how often to apply ceramic spray coating</Link> covers the signals to watch.
+              <strong style={strong}>DIY spray coating.</strong> Consumer sprays are usually rated in months, not years, and the number on the label is a ceiling, not a promise that every car reaches it regardless of how it is washed or stored. If you would rather use a silicone-based spray glaze than a ceramic product, APGO's spray glaze option (see <Link href={routes.compare} className="us-text-link">compare the options</Link>) is rated up to about 6 months on the U.S. product page, under the same ceiling logic. When water beading and gloss fade, reassess; our guide on <Link href={routes.howOftenReapply} className="us-text-link">how often to apply ceramic spray coating</Link> covers the signals to watch.
             </p>
             <p style={body}>
               <strong style={strong}>Professional shop ceramic.</strong> Shop coatings are usually sold on a years-scale expectation that depends on the package, the paint prep, and how you maintain the car afterward. This article does not quote a specific year count; ask the shop what the package includes and what maintenance it requires.
@@ -250,7 +250,7 @@ export default function DiyVsProPage() {
             <h2 style={h2Balance}>Who DIY spray is for vs who should go pro</h2>
             <p style={body}>Use this as a decision list.</p>
             <p style={body}>
-              <strong style={strong}>DIY spray ceramic / glaze tends to fit when you:</strong>
+              <strong style={strong}>DIY spray coating tends to fit when you:</strong>
             </p>
             <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
               <li style={{ ...body, ...bulletItem }}>
@@ -263,7 +263,7 @@ export default function DiyVsProPage() {
               </li>
               <li style={{ ...body, ...bulletItem }}>
                 <span style={bulletMarker}>•</span>
-                Are comfortable with month-scale durability (for D204, treat about 6 months as the upper landmark, then watch the paint)
+                Are comfortable with month-scale durability, treating the label's figure as the upper limit and then watching the paint
               </li>
               <li style={{ ...body, ...bulletItem }}>
                 <span style={bulletMarker}>•</span>
@@ -310,14 +310,14 @@ export default function DiyVsProPage() {
               Choosing DIY does not remove prep. Clean, compatible paint still comes first. If wax, an old coating, or an unknown film is on the paint, resolve that before you spray. Our <Link href={routes.coatingOverWax} className="us-text-link">coating-over-wax checklist</Link> covers that decision, so this article will not repeat it.
             </p>
             <p style={body}>
-              Aftercare is part of the path too. How you wash matters: brushes and strong soap wear a spray coating down sooner, as explained in <Link href={routes.autoWashCoating} className="us-text-link">does an automatic car wash remove ceramic coating</Link>. Weather matters as well; dirty water spots and road salt left on paint are covered in <Link href={routes.rainDamageCoating} className="us-text-link">does rain damage ceramic coating</Link>. Reapply when those wear signals show rather than on a blind calendar, using the <Link href={routes.howOftenReapply} className="us-text-link">how-often guide</Link>. For the actual application steps on dry paint, use the <Link href={routes.coloredGlaze} className="us-text-link">dry-application guide</Link>.
+              Aftercare is part of the path too. How you wash matters: brushes and strong soap wear a spray coating down sooner, as explained in <Link href={routes.autoWashCoating} className="us-text-link">does an automatic car wash remove ceramic coating</Link>. Weather matters as well; dirty water spots and road salt left on paint are covered in <Link href={routes.rainDamageCoating} className="us-text-link">does rain damage ceramic coating</Link>. Reapply when those wear signals show rather than on a blind calendar, using the <Link href={routes.howOftenReapply} className="us-text-link">how-often guide</Link>. If you choose APGO's spray glaze, its <Link href={routes.coloredGlaze} className="us-text-link">dry-application guide</Link> has the steps; for any other product, follow its label.
             </p>
           </section>
 
           <section id="bottom-line" style={section}>
             <h2 style={h2}>Bottom line</h2>
             <p style={body}>
-              DIY versus professional ceramic coating is a purchase decision between redoable convenience and paid bay labor with a longer package. DIY spray, with D204 as one dry-surface example rated up to about six months on the U.S. product page, fits drivers who will prep honestly and refresh when the finish fades. Pro fits drivers who want to buy prep, time, and a years-scale package, based on a written shop quote.
+              DIY versus professional ceramic coating is a purchase decision between redoable convenience and paid bay labor with a longer package. DIY spray fits drivers who will prep honestly and refresh when the finish fades. Pro fits drivers who want to buy prep, time, and a years-scale package, based on a written shop quote.
             </p>
             <p style={body}>
               Pick the path that matches your calendar and your patience for redos, then follow the product label or the shop’s written package terms.
