@@ -6,11 +6,24 @@
   "type": "module",
   "scripts": {
     "serve": "python3 -m http.server 4173 -d prototype",
+    "dev": "wrangler dev --port 8799",
+    "db:migrate:local": "wrangler d1 execute apgo-us-store --local --file worker/schema.sql",
+    "db:migrate:remote": "wrangler d1 execute apgo-us-store --remote --file worker/schema.sql",
     "test": "npm run test:static && npm run test:e2e",
-    "test:static": "node --test tests/static-contract.test.mjs",
-    "test:e2e": "playwright test",
+    "test:static": "node --test tests/static-contract.test.mjs tests/commerce-unit.test.mjs tests/commerce-backend.test.mjs tests/commerce-pricing.test.mjs tests/commerce-wallets.test.mjs tests/commerce-express.test.mjs tests/commerce-mcf.test.mjs tests/policy-pages.test.mjs tests/staging.test.mjs tests/hosts.test.mjs",
+    "db:migrate:staging": "wrangler d1 execute apgo-us-store-staging --env staging --remote --file worker/schema.sql",
+    "deploy:staging": "npm run db:migrate:staging && wrangler deploy --env staging",
+    "smoke:airwallex": "node scripts/airwallex-sandbox-smoke.mjs",
+    "smoke:airwallex:browser": "node scripts/airwallex-browser-smoke.mjs",
+    "capture:v3-cart": "node scripts/capture-v3-cart.mjs",
+    "capture:wallets": "node scripts/capture-wallets.mjs",
+    "capture:admin-fulfillment": "node scripts/capture-admin-fulfillment.mjs",
+    "capture:admin-mcf": "node scripts/capture-admin-mcf.mjs",
+    "test:e2e": "playwright test --workers=1",
     "capture": "node scripts/capture.mjs",
     "capture:v2": "node scripts/capture-v2.mjs",
+    "capture:v3-style": "node scripts/capture-v3-style.mjs",
+    "capture:v3": "node scripts/capture-v3.mjs",
     "record": "node scripts/record-review.mjs"
   },
   "engines": {
@@ -18,6 +31,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.62.1"
+    "@playwright/test": "1.62.1",
+    "wrangler": "^4.70.0"
   }
 }
