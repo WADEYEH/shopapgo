@@ -1,0 +1,123 @@
+name = "apgo-us-store"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# prototype/ is served as-is; the Worker runs first for /api/*, the protected /admin/* back office and the
+# Apple Pay domain-verification path (wrangler skips dot-folders, so the file lives in prototype/apple-pay/).
+[assets]
+directory = "./prototype"
+binding = "ASSETS"
+run_worker_first = true
+
+# Create once with `npx wrangler d1 create apgo-us-store`, then paste the id here.
+# Local dev (`wrangler dev`) works with the placeholder id.
+[[d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+# "demo" = Airwallex sandbox. Switch to "prod" only after prices, shipping and
+# tax in worker/catalog.js are approved.
+AIRWALLEX_ENV = "demo"
+ROOT_PAGE = "/v3"
+SITE_HOME_URL = "http://127.0.0.1:3012/us"
+
+# Optional, non-secret store settings (all have safe defaults; see docs/commerce.md):
+#   PRICING_JSON      partial override of worker/pricing.js DEFAULT_PRICING (prices, shipping, tax)
+#   PRICING_APPROVED  must be "true" before AIRWALLEX_ENV="prod" will take payments
+#   APPLE_PAY_ENABLED / GOOGLE_PAY_ENABLED   "false" hides that wallet button (default on)
+#   PAYMENT_AUTO_CAPTURE                     "false" = authorize only (default capture)
+#   WALLET_MERCHANT_NAME                     label shown on the wallet sheet (default "APGO")
+#   EXPRESS_CHECKOUT  "true" shows the cart-page Apple Pay / Google Pay block (UI incomplete; off in staging and production)
+
+[observability]
+enabled = true
+
+# Secrets (never commit): set locally in .dev.vars, remotely with
+#   npx wrangler secret put AIRWALLEX_CLIENT_ID
+#   npx wrangler secret put AIRWALLEX_API_KEY
+#   npx wrangler secret put AIRWALLEX_WEBHOOK_SECRET
+
+# ---------------------------------------------------------------------------------------------------------------
+# Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit
+# bindings / vars / assets into [env.*], so each environment repeats them. Secrets are per environment too.
+#
+#   staging     deployed:  npm run deploy:staging   -> https://apgo-us-store-staging.<account>.workers.dev
+#   production  PLANNED ONLY, never deployed yet (see docs/commerce.md "Go-live checklist").
+# ---------------------------------------------------------------------------------------------------------------
+
+[env.staging]
+name = "apgo-us-store-staging"
+workers_dev = true
+preview_urls = false
+# Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy; workers.dev stays on.
+#   staging.shopapgo.com        the storefront (Basic-auth gate); /admin* answers 404 here
+#   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); ADMIN_TOKEN only
+routes = [
+  { pattern = "staging.shopapgo.com", custom_domain = true },
+  { pattern = "admin-staging.shopapgo.com", custom_domain = true },
+]
+
+[env.staging.assets]
+directory = "./prototype"
+binding = "ASSETS"
+# true = the Worker runs first for EVERY path, so static pages/images also get the Basic-auth gate and X-Robots-Tag
+# (without it Cloudflare serves static files directly, bypassing worker/staging.js). All environments use this gate.
+run_worker_first = true
+
+# Staging has its own D1 (created with `npx wrangler d1 create apgo-us-store-staging`; the id is not a secret).
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store-staging"
+database_id = "246c3158-a70e-420e-a165-cda01b4ca434"
+
+[env.staging.vars]
+AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
+SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
+SITE_HOME_URL = "https://www.shopapgo.com/us"
+ROOT_PAGE = "/v3"         # worker/root-page.js: "/" serves the v3 store entry (cart badge + Add to cart), not the old Amazon landing
+ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
+ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
+EXPRESS_CHECKOUT = "false"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block off (UI only, not ready). Do NOT set in production yet.
+# Secrets (wrangler secret put <NAME> --env staging): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (sandbox keys only),
+# ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD; AIRWALLEX_WEBHOOK_SECRET once the sandbox webhook exists.
+
+[env.staging.observability]
+enabled = true
+
+# PLANNED, NOT DEPLOYED. Do not run `wrangler deploy --env production` before the go-live checklist is done.
+[env.production]
+name = "apgo-us-store"
+workers_dev = false
+# Uncomment when store.shopapgo.com is ready to be bound (zone shopapgo.com):
+# routes = [
+#   { pattern = "store.shopapgo.com", custom_domain = true },
+#   { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host; also set ADMIN_HOST = "admin.shopapgo.com" in [env.production.vars]
+# ]
+
+[env.production.assets]
+directory = "./prototype"
+binding = "ASSETS"
+run_worker_first = true
+
+# Placeholder id: create the production database first (`npx wrangler d1 create apgo-us-store`) and paste its id.
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[env.production.vars]
+AIRWALLEX_ENV = "prod"
+ROOT_PAGE = "/v3"
+ADMIN_HOST = "admin.shopapgo.com"
+SITE_HOME_URL = "https://www.shopapgo.com/us"
+# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set either: production admin accepts ADMIN_TOKEN only (owner's decision if that should change).
+# PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
+# prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
+# Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
+# AIRWALLEX_WEBHOOK_SECRET, ADMIN_TOKEN, plus the optional notification / email / MCF secrets.
+
+[env.production.observability]
+enabled = true

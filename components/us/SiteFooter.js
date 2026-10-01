@@ -5,6 +5,8 @@ import { config } from "@/lib/us/config";
 import { homeLink, guideGroups } from "@/lib/us/navigation";
 import { company } from "@/lib/us/company";
 
+import { storeUrl, cartUrl, storeEnabled } from "@/lib/us/store";
+
 const productHowToRoutes = new Set([routes.coloredGlaze, routes.glazeCoating]);
 
 export default function SiteFooter() {
@@ -44,6 +46,8 @@ export default function SiteFooter() {
               <p>{company.hours}<br />{company.timezone}</p>
             </div>
             <nav aria-label="Support"><ul>
+              {storeEnabled && <li><a href={storeUrl}>Shop APGO</a></li>}
+              {storeEnabled && <li><a href={cartUrl}>Cart</a></li>}
               <li><Link href={routes.faq}>Product FAQ</Link></li>
               <li><a href="https://www.amazon.com/gp/your-account/order-history" target="_blank" rel="noopener noreferrer">Amazon order support <span aria-hidden="true">↗</span></a></li>
             </ul></nav>

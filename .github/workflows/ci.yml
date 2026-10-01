@@ -21,3 +21,21 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  commerce:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: commerce
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: commerce/package-lock.json
+      - run: npm ci
+      - run: npm run test:static
+      - run: npm run verify:bundle
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

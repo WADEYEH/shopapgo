@@ -7,6 +7,8 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { asset, routes } from "@/lib/us/routes";
 import { guideGroups, homeLink } from "@/lib/us/navigation";
 
+import { cartUrl, storeEnabled } from "@/lib/us/store";
+
 const MenuContext = createContext(false);
 export const useSiteMenuOpen = () => useContext(MenuContext);
 
@@ -105,9 +107,11 @@ export default function SiteChrome({ children, footer }) {
                 <NavigationGroups pathname={pathname} onNavigate={() => setGuidesOpen(false)} />
               </div>}
             </div>
+            {storeEnabled && <a href={cartUrl} className="us-store-cart">Cart</a>}
             <Link href={routes.compare} className="us-site-cta">View products <span aria-hidden="true">→</span></Link>
           </nav>
           <nav aria-label="Mobile site" className="us-header-mobile">
+            {storeEnabled && <a href={cartUrl} className="us-store-cart">Cart</a>}
             <Link href={routes.guides} className={inGuides ? "is-active" : undefined} aria-current={pathname === routes.guides ? "page" : undefined}>Guides</Link>
             <button ref={menuButton} type="button" aria-expanded={menuOpen} aria-controls="us-mobile-menu" onClick={() => setMenuOpen(true)}>Menu <span aria-hidden="true">☰</span></button>
           </nav>
@@ -133,6 +137,7 @@ export default function SiteChrome({ children, footer }) {
       }}>
         <div className="us-drawer-top"><span id="us-menu-title">Explore APGO</span><button type="button" autoFocus onClick={() => setMenuOpen(false)} aria-label="Close menu">✕</button></div>
         <nav aria-label="All pages">
+          {storeEnabled && <a className="us-drawer-home" href={cartUrl} onClick={() => setMenuOpen(false)}>Cart <span aria-hidden="true">→</span></a>}
           <Link className="us-drawer-home" href={homeLink.href} aria-current={pathname === routes.home ? "page" : undefined} onClick={() => setMenuOpen(false)}>Home <span aria-hidden="true">→</span></Link>
           {menuOpen && <NavigationGroups pathname={pathname} onNavigate={() => setMenuOpen(false)} />}
           <Link className="us-site-cta" href={routes.compare} onClick={() => setMenuOpen(false)}>View products <span aria-hidden="true">→</span></Link>

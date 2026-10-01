@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/*.test.cjs"
+    "test": "node --test tests/*.test.cjs",
+    "commerce:install": "npm --prefix commerce ci",
+    "commerce:dev": "npm --prefix commerce run dev",
+    "commerce:test": "npm --prefix commerce run test:static",
+    "commerce:test:e2e": "npm --prefix commerce run test:e2e",
+    "commerce:verify": "npm --prefix commerce run verify:bundle"
   },
   "dependencies": {
     "next": "^15.5.25",

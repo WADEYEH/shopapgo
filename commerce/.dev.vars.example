@@ -1,0 +1,69 @@
+# Copy to .dev.vars (git-ignored) for `npm run dev`; in production use
+# `npx wrangler secret put <NAME>`. Never commit real values.
+
+# --- Airwallex (SANDBOX keys while AIRWALLEX_ENV = "demo") -----------------------
+# Airwallex web app (sandbox) > Developer > API keys / Webhooks.
+AIRWALLEX_CLIENT_ID=
+AIRWALLEX_API_KEY=
+AIRWALLEX_WEBHOOK_SECRET=
+# Only if the scoped API key is linked to several Airwallex accounts:
+# AIRWALLEX_LOGIN_AS=
+
+# --- Order back office (/admin/) ---------------------------------------------------
+# Long random string (>= 16 chars); the password for /admin/ (any username) or a
+# Bearer token. Generate one with:  openssl rand -base64 32
+# Left empty, /admin/ and /admin/api/* answer 503 (closed).
+ADMIN_TOKEN=
+
+# --- New paid-order notification (all optional; nothing is sent when unset) --------
+# Channel A: any https incoming webhook (Slack, Discord, Teams, Zapier, n8n ...).
+ORDER_NOTIFY_WEBHOOK_URL=
+# Optional: signs the webhook with X-APGO-Timestamp / X-APGO-Signature (HMAC-SHA256).
+ORDER_NOTIFY_WEBHOOK_SECRET=
+# Channel B: email through the Resend API (needs all three).
+RESEND_API_KEY=
+ORDER_NOTIFY_EMAIL_TO=
+ORDER_NOTIFY_EMAIL_FROM=
+
+# --- Customer emails (order confirmation + shipment notice; optional, nothing is sent when unset) ---
+# Uses RESEND_API_KEY above. Sender must be on a domain verified in Resend, e.g. APGO <orders@your-domain>.
+# Falls back to ORDER_NOTIFY_EMAIL_FROM when empty.
+CUSTOMER_EMAIL_FROM=
+# Optional reply-to address (e.g. your support inbox).
+CUSTOMER_EMAIL_REPLY_TO=
+# Optional paragraph appended to both emails (e.g. the approved returns sentence). Left empty, no policy text is sent.
+CUSTOMER_EMAIL_POLICY_NOTE=
+# "false" turns customer emails off while keeping the team notification.
+# CUSTOMER_EMAIL_ENABLED=
+
+# --- Store settings (all optional, non-secret; defaults in worker/pricing.js + worker/wallets.js) ---
+# Partial override of the placeholder prices / shipping / tax, as JSON (see docs/commerce.md).
+# PRICING_JSON=
+# Must be "true" before AIRWALLEX_ENV=prod will take payments.
+# PRICING_APPROVED=
+# Apple Pay / Google Pay buttons (default on; "false" hides one) and the wallet sheet label.
+# APPLE_PAY_ENABLED=
+# GOOGLE_PAY_ENABLED=
+# "true" shows the cart-page Apple Pay / Google Pay block (UI only; default off, staging on, production unset).
+# EXPRESS_CHECKOUT=
+# WALLET_MERCHANT_NAME=
+# "false" = authorize only instead of capturing immediately (default capture).
+# PAYMENT_AUTO_CAPTURE=
+
+# --- Amazon Multi-Channel Fulfillment (MCF, optional; OFF unless MCF_AUTO_SUBMIT=true) ----------
+# Logistics: paid orders are sent to Amazon MCF (real shipments that use your FBA stock). This Worker holds NO
+# Amazon credentials: it calls the internal outbound endpoints of the amazon-spapi-mcp Worker (v1.5.0+), which
+# keeps the Login-with-Amazon credentials. Put real values in .dev.vars / `wrangler secret put` only, never here.
+AMAZON_OUTBOUND_BASE_URL=
+OUTBOUND_INTERNAL_TOKEN=
+# Non-secret settings (see docs/commerce.md "Amazon MCF"):
+# "true" turns automatic submission on (still needs the two connection values and the SKU map).
+# MCF_AUTO_SUBMIT=
+# Our SKU -> Amazon seller SKU, JSON. Empty by default: nothing is sent until you confirm the mapping.
+# MCF_SKU_MAP_JSON={"D204":"<seller sku>","D215":"<seller sku>"}
+# Optional: our shipping method key -> "STANDARD" | "EXPEDITED" (defaults: standard -> STANDARD, express -> EXPEDITED).
+# MCF_SHIPPING_MAP_JSON=
+# "true" lets the optional cron trigger sync MCF status (no cron is configured by default).
+# MCF_SYNC_CRON=
+# "true" also passes the shopper's email to Amazon so it sends its own shipping notices (default off: no duplicate emails).
+# MCF_NOTIFY_AMAZON_EMAIL=
