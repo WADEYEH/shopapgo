@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Your cart · APGO</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="css/commerce.css">
+    <script type="module" src="js/commerce/cart.js"></script>
+  </head>
+  <body data-page="cart">
+    <header class="shop-header">
+      <div class="shop-header__inner">
+        <a class="shop-header__logo" href="./" aria-label="APGO home"><img src="assets/brand/apgo-logo.png" alt="APGO" width="89" height="24"></a>
+        <nav class="shop-header__nav" aria-label="Store">
+          <a href="cart.html" aria-current="page">Cart · <span data-cart-count>0</span></a>
+        </nav>
+        <a class="btn btn--sm" href="checkout.html" data-checkout-link>Checkout <span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <main class="shop-main" id="main">
+      <div class="shop-intro">
+        <p class="eyebrow">Your cart</p>
+        <h1 class="heading-guide-h1" data-cart-title>Ready when you are.</h1>
+        <p class="body body--muted" data-cart-lede>Shipping and tax are calculated at checkout.</p>
+      </div>
+
+      <div data-cart-message aria-live="polite"></div>
+
+      <div class="shop-grid">
+        <section class="stack" aria-labelledby="cart-items-title">
+          <h2 class="visually-hidden" id="cart-items-title">Items in your cart</h2>
+          <ul class="line-items" data-cart-lines></ul>
+          <div class="cart-empty" data-cart-empty hidden>
+            <a class="btn btn--sm" href="./#compare">Choose Dry or Wet <span aria-hidden="true">→</span></a>
+          </div>
+        </section>
+
+        <aside class="summary" aria-labelledby="summary-title">
+          <h2 class="label label--xs" id="summary-title">Order summary</h2>
+          <div data-cart-summary></div>
+          <!-- Express checkout (Apple Pay / Google Pay). Collapsed and invisible unless the
+               store flag `expressCheckout` is on, the cart has items and a wallet reports ready. -->
+          <div class="express" data-express data-state="hidden" aria-busy="false">
+            <div class="express__slots" role="group" aria-label="Express checkout">
+              <div class="wallet-slot" data-wallet-slot="applePay"><div id="cart-wallet-applepay"></div></div>
+              <div class="wallet-slot" data-wallet-slot="googlePay"><div id="cart-wallet-googlepay"></div></div>
+              <div class="express__skeleton" data-express-skeleton aria-hidden="true"></div>
+            </div>
+            <div data-express-message aria-live="polite"></div>
+            <p class="wallets__divider label label--xs express__divider"><span>Or checkout with card</span></p>
+          </div>
+          <a class="btn btn--full" href="checkout.html" data-checkout-button>Checkout <span aria-hidden="true">→</span></a>
+          <p class="label summary__note">Secure checkout · Payments by Airwallex</p>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="shop-footer">
+      <div class="shop-footer__inner">
+        <img src="assets/brand/apgo-logo.png" alt="APGO" width="89" height="24">
+        <nav class="shop-footer__links" aria-label="Legal and support">
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="terms.html">Terms of Sale</a>
+          <a href="returns.html">Returns &amp; Refunds</a>
+          <a href="contact.html">Contact</a>
+        </nav>
+        <span>© <span data-year>2026</span> APGO.</span>
+      </div>
+    </footer>
+  </body>
+</html>

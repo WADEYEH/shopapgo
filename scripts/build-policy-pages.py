@@ -70,9 +70,17 @@ def sec(h, *paras, items=None):
         out += "        <ul>\n" + "".join(f"          <li>{i}</li>\n" for i in items) + "        </ul>\n"
     return out + "      </section>\n"
 
+def tc(text):
+    """Visible marker for a business term the owner has not decided yet."""
+    return f"<mark data-to-confirm>[TO CONFIRM: {text}]</mark>"
+
 mail = f'<a href="mailto:{EMAIL}">{EMAIL}</a>'
 OPERATOR = ("APGO is operated by 光世代科技有限公司 (Taiwan Business ID 24705400), "
             "No. 3, Ln. 56, Fengshan St., Xinzhuang Dist., New Taipei City, Taiwan.")
+
+LEGEND = ('      <p class="legal__confirm-note" data-confirm-legend>Highlighted items marked '
+          '<mark data-to-confirm>[TO CONFIRM]</mark> are business terms the owner has not decided yet. '
+          'They are placeholders, not commitments.</p>\n')
 
 pages = {}
 
@@ -94,9 +102,9 @@ pages["privacy"] = ("Privacy Policy", "Legal", "p", "".join([
     sec("What stays in your browser",
         "Your cart (product codes and quantities, no prices) is saved in your browser’s local storage so it survives a page reload. You can clear it in your browser settings at any time. Where analytics is enabled on this site, it is used to understand how pages perform, not to sell your data."),
     sec("Who we share it with",
-        "We share data only with service providers that help us run the store: Airwallex (payments), Cloudflare (hosting, security and our order database), and the carrier or fulfillment partner that delivers your order. We do not sell your personal information."),
+        "We share data only with service providers that help us run the store: Airwallex (payments), Cloudflare (hosting, security and our order database), and the carrier or fulfillment partner that delivers your order ("+tc("which fulfillment partner(s) will be used")+"). We do not sell your personal information."),
     sec("How long we keep it",
-        "We keep order records for as long as needed to fulfil the order, handle returns and meet tax and accounting rules, then delete or anonymize them."),
+        "We keep order records for " + tc("retention period") + " so we can fulfil the order, handle returns and meet tax and accounting rules, then delete or anonymize them."),
     sec("Your choices",
         f"You can ask us to access, correct or delete your personal information, or stop marketing messages, by emailing {mail}. We will verify it is you and respond within a reasonable time. If you live in a state with privacy laws that give you additional rights (for example California), contact us and we will honor them as required."),
     sec("Children", "The store is not directed to children under 13 and we do not knowingly collect their data."),
@@ -108,32 +116,33 @@ pages["terms"] = ("Terms of Sale", "Legal", "t", "".join([
     sec("Orders",
         "Placing an order is an offer to buy. We accept it when payment is confirmed, and you will see an order number on the confirmation page. We may cancel and fully refund an order we cannot fulfil, such as for a pricing error, stock shortage or suspected fraud."),
     sec("Prices and payment",
-        "Prices are in US dollars and are shown at checkout before you pay. The total includes the shipping method you choose and any sales tax we are required to collect. Payments are processed by Airwallex; we do not see or store your card number."),
+        "Prices are in US dollars and are shown at checkout before you pay. The total includes the shipping method you choose (" + tc("shipping fees and any free-shipping terms") + ") and any sales tax (" + tc("whether, where and at what rate sales tax is collected") + "). Payments are processed by Airwallex; we do not see or store your card number."),
     sec("Shipping",
-        "We ship to addresses in the United States. The delivery estimate for each shipping method is shown at checkout and is an estimate, not a guarantee. Risk of loss passes to you on delivery."),
+        "We ship to " + tc("shipping regions, currently planned: addresses in the United States") + ". Shipping methods and delivery times: " + tc("shipping methods and delivery time for each") + ". Any delivery estimate is an estimate, not a guarantee. Risk of loss passes to you " + tc("when risk of loss passes, counsel to confirm") + "."),
     sec("Returns and refunds", "See our <a href=\"returns.html\">Returns &amp; Refunds</a> page, which forms part of these terms."),
     sec("Use of the products",
         "Use each product only on the surfaces and in the way its current label and instructions describe. If you are unsure whether a surface is covered, contact us before use. Results depend on preparation, conditions and application."),
     sec("Limitation of liability",
-        "To the extent the law allows, APGO is not liable for indirect or consequential losses, and our total liability for an order is limited to the amount you paid for it. Nothing here limits rights you have under law that cannot be limited, including any rights under applicable consumer protection law."),
-    sec("Governing law", "These terms are governed by the laws of the State of [to be confirmed with counsel], without regard to conflict-of-law rules."),
+        "To the extent the law allows, APGO is not liable for indirect or consequential losses, and our total liability for an order is limited to " + tc("liability cap, counsel to confirm") + ". Nothing here limits rights you have under law that cannot be limited, including any rights under applicable consumer protection law."),
+    sec("Governing law", "These terms are governed by the laws of " + tc("governing law and jurisdiction, to be set with counsel") + ", without regard to conflict-of-law rules."),
     sec("Contact", f"Questions about these terms: {mail}."),
 ]))
 
 pages["returns"] = ("Returns &amp; Refunds", "Support", "r", "".join([
-    sec("Our promise",
-        "If something is wrong with your order, we will make it right. This page covers orders placed on this store. For Amazon orders, use Your Orders on Amazon."),
+    sec("Our approach",
+        "If something is wrong with your order, contact us and we will work it out with you. This page covers orders placed on this store. For Amazon orders, use Your Orders on Amazon."),
     sec("Returns",
-        items=["You may return an unopened, unused product within 30 days of delivery for a refund of the product price.",
-               "Opened or used products can be returned only if they are defective or were not what you ordered.",
+        items=["Return window: " + tc("return window, number of days and whether it counts from delivery") + ".",
+               "Condition of returned products: " + tc("whether only unopened, unused products are accepted") + ".",
+               "Opened or used products: " + tc("whether opened or used products are accepted, for example only if defective or not as ordered") + ".",
                f"To start a return, email {mail} with your order number and the reason. We will reply with return instructions. Please do not ship anything back before you hear from us."]),
     sec("Damaged, defective or wrong item",
-        f"Email {mail} within 30 days of delivery with your order number and a photo of the item and packaging. We will send a replacement or refund you in full, including the original shipping you paid, and cover the return shipping if a return is needed."),
-    sec("Return shipping", "For other returns, you pay the cost of shipping the item back."),
+        f"Email {mail} with your order number and a photo of the item and packaging, within " + tc("reporting window after delivery") + ". What we offer: " + tc("replacement, refund or both, and whether original and return shipping are covered") + "."),
+    sec("Return shipping", "Who pays for shipping the item back: " + tc("return shipping cost for change-of-mind returns") + "."),
     sec("How refunds work",
-        "After we receive and check the returned item, we refund the product price to the original payment method through Airwallex. Banks usually post the refund within 5–10 business days. Express shipping fees are not refunded unless the return is because of our error."),
+        "After we receive and check the returned item, we refund to the original payment method through Airwallex. Refund amount: " + tc("what is refunded, product price and/or shipping fees") + ". Refund timing: " + tc("refund processing time") + "."),
     sec("Order changes and cancellations",
-        f"We can cancel an order that has not shipped yet. Email {mail} as soon as possible with your order number."),
+        f"Email {mail} as soon as possible with your order number if you want to change or cancel an order. Cancellation rules: " + tc("whether and until when an order can be cancelled, for example before it ships") + "."),
     sec("Questions", f"{mail}, Mon–Fri, 09:00–18:00 Taiwan time (UTC+8)."),
 ]))
 
@@ -154,7 +163,7 @@ pages["contact"] = ("Contact", "Support", "c", "".join([
 
 for slug, (title, eyebrow, cur, body) in pages.items():
     (ROOT / f"{slug}.html").write_text(PAGE.format(
-        title=title, eyebrow=eyebrow, slug=slug, updated=UPDATED, body=body, footer=footer(cur)), encoding="utf-8")
+        title=title, eyebrow=eyebrow, slug=slug, updated=UPDATED, body=(LEGEND + body if "data-to-confirm" in body else body), footer=footer(cur)), encoding="utf-8")
     print("wrote", slug + ".html")
 
 # Keep the store pages' footer in step with the policy pages.

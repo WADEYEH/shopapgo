@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Checkout · APGO</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="css/commerce.css">
+    <script type="module" src="js/commerce/checkout.js"></script>
+  </head>
+  <body data-page="checkout">
+    <header class="shop-header">
+      <div class="shop-header__inner">
+        <a class="shop-header__logo" href="./" aria-label="APGO home"><img src="assets/brand/apgo-logo.png" alt="APGO" width="89" height="24"></a>
+        <nav class="shop-header__nav" aria-label="Store">
+          <a href="cart.html">Cart · <span data-cart-count>0</span></a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shop-main" id="main">
+      <div class="shop-intro">
+        <p class="eyebrow">Checkout</p>
+        <h1 class="heading-guide-h1" data-checkout-title>Almost there.</h1>
+      </div>
+
+      <div data-checkout-message aria-live="polite"></div>
+
+      <div class="shop-grid" data-checkout-grid>
+        <div class="stack" data-checkout-flow hidden>
+          <ol class="steps">
+            <li data-step-indicator="contact"><span class="steps__dot" aria-hidden="true">1</span>Contact</li>
+            <li data-step-indicator="shipping"><span class="steps__dot" aria-hidden="true">2</span>Shipping</li>
+            <li data-step-indicator="payment"><span class="steps__dot" aria-hidden="true">3</span>Payment</li>
+          </ol>
+
+          <form class="stack" data-step="contact" novalidate>
+            <div class="shop-intro">
+              <h2 class="heading-guide-h2" tabindex="-1">Contact</h2>
+              <p class="body body--sm">We'll only use this for order updates.</p>
+            </div>
+            <div class="field" data-field="email">
+              <label class="field__label" for="email">Email<span class="req" aria-hidden="true"> *</span></label>
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
+              <span class="field__error" data-error hidden></span>
+            </div>
+            <label class="check">
+              <span class="check__control"><input type="checkbox" name="marketingOptIn"><span class="check__box" aria-hidden="true"></span></span>
+              <span class="check__label">Email me when new application guides go live</span>
+            </label>
+            <div class="actions">
+              <button class="btn" type="submit">Continue to shipping <span aria-hidden="true">→</span></button>
+            </div>
+          </form>
+
+          <form class="stack" data-step="shipping" novalidate hidden>
+            <div class="shop-intro">
+              <h2 class="heading-guide-h2" tabindex="-1">Shipping address</h2>
+              <p class="body body--sm">US addresses only for now.</p>
+            </div>
+            <div class="row-2">
+              <div class="field" data-field="firstName">
+                <label class="field__label" for="firstName">First name<span class="req" aria-hidden="true"> *</span></label>
+                <input id="firstName" name="firstName" autocomplete="shipping given-name" required>
+                <span class="field__error" data-error hidden></span>
+              </div>
+              <div class="field" data-field="lastName">
+                <label class="field__label" for="lastName">Last name<span class="req" aria-hidden="true"> *</span></label>
+                <input id="lastName" name="lastName" autocomplete="shipping family-name" required>
+                <span class="field__error" data-error hidden></span>
+              </div>
+            </div>
+            <div class="field" data-field="street">
+              <label class="field__label" for="street">Street address<span class="req" aria-hidden="true"> *</span></label>
+              <input id="street" name="street" autocomplete="shipping address-line1" placeholder="123 Main St" required>
+              <span class="field__error" data-error hidden></span>
+            </div>
+            <div class="field" data-field="street2">
+              <label class="field__label" for="street2">Apt, suite, unit</label>
+              <input id="street2" name="street2" autocomplete="shipping address-line2">
+            </div>
+            <div class="row-2">
+              <div class="field" data-field="city">
+                <label class="field__label" for="city">City<span class="req" aria-hidden="true"> *</span></label>
+                <input id="city" name="city" autocomplete="shipping address-level2" required>
+                <span class="field__error" data-error hidden></span>
+              </div>
+              <div class="field" data-field="state">
+                <label class="field__label" for="state">State<span class="req" aria-hidden="true"> *</span></label>
+                <div class="select">
+                  <select id="state" name="state" autocomplete="shipping address-level1" required data-state-select>
+                    <option value="">Select</option>
+                  </select>
+                </div>
+                <span class="field__error" data-error hidden></span>
+              </div>
+              <div class="field" data-field="zip">
+                <label class="field__label" for="zip">ZIP code<span class="req" aria-hidden="true"> *</span></label>
+                <input id="zip" name="zip" autocomplete="shipping postal-code" inputmode="numeric" maxlength="10" required>
+                <span class="field__error" data-error hidden></span>
+              </div>
+            </div>
+            <fieldset>
+              <legend class="label label--xs">Shipping method</legend>
+              <div class="ship-options" data-ship-options></div>
+            </fieldset>
+            <div class="actions">
+              <button class="btn" type="submit">Continue to payment <span aria-hidden="true">→</span></button>
+              <button class="btn btn--text" type="button" data-back="contact">← Back</button>
+            </div>
+          </form>
+
+          <form class="stack" data-step="payment" novalidate hidden>
+            <div class="shop-intro">
+              <h2 class="heading-guide-h2" tabindex="-1">Payment</h2>
+              <p class="body body--sm">Card details are encrypted by Airwallex and never stored by APGO.</p>
+            </div>
+            <!-- Apple Pay / Google Pay: stay collapsed and invisible unless the device and Airwallex report the wallet is ready. -->
+            <div class="wallets" data-wallets role="group" aria-label="Express payment">
+              <div class="wallet-slot" data-wallet-slot="applePay"><div id="wallet-applepay"></div></div>
+              <div class="wallet-slot" data-wallet-slot="googlePay"><div id="wallet-googlepay"></div></div>
+              <p class="wallets__divider label label--xs" data-wallet-divider hidden><span>Or pay by card</span></p>
+            </div>
+            <div class="field" data-field="cardNumber">
+              <span class="field__label" id="card-number-label">Card number<span class="req" aria-hidden="true"> *</span></span>
+              <div class="card-input" id="card-number" role="group" aria-labelledby="card-number-label"></div>
+              <span class="field__error" data-error hidden></span>
+            </div>
+            <div class="row-2">
+              <div class="field" data-field="expiry">
+                <span class="field__label" id="card-expiry-label">Expiry<span class="req" aria-hidden="true"> *</span></span>
+                <div class="card-input" id="card-expiry" role="group" aria-labelledby="card-expiry-label"></div>
+                <span class="field__error" data-error hidden></span>
+              </div>
+              <div class="field" data-field="cvc">
+                <span class="field__label" id="card-cvc-label">Security code<span class="req" aria-hidden="true"> *</span></span>
+                <div class="card-input" id="card-cvc" role="group" aria-labelledby="card-cvc-label"></div>
+                <span class="field__error" data-error hidden></span>
+              </div>
+            </div>
+            <div data-payment-message aria-live="assertive"></div>
+            <div class="notice notice--info" role="note">
+              <span class="notice__title">Before you order</span>
+              <span class="notice__body">Use only as directed. Read and follow the current product label before use.</span>
+            </div>
+            <div class="actions">
+              <button class="btn" type="submit" data-place-order>Place order <span aria-hidden="true">→</span></button>
+              <button class="btn btn--text" type="button" data-back="shipping">← Back</button>
+            </div>
+          </form>
+        </div>
+
+        <section class="stack" data-confirmation hidden aria-live="polite"></section>
+
+        <aside class="summary" aria-labelledby="summary-title" data-summary hidden>
+          <h2 class="label label--xs" id="summary-title">Order summary</h2>
+          <ul class="summary-lines" data-summary-lines></ul>
+          <div data-summary-rows></div>
+          <p class="label summary__note">Secure checkout · Payments by Airwallex</p>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="shop-footer">
+      <div class="shop-footer__inner">
+        <img src="assets/brand/apgo-logo.png" alt="APGO" width="89" height="24">
+        <nav class="shop-footer__links" aria-label="Legal and support">
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="terms.html">Terms of Sale</a>
+          <a href="returns.html">Returns &amp; Refunds</a>
+          <a href="contact.html">Contact</a>
+        </nav>
+        <span>© <span data-year>2026</span> APGO.</span>
+      </div>
+    </footer>
+  </body>
+</html>
