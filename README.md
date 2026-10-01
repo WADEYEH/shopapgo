@@ -24,6 +24,42 @@ through Shopify or this prototype.
 - Product imagery must follow `docs/asset-map.md` after the asset lane completes
   it.
 
+## Direct store (cart + Airwallex checkout)
+
+`prototype/cart.html` and `prototype/checkout.html` are a separate,
+`noindex` direct-to-consumer store backed by a Cloudflare Worker (`worker/`)
+and Airwallex. Prices, shipping and tax all live in one file, `worker/pricing.js` (placeholders;
+optional `PRICING_JSON` override; tax defaults to 0/undecided; prod stays closed until
+`PRICING_APPROVED=true`). The Payment step offers Apple Pay / Google Pay (Airwallex.js
+elements) when the device supports them.
+`prototype/v3.html` has the landing entry: header cart badge and **Add to cart**
+(primary) with the Amazon link kept as the secondary option. A protected
+order back office lives at `/admin/` (on staging/prod only on its own `admin-*` hostname, see Environments) (`ADMIN_TOKEN` secret; its writes are mark-as-shipped and the Amazon MCF buttons), paid
+orders can trigger an opt-in team notification and opt-in customer emails, and
+`npm run smoke:airwallex` runs the full sandbox payment flow once keys are in
+`.dev.vars` (see `.dev.vars.example`; never commit real values).
+Paid orders can optionally be fulfilled by **Amazon Multi-Channel Fulfillment** (`worker/amazon-mcf.js`, `worker/mcf.js`). The Worker holds **no Amazon
+credentials**: it calls the internal outbound endpoints of the amazon-spapi-mcp Worker (v1.5.0+) with `AMAZON_OUTBOUND_BASE_URL` + `OUTBOUND_INTERNAL_TOKEN`.
+It is **off by default**: set `MCF_AUTO_SUBMIT=true` and `MCF_SKU_MAP_JSON` (our SKU → Amazon seller SKU). The back office shows the MCF state, a
+**Retry send** button and **Sync MCF status** (Amazon reports shipped + tracking → the order is marked shipped and the customer emailed once). Amazon sends no
+email of its own unless `MCF_NOTIFY_AMAZON_EMAIL=true`. Before enabling it: Amazon Fulfillment role on the MCP's app, confirmed SKU map, a first real test order
+and a decision on shipping fee/delivery wording; see `docs/commerce.md` "Amazon MCF".
+Real production MCF orders ship real stock; all tests use a fake Amazon.
+Setup, architecture, the notification assessment, the Airwallex review and the
+go-live checklist (prices, shipping and tax are still undecided placeholders)
+are in `docs/commerce.md`.
+
+**Environments.** `wrangler.toml` has local dev (top level), `[env.staging]` (deployed: Worker `apgo-us-store-staging` on workers.dev,
+own D1, Airwallex sandbox, `SITE_ENV=staging` → noindex header, `robots.txt` Disallow, whole-site Basic auth; the Airwallex webhook keeps its signature check).
+Custom domains: storefront **https://staging.shopapgo.com** (Cloudflare Custom Domain; the workers.dev URL keeps working) and the order back office on its
+own host **https://admin-staging.shopapgo.com/admin/** (`ADMIN_HOST`, `worker/hosts.js`: only `/admin*` + its css/js there, login = `ADMIN_TOKEN` or (staging only, `ADMIN_ACCEPT_SITE_BASIC="true"`) the same Basic user/password as the website, noindex;
+the store hosts answer 404 for `/admin*`; planned prod: `admin.shopapgo.com`). The `[env.staging]` `routes` bind both; `shopapgo` Pages (`www`) is untouched and `[env.production]` (planned only, `store.shopapgo.com`, not deployed,
+`PRICING_APPROVED` unset = payments closed). Deploy staging with `npm run deploy:staging`; verify with `scripts/staging-check.mjs` and
+`scripts/airwallex-browser-smoke.mjs --base <url> [--admin-base <admin url>] --credentials ~/.apgo-staging-credentials`. Secrets are per environment
+(`wrangler secret put <NAME> --env staging`); staging secrets: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (sandbox), `ADMIN_TOKEN`,
+`STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` (+ `AIRWALLEX_WEBHOOK_SECRET` once a sandbox webhook exists). Go-live
+to-do (prod D1, domain, prod secrets, webhook registration, `PRICING_APPROVED`): `docs/commerce.md` "Environments".
+
 ## Run locally
 
 Requirements:
@@ -48,6 +84,9 @@ npm run test:static
 npm run test:e2e
 npm run test
 npm run capture
+npm run capture:v3-cart   # v3 Add to cart + back office screenshots (desktop/mobile)
+npm run capture:wallets   # checkout screenshots with Apple/Google Pay shown (desktop/mobile)
+npm run smoke:airwallex   # sandbox payment smoke test (needs .dev.vars keys)
 npm run record
 ```
 
@@ -123,6 +162,8 @@ prototype/
   css/app.css                responsive visual system
   js/config.js               only external runtime values
   js/app.js                  framework-free interactions and analytics hooks
+  cart.html checkout.html    direct store (js/commerce/, css/commerce.css)
+  admin/index.html           protected order back office (js/admin.js, css/admin.css)
   assets/                    approved/fallback media organized by asset lane
 docs/
   CLAUDE_DESIGN_BRIEF.md     standalone brief for an independent Claude concept
@@ -132,8 +173,9 @@ docs/
   shopify-handoff.md         Shopify template and DOM/data integration contract
   analytics-seo.md           events, Amazon Attribution, SEO and privacy
   qa-checklist.md            concentrated acceptance and release gates
-tests/                       static contract and Playwright end-to-end checks
-scripts/                     screenshot and review-recording utilities
+worker/                      Cloudflare Worker: pricing (single source), catalog, wallets, checkout, orders, Airwallex, admin, notify
+tests/                       static contract, Worker backend and Playwright end-to-end checks
+scripts/                     screenshot, review-recording and Airwallex smoke-test utilities
 review/                      generated review evidence
 ```
 
