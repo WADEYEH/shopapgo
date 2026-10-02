@@ -267,7 +267,7 @@ export default function HowOftenReapplyPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "coatingOverWax", "autoWashCoating", "rainDamageCoating"]} />
+        <RelatedGuides items={["waxVsSprayCoating", "coatingMaintenance", "autoWashCoating", "rainDamageCoating"]} />
       </main>
     </div>
   );

@@ -291,7 +291,7 @@ export default function CeramicSprayVsCoatingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["diyVsPro", "waxVsSprayCoating", "howOftenReapply"]} />
+        <RelatedGuides items={["whatIsSprayCeramic", "paintProtectionTypes", "diyVsPro"]} />
       </main>
     </div>
   );

@@ -325,7 +325,7 @@ export default function DiyVsProPage() {
           </section>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "howOftenReapply", "coatingOverWax"]} />
+        <RelatedGuides items={["waxVsSprayCoating", "sprayVsCoating", "paintProtectionTypes", "howOftenReapply"]} />
       </main>
     </div>
   );

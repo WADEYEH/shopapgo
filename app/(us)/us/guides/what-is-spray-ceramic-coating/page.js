@@ -234,7 +234,7 @@ export default function WhatIsSprayCeramicCoatingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "howOftenReapply", "coatingOverWax"]} />
+        <RelatedGuides items={["sprayVsCoating", "prepForSpray", "waxVsSprayCoating"]} />
       </main>
     </div>
   );

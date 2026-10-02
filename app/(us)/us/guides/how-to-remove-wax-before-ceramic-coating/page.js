@@ -289,6 +289,9 @@ export default function HowToRemoveWaxBeforeCeramicCoatingPage() {
               With the wax gone, finish the rest of your prep, including washing, decontamination, and drying or leaving the paint wet as your label says; see <Link href={routes.prepForSpray} className="us-text-link">how to prep your car for ceramic spray</Link>. Then apply your product according to its label.
             </p>
             <p style={body}>
+              If the finish shows streaks, haze, or high spots after you apply it, see <Link href={routes.streaksHighSpots} className="us-text-link">ceramic coating streaks, haze, or high spots and how to fix them</Link>.
+            </p>
+            <p style={body}>
               If you're using APGO Atomic Colored Glaze (D204), a silicone-based spray glaze applied after the car is washed and completely dried, follow <Link href={routes.coloredGlaze} className="us-text-link">how to apply APGO Atomic Colored Glaze</Link>. D204 and APGO Atomic Glaze Coating (D215), a silicone-based spray glaze applied to wet paint, are alternative routines, not a two-product layering system, so contact APGO before combining them. You can compare both on <Link href={routes.compare} className="us-text-link">APGO's silicone-based spray glaze</Link> page.
             </p>
           </section>
@@ -315,7 +318,7 @@ export default function HowToRemoveWaxBeforeCeramicCoatingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["coatingOverWax", "waxVsSprayCoating", "coloredGlaze"]} />
+        <RelatedGuides items={["prepForSpray", "whatIsCarGlaze", "coatingOverWax"]} />
       </main>
     </div>
   );

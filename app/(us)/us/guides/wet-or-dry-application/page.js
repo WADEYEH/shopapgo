@@ -358,7 +358,7 @@ export default function WetOrDryPage() {
           note="U.S. launch preparation is underway. Explore the guides now; purchasing links will be added when the products are available."
         />
 
-        <RelatedGuides items={["waxVsSprayCoating", "coatingOverWax", "howOftenReapply", "afterWashing"]} />
+        <RelatedGuides items={["prepForSpray", "waxVsSprayCoating", "coatingOverWax", "afterWashing"]} />
       </main>
     </div>
   );

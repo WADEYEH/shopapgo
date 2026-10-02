@@ -332,7 +332,7 @@ export default function HowToPrepCarForCeramicSprayPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["coatingOverWax", "wetOrDry", "coloredGlaze"]} />
+        <RelatedGuides items={["removeWaxFirst", "waitToWash", "coatingOverWax"]} />
       </main>
     </div>
   );

@@ -21,6 +21,18 @@ const MORE_GUIDES = [
   { key: "autoWashCoating", label: "Does an automatic car wash remove ceramic coating?" },
   { key: "rainDamageCoating", label: "Does rain damage ceramic coating?" },
   { key: "diyVsPro", label: "DIY ceramic coating vs professional" },
+  { key: "paintProtectionTypes", label: "Types of paint protection" },
+  { key: "whatIsSprayCeramic", label: "What is spray ceramic?" },
+  { key: "whatIsCarGlaze", label: "What is car glaze?" },
+  { key: "sprayVsCoating", label: "Ceramic spray vs coating" },
+  { key: "coatingScratches", label: "Scratches & coating" },
+  { key: "prepForSpray", label: "Prep for ceramic spray" },
+  { key: "removeWaxFirst", label: "Remove wax first" },
+  { key: "waitToWash", label: "When to wash after spraying" },
+  { key: "coatingMaintenance", label: "Coating maintenance" },
+  { key: "washCoatedCar", label: "Wash a coated car" },
+  { key: "winterWash", label: "Winter washing" },
+  { key: "streaksHighSpots", label: "Streaks & high spots" },
 ];
 
 export default function GuidesSection() {

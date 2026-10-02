@@ -320,7 +320,7 @@ export default function AfterWashingPage() {
           </p>
         </ArticleBody>
 
-<RelatedGuides items={["autoWashCoating", "rainDamageCoating", "howOftenReapply", "wetOrDry"]} />
+<RelatedGuides items={["washCoatedCar", "autoWashCoating", "rainDamageCoating", "wetOrDry"]} />
       </main>
     </div>
   );

@@ -318,7 +318,7 @@ export default function TypesOfCarPaintProtectionPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "coatingOverWax", "diyVsPro"]} />
+        <RelatedGuides items={["sprayVsCoating", "whatIsSprayCeramic", "waxVsSprayCoating"]} />
       </main>
     </div>
   );
