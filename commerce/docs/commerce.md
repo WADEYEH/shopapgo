@@ -343,7 +343,7 @@ npm run dev                        # http://127.0.0.1:8799/v3.html  ·  /cart.ht
 ```
 
 Sandbox test card: `4035 5010 0000 0008`, any future expiry, any CVC.
-3DS challenge: `4012 0003 0000 0088` (OTP `1234`). Decline: `4000 0000 0000 0002`.
+3DS challenge: `4012 0003 0000 0088` (OTP `1234`). Risk decline: `4646 4646 4646 4644` (any amount). Elements authentication failure: `4012 0003 0000 0013`.
 
 Browser smoke test (Airwallex.js iframes, use when the account has no native API access): start `npm run dev`, then `npm run smoke:airwallex:browser` (`-- --card declined`, `-- --headed`). Screenshots go to `review/airwallex-browser-*.png`.
 
@@ -726,7 +726,7 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 - Credentials are kept in the password vault (see "Handoff"). The older `~/.apgo-staging-credentials` file on the owner's Mac is **out of date**: do not rely on it. Names: `STAGING_BASIC_AUTH_USER`,
   `STAGING_BASIC_AUTH_PASSWORD`, `ADMIN_TOKEN`. Never commit or paste values.
 - Card tests: use Airwallex sandbox test cards only, e.g. `4035 5010 0000 0008` (success), any future expiry, any CVC;
-  `4000 0000 0000 0002` is declined. No real charge can happen because staging only has sandbox keys.
+  `4646 4646 4646 4644` triggers a sandbox risk decline at any amount. No real charge can happen because staging only has sandbox keys.
 
 ### Staging secrets (`npx wrangler secret put <NAME> --env staging`)
 

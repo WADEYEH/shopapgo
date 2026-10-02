@@ -3,7 +3,7 @@
 //
 //   npm run smoke:airwallex            # starts wrangler dev (local D1), runs the flow
 //   npm run smoke:airwallex -- --base http://127.0.0.1:8799   # use a server you already started
-//   npm run smoke:airwallex -- --card declined                # 4000 0000 0000 0002, expects no payment
+//   npm run smoke:airwallex -- --card declined                # sandbox risk decline at any amount
 //   npm run smoke:airwallex -- --env smoke                    # read .dev.vars.smoke instead
 //
 // It needs AIRWALLEX_CLIENT_ID / AIRWALLEX_API_KEY in .dev.vars (sandbox keys) and
@@ -34,7 +34,8 @@ const option = (name, fallback) => {
 
 const CARDS = {
   success: { number: "4035501000000008", expects: "paid", note: "Visa, approves" },
-  declined: { number: "4000000000000002", expects: "unpaid", note: "declined" },
+  // Official sandbox risk-decline card (not the Shopify plugin's test-card list).
+  declined: { number: "4646464646464644", expects: "unpaid", note: "risk declined", errorCode: "risk_declined" },
 };
 const cardName = option("card", "success");
 const card = CARDS[cardName];
@@ -221,7 +222,7 @@ try {
     }
     expect("Card payment succeeded at Airwallex", intentStatus === "SUCCEEDED", `intent status ${intentStatus}`);
   } else {
-    expect("Declined card did not succeed", intentStatus !== "SUCCEEDED", `intent status ${intentStatus ?? `HTTP ${confirmed.response.status}`}`);
+    expect("Expected sandbox decline returned", !confirmed.response.ok && confirmed.body?.code === card.errorCode, `HTTP ${confirmed.response.status}, code ${confirmed.body?.code ?? "missing"}`);
   }
 
   log("\n4. Order status through the Worker (retrieve fallback)");

@@ -56,3 +56,15 @@ The 29 backend tests passed on October 2, including signed payment settlement, d
 - The owner completed password reauthentication and saved the edit. Airwallex displayed "Webhook subscription updated" and the saved details contain the original success/cancellation events plus all six failed-attempt events. The list now shows **8 events** on the same Sandbox Business account, destination and API version.
 - The displayed signing secret was compared with the previously configured value without logging it; it is unchanged. No secret update or Worker redeployment was needed.
 - Actual Airwallex success/failure delivery and real checkout remain unverified for the staging-login reason above. Local screenshots and mocked-provider tests do not substitute for that verification.
+
+## Next sandbox checkout test
+
+Chrome still could not open the protected staging cart; no staging credentials file or `.dev.vars` was present in the documented local locations. The owner was asked to sign in to `https://staging.shopapgo.com` manually. These credentials are separate from the Airwallex login.
+
+The test-card scenarios were checked against the [current official Airwallex integration guide](https://www.airwallex.com/docs/payments/test-and-go-live/test-card-numbers). The scripts' old `4000000000000002` came from the Shopify-plugin test-card list; the direct Elements/Native API scenarios now use the appropriate cards:
+
+- Success: `4035501000000008`, any amount.
+- Risk decline: `4646464646464644`, any amount; expect `payment_attempt.risk_declined`.
+- Elements authentication failure: `4012000300000013`; expect `payment_attempt.authentication_failed`.
+
+For a failed attempt, verify the original order stays pending, a corresponding attempt is recorded in the admin, and the cart is retained. Then retry with the success card and verify the order becomes paid with its earlier failure history retained. Verify genuine event delivery returns 200 and a redelivery does not repeat paid-order side effects. Changing store prices to a special trigger amount is unnecessary for these scenarios.

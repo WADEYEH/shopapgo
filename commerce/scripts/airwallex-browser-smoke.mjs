@@ -2,7 +2,7 @@
 // Browser smoke test of the REAL Airwallex SANDBOX payment flow (Airwallex.js split card iframes).
 //
 //   npm run dev                      # in another terminal (wrangler dev, port 8799)
-//   npm run smoke:airwallex:browser  # [-- --base http://127.0.0.1:8799] [--headed] [--card success|declined]
+//   npm run smoke:airwallex:browser  # [-- --base http://127.0.0.1:8799] [--headed] [--card success|declined|authentication-failed]
 //
 // Against a deployed STAGING Worker (Basic-auth gate, see docs/commerce.md):
 //   node scripts/airwallex-browser-smoke.mjs --base https://<staging>.workers.dev --credentials ~/.apgo-staging-credentials
@@ -33,7 +33,10 @@ const adminBase = option("admin-base", base).replace(/\/$/, "");
 const headed = args.includes("--headed");
 const CARDS = {
   success: { number: "4035501000000008", expects: "paid" },
-  declined: { number: "4000000000000002", expects: "unpaid" },
+  // Official Elements test cards; both failure cases work without changing store prices.
+  // https://www.airwallex.com/docs/payments/test-and-go-live/test-card-numbers
+  declined: { number: "4646464646464644", expects: "unpaid" },
+  "authentication-failed": { number: "4012000300000013", expects: "unpaid" },
 };
 const cardName = option("card", "success");
 const card = CARDS[cardName];
