@@ -53,7 +53,9 @@ async function postEmail(config, row, fetchImpl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const response = await fetchImpl(config.apiUrl, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}`, 'Idempotency-Key': row.request_key }, body: row.payload_json, signal: controller.signal });
+    // Workers supports manual redirects here. Never follow a redirect carrying the key.
+    const response = await fetchImpl(config.apiUrl, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}`, 'Idempotency-Key': row.request_key }, body: row.payload_json, signal: controller.signal });
+    if (response.status >= 300 && response.status < 400) return { retry: false, detail: 'Email service returned an unexpected redirect; no credentials forwarded.' };
     const raw = await limitedBody(response);
     let body; try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
     if (response.ok && typeof body?.id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(body.id)) return { providerId: body.id };
@@ -61,8 +63,15 @@ async function postEmail(config, row, fetchImpl) {
     const retryHeader = response.headers.get('Retry-After');
     const seconds = retryHeader && /^\d+$/.test(retryHeader) ? Number(retryHeader) : retryHeader ? (Date.parse(retryHeader) - Date.now()) / 1000 : 0;
     return { retry, delayMs: Math.min(Math.max(seconds * 1000 || 0, 0), SAFE_WINDOW_MS), detail: response.ok ? 'Email service response is missing its message ID; retry safely.' : `Email service returned HTTP ${response.status}.` };
-  } catch {
-    return { retry: true, detail: 'Email service timed out or could not be reached; retry safely.' };
+  } catch (error) {
+    // Never persist the raw error: invalid-header errors may contain credentials.
+    const message = String(error?.message || '');
+    const reason = controller.signal.aborted ? 'timed out'
+      : /redirect/i.test(message) ? 'rejected the redirect policy'
+      : /illegal invocation/i.test(message) ? 'could not invoke the transport'
+      : /header|ByteString|invalid character/i.test(message) ? 'rejected an invalid request header'
+      : 'could not be reached';
+    return { retry: true, detail: `Email service ${reason}; retry safely.` };
   } finally { clearTimeout(timer); }
 }
 

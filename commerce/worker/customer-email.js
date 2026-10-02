@@ -32,7 +32,7 @@ export function customerEmailConfig(env) {
   const from = env.CUSTOMER_EMAIL_FROM || env.ORDER_NOTIFY_EMAIL_FROM;
   if (!env.RESEND_API_KEY || !from) return null;
   return {
-    apiKey: env.RESEND_API_KEY,
+    apiKey: String(env.RESEND_API_KEY).trim(),
     from,
     replyTo: env.CUSTOMER_EMAIL_REPLY_TO || undefined,
     apiUrl: env.ORDER_NOTIFY_EMAIL_API_URL || DEFAULT_EMAIL_API,

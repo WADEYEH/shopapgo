@@ -46,6 +46,31 @@ test('concurrent sends take one DB lease and make one provider request', {skip},
   assert.equal(calls,1);assert.deepEqual(results.map(r=>r.status).sort(),['duplicate','sent']);
 });
 
+test('clipboard whitespace in a stored key is removed before constructing authenticated requests', {skip}, async()=>{
+  const {env,order}=await setup({RESEND_API_KEY:'  test-key\r\n'});
+  const result=await sendCustomerEmail(env,order,'confirmation',{fetchImpl:async(url,init)=>{
+    const request=new Request(url,init);
+    assert.equal(request.headers.get('Authorization'),'Bearer test-key');
+    return accepted();
+  }});
+  assert.equal(result.status,'sent');
+});
+
+test('provider redirects are not followed and stop automatic retries without forwarding credentials', {skip}, async()=>{
+  const {db,env,order}=await setup();let calls=0;
+  const result=await sendCustomerEmail(env,order,'confirmation',{fetchImpl:async(_url,init)=>{
+    calls++;
+    assert.equal(init.redirect,'manual');
+    return new Response(null,{status:302,headers:{Location:'https://unrelated.example/collect'}});
+  }});
+  assert.equal(result.status,'failed');
+  const row=await getDelivery(db,ID,'confirmation');
+  assert.equal(row.status,'failed');
+  assert.match(row.detail,/unexpected redirect/);
+  await scheduledCustomerEmailRetry({...env,CUSTOMER_EMAIL_RETRY_CRON:'true'});
+  assert.equal(calls,1);
+});
+
 test('timeout retries use exactly the same body/key; honor backoff and stop outside safe idempotency window', {skip}, async()=>{
   const {db,env,order}=await setup();const t=Date.now();const requests=[];
   const failed=async(_url,init)=>{requests.push({key:init.headers['Idempotency-Key'],body:init.body});throw new Error('secret-key private@example.com');};
