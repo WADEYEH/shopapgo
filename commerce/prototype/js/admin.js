@@ -433,6 +433,32 @@ $("[data-admin-search]").addEventListener("submit", (event) => {
   load({ reset: true });
 });
 $("[data-admin-load-more]").addEventListener("click", () => load());
+$("[data-admin-mcf-check]").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const result = $("[data-admin-mcf-check-result]");
+  button.disabled = true;
+  result.replaceChildren(notice("info", "Checking MCF connection", "Checking access and a sample delivery preview. No shipment will be created."));
+  try {
+    const check = await adminApi("/admin/api/mcf/check");
+    if (!check.ok) {
+      result.replaceChildren(notice("warning", "MCF connection check failed", check.error || "The fulfillment service could not be verified."));
+    } else {
+      const previews = check.previews || (check.preview ? [check.preview] : []);
+      const available = previews.length > 0 && previews.every((preview) => preview.fulfillable === true);
+      const details = [
+        ...previews.map((preview) => `${preview.sku}: ${preview.fulfillable ? "available for the sample delivery address" : "unavailable for the sample delivery address"}.${preview.deliveryStart && preview.deliveryEnd ? ` Estimated delivery: ${formatDate(preview.deliveryStart)} – ${formatDate(preview.deliveryEnd)}.` : ""}`),
+        previews.length ? "" : "Connection verified; no product preview was returned.",
+        check.autoSubmit ? "Automatic fulfillment is enabled." : "Automatic fulfillment is off.",
+        "No shipment was created. This preview does not confirm delivery to every customer address.",
+      ].filter(Boolean).join(" ");
+      result.replaceChildren(notice(available ? "success" : "warning", "MCF connection verified", details));
+    }
+  } catch (error) {
+    result.replaceChildren(notice("warning", "MCF connection check failed", error.message));
+  } finally {
+    button.disabled = false;
+  }
+});
 $("[data-admin-mcf-sync-all]").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   button.disabled = true;

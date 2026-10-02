@@ -31,6 +31,7 @@
       <div class="admin-toolbar">
         <div class="admin-tabs" role="group" aria-label="Filter by status" data-admin-tabs></div>
         <div class="admin-tabs" role="group" aria-label="Filter by shipping" data-admin-fulfillment-tabs></div>
+        <button class="btn btn--sm" type="button" data-admin-mcf-check>Check MCF connection</button>
         <button class="btn btn--sm" type="button" data-admin-mcf-sync-all>Sync MCF status</button>
         <form class="admin-search" role="search" data-admin-search>
           <label class="visually-hidden" for="admin-q">Search orders</label>
@@ -38,6 +39,8 @@
           <button class="btn btn--sm" type="submit">Search</button>
         </form>
       </div>
+
+      <div data-admin-mcf-check-result aria-live="polite"></div>
 
       <div class="admin-grid">
         <section aria-labelledby="orders-heading" class="admin-list-wrap">

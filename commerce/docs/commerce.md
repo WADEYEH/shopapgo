@@ -511,7 +511,7 @@ credentials and talks to SP-API Fulfillment Outbound. **It is OFF by default**: 
 
 ### The outbound endpoints (amazon-spapi-mcp v1.5.0)
 
-`GET /admin/api/mcf/check` (ADMIN_TOKEN) is a read-only connection test: it lists MCF orders and previews one unit of the first mapped SKU to a Seattle address (fee + arrival window). It creates and cancels nothing and works while `MCF_AUTO_SUBMIT` is off.
+`GET /admin/api/mcf/check` (ADMIN_TOKEN) is a read-only connection test: it lists MCF orders and previews one unit of each store SKU (D204 and D215) to a Seattle address (fee + arrival window). Missing SKU mappings fail the check. The admin's **Check MCF connection** button displays both previews and the automatic fulfillment state. It creates and cancels nothing and works while `MCF_AUTO_SUBMIT` is off.
 
 Auth: `Authorization: Bearer <OUTBOUND_INTERNAL_TOKEN>` (missing/wrong → 401; secret unset on the MCP Worker → 503). Base URL: `AMAZON_OUTBOUND_BASE_URL`
 (must be `https://`, the bearer never travels over http). All JSON; top level snake_case, nested `address` / `destination_address` / `items[]` camelCase; replies are the raw

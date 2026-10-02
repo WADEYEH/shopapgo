@@ -424,11 +424,19 @@ test("GET /admin/api/mcf/check is read-only: lists and previews, never creates o
     assert.equal(check.autoSubmit, false);
     assert.equal(check.list.ok, true);
     assert.deepEqual({ sku: check.preview.sku, fulfillable: check.preview.fulfillable, feeCents: check.preview.feeCents }, { sku: "D204", fulfillable: true, feeCents: 891 });
-    assert.deepEqual(amazon.calls.map((c) => c.op).sort(), ["list", "preview"]);
+    assert.deepEqual(check.previews.map((preview) => preview.sku), ["D204", "D215"]);
+    assert.deepEqual(amazon.calls.map((c) => c.op).sort(), ["list", "preview", "preview"]);
+    assert.deepEqual(amazon.calls.filter((c) => c.op === "preview").map((c) => c.body.items[0].sellerSku), ["AMZ-SKU-D204", "AMZ-SKU-D215"]);
     assert.ok(!JSON.stringify(check).includes(FAKE_OUTBOUND_TOKEN));
   });
   const missing = await (await call(mcfEnv(db, { OUTBOUND_INTERNAL_TOKEN: "" }), "/admin/api/mcf/check", { headers: bearer })).json();
   assert.deepEqual({ ok: missing.ok, step: missing.step }, { ok: false, step: "config" });
+  await withWorld({}, async ({ amazon }) => {
+    const missingSku = await (await call(mcfEnv(db, { MCF_SKU_MAP_JSON: JSON.stringify({ D204: "AMZ-SKU-D204" }) }), "/admin/api/mcf/check", { headers: bearer })).json();
+    assert.equal(missingSku.ok, false);
+    assert.match(missingSku.error, /D215/);
+    assert.deepEqual(amazon.calls.map((c) => c.op), ["list"], "incomplete mapping cannot produce a successful preview check");
+  });
   await withWorld({ amazon: createFakeAmazon({ token: "other" }) }, async () => {
     const denied = await (await call(env, "/admin/api/mcf/check", { headers: bearer })).json();
     assert.deepEqual({ ok: denied.ok, step: denied.step, kind: denied.kind }, { ok: false, step: "list", kind: "auth" });

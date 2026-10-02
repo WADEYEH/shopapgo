@@ -11,6 +11,35 @@ const SUBMITTED = { ...FAILED, status: "submitted", mcfStatus: "PROCESSING", err
 
 const block = (page) => page.locator("[data-admin-mcf]");
 
+test("connection check uses GET only, reports preview availability and never enables fulfillment", async ({ page }) => {
+  const requests = await mockAdminApi(page);
+  const checks = [];
+  await page.route("**/admin/api/mcf/check", (route) => {
+    checks.push(route.request().method());
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, autoSubmit: false, previews: [{ sku: "D204", fulfillable: true }, { sku: "D215", fulfillable: false }] }) });
+  });
+  await page.goto(`/admin/index.html#${PAID}`);
+  await page.getByRole("button", { name: "Check MCF connection", exact: true }).click();
+  await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("D204: available");
+  await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("D215: unavailable");
+  await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("Automatic fulfillment is off.");
+  await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("No shipment was created.");
+  expect(checks).toEqual(["GET"]);
+  expect(requests.mcf).toHaveLength(0);
+  expect(requests.writes).toHaveLength(0);
+  await expect(page.locator("[data-mcf-submit]")).toHaveCount(0);
+});
+
+test("connection failure is readable as text and the check can be retried", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/admin/api/mcf/check", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false, step: "list", error: "<img src=x onerror=alert(1)> token rejected" }) }));
+  await page.goto("/admin/index.html");
+  await page.getByRole("button", { name: "Check MCF connection", exact: true }).click();
+  await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("token rejected");
+  await expect(page.locator("[data-admin-mcf-check-result] img")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Check MCF connection", exact: true })).toBeEnabled();
+});
+
 test("default: MCF off shows 'not enabled, ship manually' and no MCF buttons; the manual shipping form still works", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto(`/admin/index.html#${PAID}`);

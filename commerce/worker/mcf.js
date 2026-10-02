@@ -29,6 +29,7 @@ import {
 import { FulfillmentError, markShipped, recordAudit, validateShipment } from "./fulfillment.js";
 import { sendCustomerEmail } from "./customer-email.js";
 import { getOrder } from "./orders.js";
+import { PRODUCTS } from "./catalog.js";
 
 const now = () => new Date().toISOString();
 const STALE_SUBMITTING_MS = 5 * 60_000;
@@ -387,7 +388,7 @@ export async function cancelMcfOrder(env, orderId, { actor = "admin" } = {}) {
   }
 }
 
-// Read-only connection check for admins (GET /admin/api/mcf/check): lists orders and previews one unit of a mapped SKU to a
+// Read-only connection check for admins (GET /admin/api/mcf/check): lists orders and previews one unit of each store SKU to a
 // sample Seattle address. Creates and cancels nothing, and works whether or not MCF_AUTO_SUBMIT is on.
 export async function checkMcfConnection(env) {
   const config = mcfReadiness(env, null).config;
@@ -400,12 +401,17 @@ export async function checkMcfConnection(env) {
   } catch (error) {
     return { ...result, step: "list", error: clip(error?.message, 200), kind: error?.kind ?? "unexpected" };
   }
-  const sku = Object.keys(config.skuMap)[0];
-  if (!sku) return { ...result, step: "preview", error: "MCF_SKU_MAP_JSON is empty" };
+  const skus = Object.values(PRODUCTS).map((product) => product.sku);
+  const missing = skus.filter((sku) => !config.skuMap[sku]);
+  if (missing.length) return { ...result, step: "preview", error: `Missing Amazon SKU mapping: ${missing.join(", ")}` };
+  result.previews = [];
   try {
     const address = { name: "Connection Check", addressLine1: "400 Broad St", city: "Seattle", stateOrRegion: "WA", postalCode: "98109" };
-    const preview = await getFulfillmentPreview(env, { address, items: [{ sku: config.skuMap[sku], qty: 1 }], tier: "STANDARD" });
-    result.preview = { sku, tier: "STANDARD", fulfillable: preview.fulfillable, feeCents: preview.offer?.feeCents ?? null, deliveryStart: preview.offer?.deliveryStart ?? null, deliveryEnd: preview.offer?.deliveryEnd ?? null };
+    for (const sku of skus) {
+      const preview = await getFulfillmentPreview(env, { address, items: [{ sku: config.skuMap[sku], qty: 1 }], tier: "STANDARD" });
+      result.previews.push({ sku, tier: "STANDARD", fulfillable: preview.fulfillable, feeCents: preview.offer?.feeCents ?? null, deliveryStart: preview.offer?.deliveryStart ?? null, deliveryEnd: preview.offer?.deliveryEnd ?? null });
+    }
+    result.preview = result.previews[0]; // retain the previous API field for existing clients
     result.ok = true;
   } catch (error) {
     return { ...result, step: "preview", error: clip(error?.message, 200), kind: error?.kind ?? "unexpected" };
