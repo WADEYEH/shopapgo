@@ -21,7 +21,7 @@ const GUIDE_GROUPS = [
     id: "compare-and-choose",
     label: "Compare & choose",
     labelColor: color.tertiary,
-    items: [routes.paintProtectionTypes, routes.whatIsSprayCeramic, routes.whatIsCarGlaze, routes.sprayVsCoating, routes.waxVsSprayCoating, routes.diyVsPro],
+    items: [routes.paintProtectionTypes, routes.whatIsSprayCeramic, routes.whatIsCarGlaze, routes.sprayVsCoating, routes.coatingScratches, routes.waxVsSprayCoating, routes.diyVsPro],
   },
   {
     id: "prep-and-application",
@@ -39,7 +39,7 @@ const GUIDE_GROUPS = [
     id: "durability-and-weather",
     label: "Durability & weather",
     labelColor: color.wet,
-    items: [routes.howOftenReapply, routes.rainDamageCoating],
+    items: [routes.howOftenReapply, routes.rainDamageCoating, routes.winterWash],
   },
   {
     id: "troubleshooting",
@@ -54,6 +54,7 @@ const JUMP_LINK_LABELS = {
   [routes.whatIsSprayCeramic]: "What is spray ceramic?",
   [routes.whatIsCarGlaze]: "What is car glaze?",
   [routes.sprayVsCoating]: "Ceramic spray vs coating",
+  [routes.coatingScratches]: "Scratches & coating",
   [routes.waxVsSprayCoating]: "Wax vs spray coating",
   [routes.diyVsPro]: "DIY ceramic coating vs professional",
   [routes.prepForSpray]: "Prep for ceramic spray",
@@ -69,6 +70,7 @@ const JUMP_LINK_LABELS = {
   [routes.autoWashCoating]: "Auto wash & coating",
   [routes.howOftenReapply]: "How often to reapply",
   [routes.rainDamageCoating]: "Rain & coating",
+  [routes.winterWash]: "Winter washing",
   [routes.streaksHighSpots]: "Streaks & high spots",
 };
 
@@ -245,6 +247,14 @@ export default function GuidesPage() {
                 <span style={cardLabel(color.tertiary)}>Compare · Spray vs liquid</span>
                 <span style={cardTitle}>Ceramic Spray vs Ceramic Coating: What's Actually Different?</span>
                 <span style={cardExcerpt}>Ceramic spray vs ceramic coating: compare prep load, application window, fixing mistakes and durability expectations, then pick the format that fits your wash.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #22 does-ceramic-coating-prevent-scratches */}
+              <Link href={routes.coatingScratches} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/does-ceramic-coating-prevent-scratches-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Basics · Coating limits</span>
+                <span style={cardTitle}>Does Ceramic Coating Prevent Scratches? What a Coating Can and Can't Do</span>
+                <span style={cardExcerpt}>Does ceramic coating prevent scratches? See which scratches a coating can help with, which it can't, like keys and rock chips, and what really prevents swirls.</span>
                 <GuideButton>Read the guide →</GuideButton>
               </Link>
               {/* existing: car-wax-vs-spray-ceramic-coating */}
@@ -484,6 +494,14 @@ export default function GuidesPage() {
                 <span style={cardTitle}>Does Rain Damage Ceramic Coating?</span>
                 <span style={cardExcerpt}>Clean rain rarely ruins a spray coating in one shower—dirty water spots and winter road salt that sit on paint are the real risks. Know what to rinse and when.</span>
                 <GuideButton>Read the weather care guide →</GuideButton>
+              </Link>
+              {/* #45 how-to-wash-your-car-in-winter */}
+              <Link href={routes.winterWash} style={cardStyle(color.wet)}>
+                <img src={asset("generated/how-to-wash-your-car-in-winter-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.wet)}>Weather · Winter washing</span>
+                <span style={cardTitle}>How to Wash Your Car in Winter (Cold, Salt & Freezing Temps)</span>
+                <span style={cardExcerpt}>How to wash your car in winter: pick the right day and place, rinse road salt from the low areas first, dry seals and locks, and clear snow without scratching.</span>
+                <GuideButton>Read the guide →</GuideButton>
               </Link>
             </div>
           </div>
