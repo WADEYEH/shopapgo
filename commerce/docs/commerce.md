@@ -40,7 +40,7 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | Secret name | Used for | Staging today |
 | --- | --- | --- |
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex API (sandbox keys on staging, production keys on prod) | set (sandbox) |
-| `AIRWALLEX_WEBHOOK_SECRET` | webhook signature | **not set** (no sandbox webhook registered; the confirmation page settles orders instead) |
+| `AIRWALLEX_WEBHOOK_SECRET` | webhook signature | set October 2; sandbox subscription registered, signature/deduplication probes passed; actual payment delivery still pending (see `staging-rollout-2026-10-02.md`) |
 | `ADMIN_TOKEN` | back office login (>= 16 chars) | set |
 | `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | staging site gate (and the staging back-office login) | set |
 | `RESEND_API_KEY` | team notification + customer emails | not set (no email is sent) |
@@ -91,7 +91,7 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
 - **Cart-page express checkout** (wallet block on the cart page) exists as front end only and is **off by default**: clicking the wallet button does **not** complete a payment yet. `EXPRESS_CHECKOUT`
   is set to `"false"` on staging and production and **must not be enabled** until the express payment flow is built.
 - Apple Pay and Google Pay have **not been verified on real devices** (needs Safari with a card in Wallet, a registered Apple Pay domain, and Chrome with a Google account); automated tests mock feature detection.
-- Staging has no Airwallex webhook registered; production needs one.
+- Staging has a sandbox Airwallex webhook registered; actual payment delivery verification is pending. Production still needs its own webhook.
 
 ## How it fits together
 

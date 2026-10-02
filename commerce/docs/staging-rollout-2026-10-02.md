@@ -23,19 +23,24 @@
 - Production `/us` still returns 200.
 - D1 still contains 2 paid and 5 pending orders, zero webhook events and zero MCF records after deployment.
 
-## Pending sandbox webhook activation and delivery verification
+## Sandbox webhook activated; actual payment delivery verification pending
 
-The Airwallex sandbox creation form has been prepared. Creation was requested after owner approval, but Airwallex requires password reauthentication before it completes; no subscription or signing secret has been obtained yet:
+The owner completed Airwallex password reauthentication. The subscription is now created and its signing secret is configured on the staging Worker:
 
 - Name: `APGO staging payment status`.
 - Destination: `https://staging.shopapgo.com/api/webhooks/airwallex`.
 - Account: Sandbox Business (single selected account).
 - Events: `payment_intent.succeeded`, `payment_intent.cancelled`.
 - API version: account's current `2026-08-21`.
+- Webhook ID: `wh_LcAsYlGhxOCm5gp3iLFlryaR-McL2DuT`.
 
-After creation, configure its signing secret as `AIRWALLEX_WEBHOOK_SECRET` on the staging Worker only. No secret belongs in this document or Git.
+`AIRWALLEX_WEBHOOK_SECRET` was stored in the staging Worker's Cloudflare Secrets. The temporary local transfer file was removed; no secret belongs in this document or Git.
+
+An isolated, locally signed `apgo.integration.signature_probe` event returned 200 (`duplicate:false`); repeating it returned 200 (`duplicate:true`); a bad signature returned 400 (`invalid_signature`). This probe contains no PaymentIntent or customer data and cannot settle an order. It verifies the deployed signing-secret configuration, not actual Airwallex delivery.
 
 Verify with an actual sandbox event: a pending order becomes paid without visiting `GET /api/orders/:id`, a redelivery is acknowledged without repeating paid-order side effects, and an invalid signature remains rejected. A locally self-signed request or a dashboard synthetic event alone does not prove real Airwallex delivery.
+
+The next actual checkout test requires the existing staging login. It was not available to this session, and Chrome could not open the protected checkout. Airwallex's Events list contained no delivered events yet after registration. Neither production checkout nor a real shipment was enabled.
 
 Resend and automatic Amazon MCF are not activated in this rollout. The existing staging login credentials remain in the owner's password vault; they have not been changed or recovered from Cloudflare.
 
