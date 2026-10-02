@@ -206,9 +206,6 @@ export default function DoesCeramicCoatingPreventScratchesPage() {
             <p style={body}>
               It can't stop key scratches, rock chips, or deeper scratches. It doesn't fill or repair scratches or swirl marks that are already there, and it isn't permanent. For a fuller list of what spray coatings don't do, see <Link href={routes.whatIsSprayCeramic} className="us-text-link">what spray ceramic coating is</Link>.
             </p>
-            <p style={body}>
-              You'll also see hardness ratings printed on some ceramic-category labels. They're marketing and category claims, and a hardness number on a label doesn't mean the paint can't be scratched.
-            </p>
           </section>
 
           <section id="swirl-marks" style={section}>
@@ -255,7 +252,7 @@ export default function DoesCeramicCoatingPreventScratchesPage() {
               No. A rock chip is an impact, and a thin coating isn't impact protection. A layer that thin can't absorb a stone hitting the hood at highway speed, and chips tend to show up on the front bumper, hood, and mirrors of any car that sees regular highway driving.
             </p>
             <p style={body}>
-              If rock chips are your main concern, drivers usually look at paint protection film, a thicker, physical film applied over the paint. To see how the main options compare, read <Link href={routes.paintProtectionTypes} className="us-text-link">types of car paint protection</Link>.
+              Chips call for a different kind of protection. To see how the main options compare, read <Link href={routes.paintProtectionTypes} className="us-text-link">types of car paint protection</Link>.
             </p>
           </section>
 
