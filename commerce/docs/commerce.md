@@ -735,7 +735,7 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex **sandbox** keys (same as `.dev.vars`) |
 | `ADMIN_TOKEN` | fresh random value, different from the local one |
 | `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | random; stored in the password vault (see "Handoff") |
-| `AIRWALLEX_WEBHOOK_SECRET` | **not set yet**: no sandbox webhook is registered for staging. Payments still complete because the confirmation page calls `GET /api/orders/:id`, which reads the PaymentIntent from Airwallex and settles the order. Register `https://<staging-host>/api/webhooks/airwallex` in the sandbox (Developer → Webhooks), then set this secret. |
+| `AIRWALLEX_WEBHOOK_SECRET` | **set October 2**: sandbox subscription registered at `https://staging.shopapgo.com/api/webhooks/airwallex`. Deployed signature and duplicate-delivery probes passed; actual sandbox payment delivery remains pending. The confirmation-page Retrieve fallback is retained. See `staging-rollout-2026-10-02.md`. |
 | `AMAZON_OUTBOUND_BASE_URL`, `OUTBOUND_INTERNAL_TOKEN` | set (by the amazon-spapi-mcp maintainer; values never printed). `MCF_SKU_MAP_JSON` is set too. |
 | `MCF_AUTO_SUBMIT`, notification / Resend secrets | **not set** (Amazon MCF stays off, no emails sent) |
 
