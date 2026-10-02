@@ -40,7 +40,7 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | Secret name | Used for | Staging today |
 | --- | --- | --- |
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex API (sandbox keys on staging, production keys on prod) | set (sandbox) |
-| `AIRWALLEX_WEBHOOK_SECRET` | webhook signature | set October 2; sandbox subscription registered, signature/deduplication probes passed; actual payment delivery still pending (see `staging-rollout-2026-10-02.md`) |
+| `AIRWALLEX_WEBHOOK_SECRET` | webhook signature | set October 2; genuine sandbox success and authentication-failure deliveries verified, including success redelivery (see `staging-rollout-2026-10-02.md`) |
 | `ADMIN_TOKEN` | back office login (>= 16 chars) | set |
 | `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | staging site gate (and the staging back-office login) | set |
 | `RESEND_API_KEY` | team notification + customer emails | not set (no email is sent) |
@@ -91,7 +91,7 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
 - **Cart-page express checkout** (wallet block on the cart page) exists as front end only and is **off by default**: clicking the wallet button does **not** complete a payment yet. `EXPRESS_CHECKOUT`
   is set to `"false"` on staging and production and **must not be enabled** until the express payment flow is built.
 - Apple Pay and Google Pay have **not been verified on real devices** (needs Safari with a card in Wallet, a registered Apple Pay domain, and Chrome with a Google account); automated tests mock feature detection.
-- Staging has a sandbox Airwallex webhook registered; actual payment delivery verification is pending. Production still needs its own webhook.
+- Staging has a sandbox Airwallex webhook registered; genuine success and authentication-failure delivery and same-order retry are verified. Production still needs its own webhook.
 
 ## How it fits together
 
@@ -735,7 +735,7 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex **sandbox** keys (same as `.dev.vars`) |
 | `ADMIN_TOKEN` | fresh random value, different from the local one |
 | `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | random; stored in the password vault (see "Handoff") |
-| `AIRWALLEX_WEBHOOK_SECRET` | **set October 2**: sandbox subscription registered at `https://staging.shopapgo.com/api/webhooks/airwallex`. Deployed signature and duplicate-delivery probes passed; actual sandbox payment delivery remains pending. The confirmation-page Retrieve fallback is retained. See `staging-rollout-2026-10-02.md`. |
+| `AIRWALLEX_WEBHOOK_SECRET` | **set October 2**: sandbox subscription registered at `https://staging.shopapgo.com/api/webhooks/airwallex`. Genuine sandbox success and authentication-failure deliveries passed; a success redelivery returned 200 without duplicating order records. The confirmation-page Retrieve fallback is retained. See `staging-rollout-2026-10-02.md`. |
 | `AMAZON_OUTBOUND_BASE_URL`, `OUTBOUND_INTERNAL_TOKEN` | set (by the amazon-spapi-mcp maintainer; values never printed). `MCF_SKU_MAP_JSON` is set too. |
 | `MCF_AUTO_SUBMIT`, notification / Resend secrets | **not set** (Amazon MCF stays off, no emails sent) |
 
