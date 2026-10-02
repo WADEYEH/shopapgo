@@ -20,4 +20,5 @@ review/tmp/
 # Generated review screenshots/recordings from `npm run capture*` / smoke scripts are not committed
 # (regenerate with the scripts). Files already tracked in review/ stay tracked.
 review/*.png
+review/*.jpg
 review/*.webm

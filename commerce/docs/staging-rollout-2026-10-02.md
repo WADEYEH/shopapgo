@@ -25,7 +25,7 @@
 
 ## Pending sandbox webhook activation and delivery verification
 
-The Airwallex sandbox creation form has been prepared, not submitted:
+The Airwallex sandbox creation form has been prepared. Creation was requested after owner approval, but Airwallex requires password reauthentication before it completes; no subscription or signing secret has been obtained yet:
 
 - Name: `APGO staging payment status`.
 - Destination: `https://staging.shopapgo.com/api/webhooks/airwallex`.
@@ -38,3 +38,5 @@ After creation, configure its signing secret as `AIRWALLEX_WEBHOOK_SECRET` on th
 Verify with an actual sandbox event: a pending order becomes paid without visiting `GET /api/orders/:id`, a redelivery is acknowledged without repeating paid-order side effects, and an invalid signature remains rejected. A locally self-signed request or a dashboard synthetic event alone does not prove real Airwallex delivery.
 
 Resend and automatic Amazon MCF are not activated in this rollout. The existing staging login credentials remain in the owner's password vault; they have not been changed or recovered from Cloudflare.
+
+The 29 backend tests passed on October 2, including signed payment settlement, duplicate deliveries, invalid signatures, late deliveries and amount mismatches. These are local mocked-provider tests, not proof of real Airwallex webhook delivery.
