@@ -89,7 +89,7 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
 - A failed customer email is recorded and shown but **not retried automatically**.
 - The audit trail's actor is always the literal `admin` (one shared token). Named users need Cloudflare Access or similar.
 - **Cart-page express checkout** (wallet block on the cart page) exists as front end only and is **off by default**: clicking the wallet button does **not** complete a payment yet. `EXPRESS_CHECKOUT`
-  is set to `"true"` on staging only and **must not be set in production** until the express payment flow is built.
+  is set to `"false"` on staging and production and **must not be enabled** until the express payment flow is built.
 - Apple Pay and Google Pay have **not been verified on real devices** (needs Safari with a card in Wallet, a registered Apple Pay domain, and Chrome with a Google account); automated tests mock feature detection.
 - Staging has no Airwallex webhook registered; production needs one.
 
