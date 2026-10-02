@@ -131,3 +131,11 @@ Remaining payment acceptance work includes issuer insufficient-funds/authorizati
 - Unsigned Resend POST returns 400 `invalid_signature` with staging noindex headers. The endpoint has no separate Basic gate, but its signing secret is not yet configured, so verified provider delivery has not been established.
 - Proof: `review/staging-email-retry-disabled.jpg` (ignored by Git). No actual email, new Resend webhook, API key or production deployment was created during this step.
 - Next: confirm a controlled test recipient, securely configure a dedicated sending-only key, create a separate signed storefront webhook, then enable staging email and verify actual confirmation/shipment delivery and rejection events. A mock test proves code behavior, not mailbox delivery. Initial paid-order email work still starts in `waitUntil`; a crash before enqueue requires operator reconciliation of the paid orders against email records.
+
+## Controlled recipient and separate Resend webhook — configured
+
+- The owner approved `wadeyeh@apgo.com.tw` for fake-order confirmation and shipment samples. Staging now has that exact `CUSTOMER_EMAIL_TEST_RECIPIENTS` allowlist; all other addresses remain blocked. Sending remains disabled.
+- Created a separate enabled Resend webhook, ID `a7d7fe9a-ea2e-459d-ac89-594b9dcddf1a`, destination `https://staging.shopapgo.com/api/webhooks/resend`, subscribed to sent, delivered, delivery_delayed, bounced, complained, suppressed and failed. The existing subscription webhook was not changed.
+- Its signing secret was saved directly into staging `RESEND_WEBHOOK_SECRET` using the masked Wrangler prompt. It is absent from source, documentation and command arguments.
+- Staging version `84414b84-6442-47b8-9e9e-eddfc59ef275` deploy output confirms the allowlist and disabled email switch. Correctly signed synthetic `apgo.signature_probe` returned 200 / ignored; an unsigned request returned 400 / invalid_signature. This verifies deployed signature enforcement, not genuine Resend delivery. The unsupported probe type creates no email-event rows.
+- Chrome has a prepared `shopapgo-staging` key form, Sending access restricted to `apgo.tw`. The owner must complete creation and save the resulting key to staging `RESEND_API_KEY`; no existing subscription key is reused. No actual sample was sent at this point.

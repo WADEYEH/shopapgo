@@ -83,6 +83,7 @@ ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic lo
 EXPRESS_CHECKOUT = "false"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block off (UI only, not ready). Do NOT set in production yet.
 CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
+CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
 CUSTOMER_EMAIL_ENABLED = "false"            # sender approved; keep actual sends off until key/test recipient are ready
 CUSTOMER_EMAIL_RETRY_CRON = "true"          # processes only existing outbox rows; does not backfill historical skipped orders
 # Secrets (wrangler secret put <NAME> --env staging): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (sandbox keys only),
