@@ -284,8 +284,9 @@ export async function finishOrderEmail(db, orderId, kind, { status, detail = "" 
 
 export async function getOrderEmails(db, orderId) {
   const { results } = await db
-    .prepare("SELECT kind, status, detail, updated_at FROM order_emails WHERE order_id = ? ORDER BY created_at, kind")
+    .prepare("SELECT e.kind, e.status, e.detail, e.updated_at, d.status AS delivery_status, d.provider_id, d.attempts, d.next_attempt_at, d.first_attempt_at FROM order_emails e LEFT JOIN order_email_delivery d ON d.order_id = e.order_id AND d.kind = e.kind WHERE e.order_id = ? ORDER BY e.created_at, e.kind")
     .bind(orderId)
     .all();
-  return results.map((row) => ({ kind: row.kind, status: row.status, detail: row.detail, updatedAt: row.updated_at }));
+  return results.map((row) => ({ kind: row.kind, status: row.status, detail: row.detail, updatedAt: row.updated_at, deliveryStatus: row.delivery_status || null, providerId: row.provider_id || null, attempts: row.attempts || 0, nextAttemptAt: row.next_attempt_at || null,
+    canRetry: row.status === 'skipped' || (['retry', 'failed'].includes(row.delivery_status) && !row.provider_id && row.attempts < 6 && Date.now() - Date.parse(row.first_attempt_at) < 23 * 60 * 60_000) }));
 }

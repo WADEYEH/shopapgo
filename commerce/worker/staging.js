@@ -18,7 +18,7 @@ export const STAGING_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
 export const isStaging = (env = {}) => env.SITE_ENV === "staging";
 
-const BASIC_EXEMPT_EXACT = new Set(["/api/webhooks/airwallex", "/admin"]);
+const BASIC_EXEMPT_EXACT = new Set(["/api/webhooks/airwallex", "/api/webhooks/resend", "/admin"]);
 export const isBasicExempt = (pathname) => BASIC_EXEMPT_EXACT.has(pathname) || pathname.startsWith("/admin/");
 
 // Comparing SHA-256 digests keeps the comparison constant-time regardless of length.

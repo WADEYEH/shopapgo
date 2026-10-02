@@ -81,11 +81,16 @@ ROOT_PAGE = "/v3"         # worker/root-page.js: "/" serves the v3 store entry (
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
 EXPRESS_CHECKOUT = "false"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block off (UI only, not ready). Do NOT set in production yet.
+CUSTOMER_EMAIL_ENABLED = "false"            # keep actual sends off until sender/key/test recipient are approved
+CUSTOMER_EMAIL_RETRY_CRON = "true"          # processes only existing outbox rows; does not backfill historical skipped orders
 # Secrets (wrangler secret put <NAME> --env staging): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (sandbox keys only),
 # ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD; AIRWALLEX_WEBHOOK_SECRET once the sandbox webhook exists.
 
 [env.staging.observability]
 enabled = true
+
+[env.staging.triggers]
+crons = ["*/2 * * * *"]
 
 # PLANNED, NOT DEPLOYED. Do not run `wrangler deploy --env production` before the go-live checklist is done.
 [env.production]

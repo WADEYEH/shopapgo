@@ -35,6 +35,12 @@ CUSTOMER_EMAIL_REPLY_TO=
 CUSTOMER_EMAIL_POLICY_NOTE=
 # "false" turns customer emails off while keeping the team notification.
 # CUSTOMER_EMAIL_ENABLED=
+# Secret for signed Resend delivery events (separate from Airwallex's secret).
+RESEND_WEBHOOK_SECRET=
+# Comma-separated exact recipients. Required with SITE_ENV=staging; no default.
+CUSTOMER_EMAIL_TEST_RECIPIENTS=
+# Enable durable retries only when an actual Cron Trigger is also configured.
+# CUSTOMER_EMAIL_RETRY_CRON=true
 
 # --- Store settings (all optional, non-secret; defaults in worker/pricing.js + worker/wallets.js) ---
 # Partial override of the placeholder prices / shipping / tax, as JSON (see docs/commerce.md).

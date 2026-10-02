@@ -1,7 +1,8 @@
 // Customer emails (order confirmation, shipment notice) through the Resend API.
 // Same opt-in style as worker/notify.js: nothing is sent unless the operator sets the
 // env below; otherwise the email is skipped and logged. A failure is logged and recorded
-// but never throws and never changes the order.
+// but never throws and never changes the order. Temporary failures use a durable
+// outbox; signed delivery events are handled in email-delivery.js.
 //
 //   RESEND_API_KEY                        (shared with notify.js)
 //   CUSTOMER_EMAIL_FROM                   sender, e.g. "APGO <orders@your-domain>"; falls back to
@@ -13,11 +14,12 @@
 //   CUSTOMER_EMAIL_ENABLED                "false" switches customer emails off
 //   ORDER_NOTIFY_EMAIL_API_URL            optional endpoint override (tests / proxies), shared with notify.js
 //
-// Idempotency lives in the caller (order_emails primary key: one row per order + kind).
+// Durable delivery state and provider idempotency are in email-delivery.js.
 
-import { claimOrderEmail, finishOrderEmail } from "./orders.js";
+import { getOrder } from "./orders.js";
+import { getFulfillment } from "./fulfillment.js";
+import { sendOutboxEmail } from "./email-delivery.js";
 
-const TIMEOUT_MS = 5_000;
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
 const money = (cents, currency) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
@@ -124,52 +126,31 @@ export function buildShipmentEmail(order, shipment, { policyNote } = {}) {
   return { subject, ...body };
 }
 
-async function deliver(config, order, message, fetchImpl) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+// "sent" remains the compatibility result for API acceptance. Delivery is separate.
+export async function sendCustomerEmail(env, order, kind, options = {}) {
   try {
-    const payload = { from: config.from, to: [order.email], subject: message.subject, text: message.text, html: message.html };
-    if (config.replyTo) payload.reply_to = config.replyTo;
-    const response = await fetchImpl(config.apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`email api responded ${response.status}`);
-  } finally {
-    clearTimeout(timer);
+    const config = customerEmailConfig(env);
+    return await sendOutboxEmail(env, order, kind, config, () => kind === "shipment"
+      ? buildShipmentEmail(order, options.shipment, { policyNote: config.policyNote })
+      : buildConfirmationEmail(order, { policyNote: config.policyNote }), options);
+  } catch {
+    console.error("customer_email_error", { orderId: order.id, kind, reason: "delivery processing failed" });
+    return { status: "failed", detail: "Email processing failed; check delivery records." };
   }
 }
 
-// Sends one customer email at most once per (order, kind). Returns { status, detail } where
-// status is "sent" | "failed" | "skipped" | "duplicate". Never throws.
-export async function sendCustomerEmail(env, order, kind, { shipment, fetchImpl = fetch } = {}) {
-  try {
-    if (!(await claimOrderEmail(env.DB, order.id, kind))) return { status: "duplicate", detail: "" };
-    const config = customerEmailConfig(env);
-    let result;
-    if (!config) {
-      console.log("customer_email_skipped", { orderId: order.id, kind, reason: "email not configured" });
-      result = { status: "skipped", detail: "Customer email is not configured." };
-    } else {
-      try {
-        const message =
-          kind === "shipment"
-            ? buildShipmentEmail(order, shipment, { policyNote: config.policyNote })
-            : buildConfirmationEmail(order, { policyNote: config.policyNote });
-        await deliver(config, order, message, fetchImpl);
-        result = { status: "sent", detail: "" };
-      } catch (error) {
-        // Reason only: never the key, the recipient or the URL.
-        console.error("customer_email_failed", { orderId: order.id, kind, reason: error?.message });
-        result = { status: "failed", detail: String(error?.message ?? "error").slice(0, 200) };
-      }
-    }
-    await finishOrderEmail(env.DB, order.id, kind, result);
-    return result;
-  } catch (error) {
-    console.error("customer_email_error", { orderId: order.id, kind, reason: error?.message });
-    return { status: "failed", detail: "internal error" };
+export async function retryCustomerEmail(env, order, kind, options = {}) {
+  const shipment = kind === "shipment" ? await getFulfillment(env.DB, order.id) : undefined;
+  if (kind === "shipment" && !shipment) return { status: "blocked", detail: "Shipment details are required." };
+  return sendCustomerEmail(env, order, kind, { ...options, retry: true, shipment });
+}
+
+export async function scheduledCustomerEmailRetry(env) {
+  if (env.CUSTOMER_EMAIL_RETRY_CRON !== "true" || !customerEmailConfig(env)) return;
+  const timestamp = new Date().toISOString();
+  const { results } = await env.DB.prepare("SELECT order_id, kind FROM order_email_delivery WHERE status IN ('queued','retry','sending') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?) ORDER BY created_at LIMIT 10").bind(timestamp, timestamp).all();
+  for (const item of results) {
+    const order = await getOrder(env.DB, item.order_id);
+    if (order) await retryCustomerEmail(env, order, item.kind);
   }
 }

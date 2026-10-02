@@ -15,8 +15,8 @@
 import { fail, json } from "./http.js";
 import { ORDER_ID_PATTERN } from "./checkout.js";
 import { FULFILLMENT_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, getOrder, listOrders, orderCounts } from "./orders.js";
-import { FulfillmentError, markShipped, validateShipment } from "./fulfillment.js";
-import { sendCustomerEmail } from "./customer-email.js";
+import { FulfillmentError, markShipped, validateShipment, recordAudit } from "./fulfillment.js";
+import { sendCustomerEmail, retryCustomerEmail } from "./customer-email.js";
 import { siteBasicOpensAdmin } from "./staging.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 
@@ -160,6 +160,19 @@ export async function handleAdminApi(request, env, pathname) {
   if (denied) return denied;
 
   const url = new URL(request.url);
+  const emailRetry = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/emails\/(confirmation|shipment)\/retry$/);
+  if (emailRetry) {
+    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+    const problem = csrfProblem(request);
+    if (problem) return fail(403, "forbidden", problem, NO_INDEX);
+    const id = decodeURIComponent(emailRetry[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    const order = await getOrder(env.DB, id);
+    if (!order) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    const email = await retryCustomerEmail(env, order, emailRetry[2]);
+    await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: "admin", detail: { kind: emailRetry[2], result: email.status } });
+    return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
+  }
   const ship = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/ship$/);
   if (ship) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });

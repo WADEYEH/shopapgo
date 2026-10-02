@@ -99,7 +99,7 @@ test("Sync MCF status: before Amazon ships nothing changes; after, the order bec
 
   requests.mcfState.amazonShipped = true;
   await page.locator("[data-mcf-sync]").click();
-  await expect(page.locator("[data-admin-detail-body] .notice--success")).toContainText("Order marked shipped and the customer was emailed");
+  await expect(page.locator("[data-admin-detail-body] .notice--success")).toContainText("Order marked shipped; email accepted by the email service.");
   await expect(block(page)).toContainText("Shipped by Amazon");
   await expect(block(page)).toContainText("TBA123456789000");
   const record = page.locator('[data-admin-fulfillment="shipped"]');

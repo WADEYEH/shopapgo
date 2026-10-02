@@ -537,7 +537,7 @@ async function paidOrder(env, { pay = true } = {}) {
   const { orderId } = await createOrder(env);
   const mails = [];
   if (pay) {
-    await withFetch((url, init) => { if (url === MAIL_URL) { mails.push(JSON.parse(init.body)); return new Response("{}"); } return jsonResponse(500, {}); }, async () => {
+    await withFetch((url, init) => { if (url === MAIL_URL) { mails.push(JSON.parse(init.body)); return Response.json({ id: crypto.randomUUID() }); } return jsonResponse(500, {}); }, async () => {
       const ctx = ctxStub();
       await call(env, "/api/webhooks/airwallex", signedWebhook(succeededEvent(orderId)), ctx);
       await ctx.settled();
@@ -547,7 +547,7 @@ async function paidOrder(env, { pay = true } = {}) {
 }
 
 async function ship(env, orderId, body = SHIPMENT, headers = {}, mails = []) {
-  return withFetch((url, init) => { if (url === MAIL_URL) { mails.push({ payload: JSON.parse(init.body), headers: init.headers }); return new Response("{}"); } return jsonResponse(500, {}); }, () =>
+  return withFetch((url, init) => { if (url === MAIL_URL) { mails.push({ payload: JSON.parse(init.body), headers: init.headers }); return Response.json({ id: crypto.randomUUID() }); } return jsonResponse(500, {}); }, () =>
     call(env, `/admin/api/orders/${orderId}/ship`, shipRequest(body, headers)),
   );
 }

@@ -37,7 +37,8 @@ import {
   settleIntent,
 } from "./orders.js";
 import { notifyOrderPaid } from "./notify.js";
-import { sendCustomerEmail } from "./customer-email.js";
+import { sendCustomerEmail, scheduledCustomerEmailRetry } from "./customer-email.js";
+import { handleResendWebhook } from "./email-delivery.js";
 import { scheduledMcfSync, submitOrderToMcf } from "./mcf.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
@@ -241,6 +242,7 @@ async function route(request, env, services) {
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
   if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env);
   if (pathname === "/api/webhooks/airwallex" && method === "POST") return handleWebhook(request, env, services);
+  if (pathname === "/api/webhooks/resend" && method === "POST") return handleResendWebhook(request, env);
   const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)$/);
   if (orderMatch && method === "GET") return handleOrder(decodeURIComponent(orderMatch[1]), env, services);
   return fail(404, "not_found", "Not found.");
@@ -283,8 +285,9 @@ export default {
   fetch(request, env, ctx) {
     return withStaging(request, env, () => handleRequest(request, env, ctx));
   },
-  // Optional cron (none is configured in wrangler.toml): syncs Amazon MCF shipment status when MCF_SYNC_CRON=true.
+  // Each job is separately opt-in. Staging cron processes only configured email
+  // retries; MCF remains off unless its own synchronization flag is enabled.
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(scheduledMcfSync(env));
+    ctx.waitUntil(Promise.all([scheduledMcfSync(env), scheduledCustomerEmailRetry(env)]));
   },
 };

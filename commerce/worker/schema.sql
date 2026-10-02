@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS order_fulfillments (
 );
 
 -- Customer emails (order confirmation / shipment). The (order_id, kind) key is the
--- idempotency claim: each email is attempted at most once per order.
+-- legacy claim/projection. New reliable delivery state is in order_email_delivery;
+-- status 'sent' means API acceptance, not proven delivery.
 CREATE TABLE IF NOT EXISTS order_emails (
   order_id TEXT NOT NULL,
   kind TEXT NOT NULL,                   -- confirmation | shipment
@@ -129,3 +130,39 @@ CREATE TABLE IF NOT EXISTS order_mcf (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS order_mcf_status ON order_mcf (status, updated_at);
+
+-- Durable customer-email outbox. Frozen payloads ensure retries use the exact same
+-- Resend idempotency key/body. Contains customer data; protect like orders.
+CREATE TABLE IF NOT EXISTS order_email_delivery (
+  order_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  provider_id TEXT UNIQUE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
+  lease_until TEXT,
+  lease_token TEXT,
+  first_attempt_at TEXT,
+  detail TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (order_id, kind)
+);
+CREATE INDEX IF NOT EXISTS email_delivery_due ON order_email_delivery(status, next_attempt_at);
+
+-- Minimal signed event metadata only: no raw webhook payloads or recipients.
+CREATE TABLE IF NOT EXISTS customer_email_events (
+  id TEXT PRIMARY KEY,
+  provider_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  received_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS customer_email_events_provider ON customer_email_events(provider_id);
+CREATE TABLE IF NOT EXISTS customer_email_suppressions (
+  email TEXT PRIMARY KEY,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);

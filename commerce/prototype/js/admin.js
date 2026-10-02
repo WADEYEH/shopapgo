@@ -218,7 +218,7 @@ function renderFulfillment(order) {
       const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/ship`, { method: "POST", body: data });
       renderDetail(result.order);
       $("[data-admin-detail-body]").prepend(
-        notice("success", "Marked as shipped", result.email.status === "sent" ? "The customer was emailed." : `Saved. Customer email: ${result.email.status}.`),
+        notice("success", "Marked as shipped", result.email.status === "sent" ? "Email accepted by the email service; delivery is tracked separately." : `Saved. Customer email: ${result.email.status}.`),
       );
       const row = state.orders.find((o) => o.id === order.id);
       if (row) Object.assign(row, { fulfillmentStatus: "shipped", shippedAt: result.order.fulfillment?.shippedAt ?? null });
@@ -251,7 +251,7 @@ async function mcfAction(order, action, button, message) {
     const text =
       action === "submit"
         ? { submitted: "Sent to Amazon MCF.", failed: "Amazon did not accept the order; see the error below.", duplicate: "Already being sent.", skipped: outcome.reason || "Nothing was sent." }[outcome.outcome]
-        : outcome.shipped ? `Amazon shipped it. Order marked shipped${outcome.email === "sent" ? " and the customer was emailed." : `; customer email: ${outcome.email ?? "none"}.`}`
+        : outcome.shipped ? `Amazon shipped it. Order marked shipped${outcome.email === "sent" ? "; email accepted by the email service." : `; customer email: ${outcome.email ?? "none"}.`}`
         : outcome.outcome === "failed" ? `Sync failed: ${outcome.reason ?? "try again"}`
         : "Synced. Amazon has not shipped it yet.";
     $("[data-admin-detail-body]").prepend(notice(outcome.outcome === "failed" ? "warning" : "success", action === "submit" ? "Amazon MCF" : "MCF status", text ?? "Done."));
@@ -325,7 +325,21 @@ function renderHistory(order) {
     el(
       "ul",
       { class: "admin-lines" },
-      ...emails.map((mail) => el("li", {}, el("span", {}, `${emailLabel[mail.kind] ?? mail.kind}: ${mail.status}`), el("span", {}, formatDate(mail.updatedAt)), mail.detail && el("small", {}, mail.detail))),
+      ...emails.map((mail) => {
+        const status = mail.deliveryStatus === "accepted" ? "Accepted by email service (delivery not confirmed)" : mail.deliveryStatus || (mail.status === "sent" ? "sent (legacy record; delivery not confirmed)" : mail.status);
+        const retry = mail.canRetry ? el("button", { type: "button", class: "btn btn--sm" }, `Retry ${emailLabel[mail.kind] ?? mail.kind}`) : null;
+        if (retry) retry.addEventListener("click", async () => {
+          retry.disabled = true;
+          try {
+            const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/emails/${mail.kind}/retry`, { method: "POST", body: {} });
+            renderDetail(result.order);
+          } catch (error) {
+            retry.parentElement.append(notice("warning", "Email retry failed", error.message));
+            retry.disabled = false;
+          }
+        });
+        return el("li", {}, el("span", {}, `${emailLabel[mail.kind] ?? mail.kind}: ${status}`), el("span", {}, formatDate(mail.updatedAt)), mail.providerId && el("small", {}, `Message ID: ${mail.providerId} · Attempts: ${mail.attempts}`), mail.nextAttemptAt && el("small", {}, `Next attempt: ${formatDate(mail.nextAttemptAt)}`), mail.detail && el("small", {}, mail.detail), retry);
+      }),
       ...audit.map((entry) => el("li", {}, el("span", {}, `${entry.action} by ${entry.actor}`), el("span", {}, formatDate(entry.at)))),
     ),
   );

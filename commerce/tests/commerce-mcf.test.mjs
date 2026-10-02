@@ -65,7 +65,7 @@ async function withWorld({ amazon = createFakeAmazon(), airwallex = true } = {},
   const others = [];
   globalThis.fetch = async (url, init = {}) => {
     const href = String(url);
-    if (href === MAIL_URL) { mails.push(JSON.parse(init.body)); return new Response("{}"); }
+    if (href === MAIL_URL) { mails.push(JSON.parse(init.body)); return Response.json({ id: crypto.randomUUID() }); }
     if (href.startsWith(FAKE_BASE_URL)) return amazon.fetch(href, init);
     if (airwallex && href.includes("/api/v1/")) {
       if (href.endsWith("/authentication/login")) return jsonResponse(201, { token: "tok", expires_at: new Date(Date.now() + 1_800_000).toISOString().replace(/\.\d+Z$/, "+0000") });

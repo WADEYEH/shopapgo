@@ -25,7 +25,7 @@ test("marks a paid order shipped: form, success notice, shipped record, list bad
   await fillShipment(page);
   await page.getByRole("button", { name: "Mark as shipped" }).click();
 
-  await expect(detail.locator(".notice--success")).toContainText("The customer was emailed.");
+  await expect(detail.locator(".notice--success")).toContainText("Email accepted by the email service; delivery is tracked separately.");
   const record = detail.locator('[data-admin-fulfillment="shipped"]');
   await expect(record).toContainText("UPS");
   await expect(record).toContainText("1Z999AA10123456784");

@@ -73,6 +73,8 @@ test("staging: missing Basic secrets fail closed (503), never open", async () =>
 
 test("staging: webhook and /admin skip the Basic gate and keep their own checks", async () => {
   assert.equal(isBasicExempt("/api/webhooks/airwallex"), true);
+  assert.equal(isBasicExempt("/api/webhooks/resend"), true);
+  assert.equal(isBasicExempt("/api/webhooks/resend/extra"), false);
   assert.equal(isBasicExempt("/admin"), true);
   assert.equal(isBasicExempt("/admin/api/orders"), true);
   assert.equal(isBasicExempt("/api/webhooks/airwallex/extra"), false);

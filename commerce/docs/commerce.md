@@ -468,21 +468,37 @@ Two emails go to the shopper through the same Resend API as the team notificatio
 | Order confirmation | once, when the order first becomes `paid` (webhook or confirmation-page poll, whichever settles it; same guarded `UPDATE` as the team notification) | order number, items, subtotal / shipping / tax / total, shipping address, plain text + simple HTML |
 | Shipment notice | when an admin marks the order shipped | the above plus carrier, tracking number and (if given) tracking link |
 
-- **Idempotent:** an `order_emails` row keyed `(order_id, kind)` is claimed before sending, so
-  duplicate webhooks, racing polls and double clicks cannot send twice. `review` and `cancelled`
-  orders get no email. The table records `sent | failed | skipped` (never the key or an address),
-  shown in the back office.
+- **Durable delivery:** `order_email_delivery` stores a frozen payload, stable Resend idempotency
+  key, provider message ID, attempt count, due time and atomic lease. Retries reuse exactly the
+  same payload/key. `review`, unpaid and cancelled orders get no email. The original
+  `order_emails` table remains a compatibility projection: `sent` means API acceptance,
+  **not proven delivery**. The admin shows the distinct delivery state and provider ID.
 - **Opt-in, safe by default:** with no `RESEND_API_KEY` or sender, the email is **skipped and
-  logged** (`customer_email_skipped`), like `notify.js`. `CUSTOMER_EMAIL_ENABLED=false` turns it off.
-- **Never affects the order:** a send failure (HTTP error, timeout 5 s) is logged
-  (`customer_email_failed`, reason only) and recorded; payment settlement and the shipment are
-  already saved. There is **no automatic retry** yet (the claim row stays `failed`).
+  recorded**. `CUSTOMER_EMAIL_ENABLED=false` turns it off. Staging additionally requires exact
+  `CUSTOMER_EMAIL_TEST_RECIPIENTS`; it never reroutes a customer's order to a test address.
+- **Never affects the order:** HTTP failures, missing response IDs and 10-second timeouts are
+  safely recorded without raw response messages, recipients or keys. A configured Cron Trigger
+  plus `CUSTOMER_EMAIL_RETRY_CRON=true` retries network/5xx/429/concurrent-idempotency errors,
+  honoring Retry-After and exponential backoff. Six attempts maximum; after 23 hours a missing-ID
+  send stops for review before Resend's 24-hour idempotency key expires. Permanent 4xx errors
+  need operator repair and an explicit admin retry inside the safe window. Accepted messages,
+  bounces, complaints and expired/legacy ambiguous records cannot be sent again.
+- **Delivery events:** `POST /api/webhooks/resend` verifies the raw body's Svix HMAC and a
+  five-minute timestamp tolerance, dedupes by `svix-id`, persists minimal event metadata and
+  safely reconciles out-of-order events (including events arriving before the send response).
+  States include accepted, delivered, delivery delayed, bounced, complained, suppressed and
+  failed. Bounce/complaint/suppression prevents future customer sends to that recipient.
+  Register a separate storefront webhook; do not change another app's endpoint.
+- **Admin retry:** authenticated `POST /admin/api/orders/:id/emails/:kind/retry` uses the existing
+  same-origin/JSON CSRF guards and records an audit entry. Historical skipped emails are only
+  attempted explicitly, not swept up by cron. The outbox's frozen payload contains customer
+  information; protect and retain it like the order table, never return it to public APIs.
 - **No invented promises:** the templates state only facts from the order. No return policy and
   no delivery-time promise are written; if the owner approves a sentence, put it in
   `CUSTOMER_EMAIL_POLICY_NOTE` (appended verbatim to both emails). All customer-supplied text is
   HTML-escaped.
 - Runs in `ctx.waitUntil` on payment (never delays the webhook); on shipping the admin request
-  waits for the send (≤ 5 s) so the page can report "emailed / skipped / failed".
+  waits for the first send (≤ 10 s) and reports acceptance / skipped / failed, separately from delivery.
 
 Environment (none is a secret except the key; all are optional):
 
@@ -493,13 +509,16 @@ Environment (none is a secret except the key; all are optional):
 | `CUSTOMER_EMAIL_REPLY_TO` | optional reply-to |
 | `CUSTOMER_EMAIL_POLICY_NOTE` | optional approved paragraph appended to both emails |
 | `CUSTOMER_EMAIL_ENABLED` | `false` disables customer emails |
+| `RESEND_WEBHOOK_SECRET` | secret for the storefront's Resend subscription |
+| `CUSTOMER_EMAIL_TEST_RECIPIENTS` | required staging allowlist, exact comma-separated emails |
+| `CUSTOMER_EMAIL_RETRY_CRON` | `true` enables processing due outbox rows when a Cron Trigger runs |
 | `ORDER_NOTIFY_EMAIL_API_URL` | endpoint override for tests/proxies (shared) |
 
 **Decisions still open:** sender name/domain and reply-to address; whether to include a returns /
 support sentence (needs the Returns page wording to be final) and any delivery-time wording
 (the shipping method text "5–7 business days" is a placeholder and is deliberately *not* used);
 whether to send a "payment received but under review" email; marketing opt-in is not used here
-(these are transactional); retry for failed emails; editing/undoing a shipment (today a wrong
+(these are transactional); provider-history review after exhausted retries; editing/undoing a shipment (today a wrong
 tracking number needs a DB fix); partial shipments and multiple parcels; refunds/cancellations
 after payment; named admin users.
 
