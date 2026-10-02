@@ -97,6 +97,89 @@ const succeededEvent = (orderId, patch = {}) => ({
   data: { object: { id: "int_123", merchant_order_id: orderId, status: "SUCCEEDED", currency: "USD", amount: 88.7, ...patch } },
 });
 
+const failedAttempt = (orderId, { id = "evt_failed_1", attemptId = "att_failed_1", at = "2026-10-02T01:00:00Z", ...patch } = {}) => ({
+  id, name: "payment_attempt.authorization_failed", created_at: at,
+  data: { object: { id: attemptId, payment_intent_id: "int_123", merchant_order_id: orderId,
+    failure_code: "authorization_failed", failure_details: { code: "issuer_declined", message: "Issuer declined the attempt", trace_id: "trace_1", details: { private: "never store raw provider data" } }, ...patch } },
+});
+
+test("failed attempts preserve pending orders and expose only safe guidance publicly", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db);
+  const { orderId } = await createOrder(env);
+  const ctx = ctxStub();
+  const event = failedAttempt(orderId, { failure_details: { code: "issuer_declined", message: "Declined for ada@example.com card 4035501000000008", trace_id: "trace_1", details: { card: "secret raw data" } } });
+  assert.equal((await call(env, "/api/webhooks/airwallex", signedWebhook(event), ctx)).status, 200);
+  await ctx.settled();
+  const row = db.raw.prepare("SELECT * FROM order_payment_failures").get();
+  assert.equal(row.message, "Declined for [redacted] card [redacted]");
+  assert.equal(row.trace_id, "trace_1");
+  assert.ok(!JSON.stringify(row).includes("secret raw data"));
+  assert.equal(db.raw.prepare("SELECT status FROM orders").get().status, "pending");
+  for (const table of ["order_notifications", "order_emails", "order_mcf"]) assert.equal(db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0);
+  const admin = await (await call(env, `/admin/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } })).json();
+  assert.equal(admin.paymentFailures[0].providerCode, "issuer_declined");
+  await withFetch(airwallexFake({ intent: { status: "REQUIRES_PAYMENT_METHOD", merchant_order_id: orderId } }), async () => {
+    const publicView = await (await call(env, `/api/orders/${orderId}`)).json();
+    assert.deepEqual(publicView.paymentFailure, { message: "Your payment wasn't completed. Check your card details or try another payment method." });
+    assert.ok(!JSON.stringify(publicView).includes("trace_1"));
+    assert.ok(!JSON.stringify(publicView).includes("issuer_declined"));
+  });
+});
+
+test("failure deliveries deduplicate by attempt and older events cannot overwrite a newer reason", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db);
+  const { orderId } = await createOrder(env);
+  const first = failedAttempt(orderId);
+  assert.equal((await (await call(env, "/api/webhooks/airwallex", signedWebhook(first))).json()).duplicate, false);
+  assert.equal((await (await call(env, "/api/webhooks/airwallex", signedWebhook(first))).json()).duplicate, true);
+  await call(env, "/api/webhooks/airwallex", signedWebhook(failedAttempt(orderId, { id: "evt_newer", at: "2026-10-02T02:00:00Z", failure_code: "provider_unavailable" })));
+  await call(env, "/api/webhooks/airwallex", signedWebhook(failedAttempt(orderId, { id: "evt_older", at: "2026-10-02T00:00:00Z" })));
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_payment_failures").get().n, 1);
+  assert.equal(db.raw.prepare("SELECT failure_code FROM order_payment_failures").get().failure_code, "provider_unavailable");
+  await call(env, "/api/webhooks/airwallex", signedWebhook(failedAttempt(orderId, { id: "evt_second", attemptId: "att_second" })));
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_payment_failures").get().n, 2);
+});
+
+test("success after failure stays paid even when a signed late failure arrives", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db);
+  const { orderId } = await createOrder(env);
+  await call(env, "/api/webhooks/airwallex", signedWebhook(failedAttempt(orderId)));
+  const ctx = ctxStub();
+  await call(env, "/api/webhooks/airwallex", signedWebhook(succeededEvent(orderId)), ctx);
+  await ctx.settled();
+  await call(env, "/api/webhooks/airwallex", signedWebhook(failedAttempt(orderId, { id: "evt_late", attemptId: "att_late" }), { timestamp: String(Date.now() - 86_400_000) }));
+  const result = await (await call(env, `/api/orders/${orderId}`)).json();
+  assert.equal(result.status, "paid");
+  assert.equal(result.paymentFailure, null);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_payment_failures").get().n, 2);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_notifications").get().n, 1);
+});
+
+test("failure events cannot attach to an unrelated intent or merchant order", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db);
+  const { orderId } = await createOrder(env);
+  for (const patch of [{ payment_intent_id: "int_foreign" }, { merchant_order_id: "APGO-US-FOREIGN" }, { attemptId: "invalid attempt id" }]) {
+    assert.equal((await call(env, "/api/webhooks/airwallex", signedWebhook(failedAttempt(orderId, patch)))).status, 200);
+  }
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_payment_failures").get().n, 0);
+});
+
+test("failure storage errors return 500 and the same webhook can be retried", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db);
+  const { orderId } = await createOrder(env);
+  const failingDb = { prepare(sql) { if (sql.startsWith("INSERT INTO order_payment_failures")) throw new Error("simulated D1 write failure"); return db.prepare(sql); } };
+  const event = failedAttempt(orderId);
+  assert.equal((await call({ ...env, DB: failingDb }, "/api/webhooks/airwallex", signedWebhook(event))).status, 500);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM webhook_events").get().n, 0);
+  assert.equal((await (await call(env, "/api/webhooks/airwallex", signedWebhook(event))).json()).duplicate, false);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_payment_failures").get().n, 1);
+});
+
 // ---------- checkout session ----------
 
 test("checkout session sends an idempotent, correctly shaped PaymentIntent", { skip }, async () => {

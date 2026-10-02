@@ -1,6 +1,7 @@
 import { toMajor } from "./catalog.js";
 import { maskEmail } from "./checkout.js";
 import { getFulfillment, listAudit } from "./fulfillment.js";
+import { listPaymentFailures } from "./payment-failures.js";
 
 const now = () => new Date().toISOString();
 
@@ -247,6 +248,7 @@ export async function adminOrder(db, orderId) {
     taxCents: order.tax_cents,
     totalCents: order.total_cents,
     paymentIntentId: order.payment_intent_id,
+    paymentFailures: await listPaymentFailures(db, orderId),
     createdAt: order.created_at,
     updatedAt: order.updated_at,
     paidAt: order.paid_at,

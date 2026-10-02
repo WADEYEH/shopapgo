@@ -305,10 +305,8 @@ function setWalletVisible(id, visible) {
 async function onWalletSuccess() {
   const orderId = state.session?.orderId;
   if (!orderId) return;
-  // Like the card path: while "placing", clearing the cart must not trigger the
-  // "cart emptied in another tab" reload.
+  // Keep the cart until the server confirms settlement, including wallet flows.
   state.placing = true;
-  cart.clear();
   history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(orderId)}`);
   await showConfirmation(orderId);
 }
@@ -342,13 +340,12 @@ function attachWalletEvents(id, element) {
   });
   element.on("success", () => onWalletSuccess());
   element.on("cancel", () => $("[data-payment-message]").replaceChildren());
-  element.on("error", (event) => {
-    const detail = event?.detail?.error;
+  element.on("error", () => {
     // The intent may be expired or consumed: drop it so the next tap uses a fresh one.
     state.session = null;
     refreshWalletSession().catch(() => {});
     $("[data-payment-message]").replaceChildren(
-      notice("warning", "Payment not completed", detail?.message && detail.code !== "UNKNOWN_ERROR" ? detail.message : "The wallet payment didn't go through. Try again or pay by card."),
+      notice("warning", "Payment not completed", "The wallet payment didn't go through. Try again or pay by card."),
     );
   });
 }
@@ -429,11 +426,10 @@ async function placeOrder(event) {
     const session = await ensureSession();
     track("add_payment_info", { payment_type: "card", value: session.quote.totalCents / 100, currency: session.quote.currency });
     await state.card.cardNumber.confirm({ intent_id: session.intent.id, client_secret: session.intent.clientSecret });
-    cart.clear();
     history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(session.orderId)}`);
     await showConfirmation(session.orderId);
   } catch (error) {
-    const text = error?.message || "Your payment didn't go through. Check your card details or try another card.";
+    const text = "Your payment wasn't completed. Check your card details or try another payment method.";
     message.replaceChildren(notice("warning", "Payment not completed", text));
     setPlacing(false);
   }
@@ -500,7 +496,7 @@ async function showConfirmation(orderId) {
   } else if (order.status === "cancelled" || order.paymentStatus === "REQUIRES_PAYMENT_METHOD") {
     $("[data-checkout-title]").textContent = "Payment not completed.";
     section.replaceChildren(
-      notice("warning", "Payment didn't go through", "Your card was not charged. Return to checkout to try again."),
+      notice("warning", "Payment didn't go through", order.paymentFailure?.message || "Your payment wasn't completed. Return to checkout to try another payment method."),
       el("div", { class: "actions" }, el("a", { class: "btn", href: "checkout.html" }, "Return to checkout ", el("span", { "aria-hidden": "true" }, "→"))),
     );
   } else {

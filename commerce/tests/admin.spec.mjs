@@ -3,6 +3,23 @@ import { expect, test } from "@playwright/test";
 
 import { mockAdminApi } from "./helpers/admin-mock.mjs";
 
+for (const width of [360, 390, 1440]) {
+  test(`payment failure history escapes provider text and fits at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockAdminApi(page, { paymentFailures: { "APGO-US-7K3M9Q2W4XZ8": [{
+      attemptId: "att_failure_sample", event: "payment_attempt.authorization_failed", code: "authorization_failed",
+      providerCode: "issuer_declined", message: '<img src=x onerror="window.__unsafe=true">' + " Reason".repeat(50),
+      traceId: "trace_" + "a".repeat(110), occurredAt: "2026-10-02T01:00:00Z",
+    }] } });
+    await page.goto("/admin/index.html#APGO-US-7K3M9Q2W4XZ8");
+    const failures = page.locator("[data-payment-failures]");
+    await expect(failures).toContainText("issuer_declined");
+    await expect(failures).toContainText('<img src=x onerror="window.__unsafe=true">');
+    await expect(failures.locator("img")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  });
+}
+
 test("lists orders with status counts and opens the detail with address, items, totals and payment state", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("/admin/index.html");

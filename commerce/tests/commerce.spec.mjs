@@ -93,7 +93,7 @@ test.describe("checkout", () => {
     expect(browser.events).toEqual(expect.arrayContaining(["begin_checkout", "add_shipping_info", "add_payment_info", "purchase"]));
   });
 
-  test("a declined card shows the issuer message and the retry reuses the same PaymentIntent", async ({ page }) => {
+  test("a declined card shows a safe message, retains the cart and retries the same PaymentIntent", async ({ page }) => {
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
     await page.goto("/checkout.html");
@@ -102,7 +102,9 @@ test.describe("checkout", () => {
 
     await page.evaluate(() => { window.__awxDecline = true; });
     await page.locator("[data-place-order]").click();
-    await expect(page.locator("[data-payment-message]")).toContainText("The card issuer declined this transaction.");
+    await expect(page.locator("[data-payment-message]")).toContainText("Your payment wasn't completed.");
+    await expect(page.locator("[data-payment-message]")).not.toContainText("issuer declined");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apgo_us_cart_v1")))).toEqual([{ sku: "d204", qty: 1 }]);
     await expect(page.locator("[data-place-order]")).toBeEnabled();
 
     await page.evaluate(() => { window.__awxDecline = false; });
@@ -116,6 +118,20 @@ test.describe("checkout", () => {
     await page.goto("/checkout.html");
     await expect(page.locator("[data-checkout-title]")).toHaveText("Your cart is empty.");
     await expect(page.locator("[data-checkout-flow]")).toBeHidden();
+  });
+
+  test("server-reported failure retains the cart and shows a retry link", async ({ page }) => {
+    await mockStore(page, { orderStatus: "pending", paymentFailure: { message: "Card verification wasn't completed. Try again or use another payment method." } });
+    await seedCart(page, [{ sku: "d204", qty: 1 }]);
+    await page.goto("/checkout.html");
+    await fillToPayment(page);
+    await fillCard(page);
+    await page.locator("[data-place-order]").click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Card verification wasn't completed.");
+    await expect(page.locator("[data-confirmation]")).not.toContainText("Your card was not charged");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apgo_us_cart_v1")))).toEqual([{ sku: "d204", qty: 1 }]);
+    await page.locator('[data-confirmation] a[href="checkout.html"]').click();
+    await expect(page.locator("#email")).toBeVisible();
   });
 });
 

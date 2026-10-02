@@ -331,6 +331,24 @@ function renderHistory(order) {
   );
 }
 
+function renderPaymentFailures(order) {
+  const failures = order.paymentFailures ?? [];
+  return el("section", { class: "admin-history", "data-payment-failures": true },
+    el("h4", {}, "Failed payment attempts"),
+    el("p", { class: "body body--sm" }, failures.length
+      ? "A failed attempt does not cancel the order. The customer can try another payment method."
+      : "No failed payment attempts recorded."),
+    ...failures.map((failure) => el("dl", { class: "admin-facts" },
+      el("dt", {}, "Time"), el("dd", {}, formatDate(failure.occurredAt)),
+      el("dt", {}, "Attempt"), el("dd", {}, failure.attemptId),
+      el("dt", {}, "Event"), el("dd", {}, failure.event),
+      el("dt", {}, "Failure code"), el("dd", {}, failure.code || "—"),
+      el("dt", {}, "Provider code"), el("dd", {}, failure.providerCode || "—"),
+      el("dt", {}, "Reason"), el("dd", {}, failure.message || "No detailed reason supplied by the payment provider."),
+      el("dt", {}, "Trace ID"), el("dd", {}, failure.traceId || "—"))),
+  );
+}
+
 function renderDetail(order) {
   const { shipping } = order;
   const address = el(
@@ -386,6 +404,7 @@ function renderDetail(order) {
       ],
       money(order.totalCents),
     ),
+    renderPaymentFailures(order),
     ...[renderMcf(order)].filter(Boolean),
     renderFulfillment(order),
     ...[renderHistory(order)].filter(Boolean),

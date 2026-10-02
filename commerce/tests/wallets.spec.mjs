@@ -84,6 +84,16 @@ test.describe("Apple Pay / Google Pay", () => {
     expect(calls.session).toHaveLength(1);
   });
 
+  test("wallet success does not clear the cart before server payment confirmation", async ({ page }) => {
+    await device(page, { ready: { googlePayButton: true } });
+    await mockStore(page, { orderStatus: "pending", paymentFailure: { message: "Your payment wasn't completed. Try again." } });
+    await toPayment(page);
+    await expect(slot(page, "googlePay")).toHaveClass(/is-ready/);
+    await page.evaluate(() => window.__awxWalletElements.googlePayButton.fire("success", {}));
+    await expect(page.locator("[data-confirmation]")).toContainText("Your payment wasn't completed.");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apgo_us_cart_v1")))).toEqual([{ sku: "d204", qty: 1 }]);
+  });
+
   test("Apple Pay needs ApplePaySession.canMakePayments and then shows beside Google Pay", async ({ page }) => {
     await device(page, { applePay: true, ready: { applePayButton: true, googlePayButton: true } });
     await mockStore(page);

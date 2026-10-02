@@ -17,6 +17,7 @@ import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
 import { PricingConfigError, resolvePricing, storeReadiness } from "./pricing.js";
 import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociation } from "./wallets.js";
 import { ORDER_ID_PATTERN, newOrderId, validateCheckout } from "./checkout.js";
+import { recordPaymentFailure, publicPaymentFailure } from "./payment-failures.js";
 import {
   AirwallexError,
   createPaymentIntent,
@@ -180,14 +181,14 @@ async function handleOrder(orderId, env, services) {
       const settled = await settleIntent(env.DB, intent);
       await afterSettle(settled, services);
       if (settled.status && settled.status !== order.status) order = await getOrder(env.DB, orderId);
-      return json({ ...publicOrder(order), paymentStatus: intent.status });
+      return json({ ...publicOrder(order), paymentStatus: intent.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
     } catch (error) {
       if (!(error instanceof AirwallexError)) throw error;
       // Fall back to the stored status; the webhook will settle it.
       console.error("airwallex_retrieve_failed", { orderId, status: error.status, code: error.code });
     }
   }
-  return json(publicOrder(order));
+  return json({ ...publicOrder(order), paymentFailure: await publicPaymentFailure(env.DB, order) });
 }
 
 async function handleWebhook(request, env, services) {
@@ -219,6 +220,7 @@ async function handleWebhook(request, env, services) {
   // The event is recorded after processing so a failed write is retried by
   // Airwallex instead of being skipped as a duplicate.
   const snapshot = event.data?.object;
+  await recordPaymentFailure(env.DB, event);
   if (String(event.name).startsWith("payment_intent.") && snapshot?.id && snapshot.merchant_order_id) {
     let intent = snapshot;
     if (late) {

@@ -69,12 +69,13 @@ const view = (o, mcf = { mode: "off" }) => ({
 // The returned array also carries .writes (ship requests), .mcf (MCF POSTs) and .emails (would-be Resend payloads).
 // MCF options: mcf ({ mode: "off" | "not_configured" | "ready", submitFails: n = first n submits fail,
 // amazonShipped: true = the next sync finds the order shipped }), mcfRecords ({ [orderId]: record } to start from).
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {} } = {}) {
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {} } = {}) {
   const requests = [];
   requests.writes = [];
   requests.mcf = [];
   requests.emails = [];
   const orders = SAMPLE_ORDERS.map((o) => structuredClone(o));
+  for (const [id, failures] of Object.entries(paymentFailures)) orders.find((o) => o.id === id).paymentFailures = structuredClone(failures);
   for (const [id, record] of Object.entries(mcfRecords)) orders.find((o) => o.id === id).mcfRecord = structuredClone(record);
   let submitFails = mcf.submitFails ?? 0;
   const mcfState = { amazonShipped: Boolean(mcf.amazonShipped) };

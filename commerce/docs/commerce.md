@@ -793,7 +793,7 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 - [ ] Bind `store.shopapgo.com`: uncomment the `routes` line in `[env.production]` (zone `shopapgo.com`; the `www` Pages project stays untouched).
 - [ ] Production secrets with `--env production`: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (production keys), `AIRWALLEX_WEBHOOK_SECRET`, `ADMIN_TOKEN`,
       plus optional notification / email / MCF secrets.
-- [ ] Register the Airwallex production webhook `https://store.shopapgo.com/api/webhooks/airwallex` (`payment_intent.succeeded`, `payment_intent.cancelled`).
+- [ ] Register the Airwallex production webhook `https://store.shopapgo.com/api/webhooks/airwallex` with the success/cancellation and six failed-attempt events listed below.
 - [ ] Approve prices / shipping / tax (see "Before switching `AIRWALLEX_ENV` to `prod`"), then set `PRICING_APPROVED = "true"` (until then prod takes no payments).
 - [ ] Decide MCF, emails, Apple Pay domain verification for `store.shopapgo.com`.
 - [ ] Leave `EXPRESS_CHECKOUT` unset in production until the cart-page express payment flow is built (today it is UI only).
@@ -819,8 +819,29 @@ npx wrangler deploy
 ```
 
 In Airwallex → Developer → Webhooks, subscribe `https://<domain>/api/webhooks/airwallex`
-to `payment_intent.succeeded` and `payment_intent.cancelled`, then store its
+to `payment_intent.succeeded`, `payment_intent.cancelled`, and the six failed-attempt events below, then store its
 secret as `AIRWALLEX_WEBHOOK_SECRET`.
+
+### Failed payment attempts
+
+Subscribe to these Payment Attempt events on the same account and destination:
+
+- `payment_attempt.authentication_failed`
+- `payment_attempt.authorization_failed`
+- `payment_attempt.risk_declined`
+- `payment_attempt.failed_to_process`
+- `payment_attempt.capture_failed`
+- `payment_attempt.expired`
+
+`worker/payment-failures.js` associates the signed event's `payment_intent_id` with an existing order. A provided `merchant_order_id` must match. It stores one row per attempt in `order_payment_failures`: attempt/event identifiers, failure code, provider code, bounded/redacted reason, trace ID and timestamps. It does not retain the raw payload, card details or provider `failure_details.details`. Detailed provider reasons are not always supplied; the admin explicitly shows when no reason is available.
+
+Failed attempts leave the order `pending` so the customer can retry. Success still settles it through the existing validated PaymentIntent path. Historical failures stay visible after payment but never revert a paid order. Repeated deliveries cannot add a second attempt row; older events cannot replace a newer reason. A storage error returns 500 before acknowledging the event so Airwallex can retry.
+
+The authenticated order detail has a **Failed payment attempts** section; the public order API exposes only a predefined customer message while the order is pending. Card and wallet SDK errors also use safe retry guidance. The cart is cleared only after the server confirms that the order is paid, including wallet and redirect flows.
+
+This does not cover failed PaymentIntent creation (the existing safe 502 + orphan-order cancellation handles that), browser/network failures before a payment attempt exists, refunds or disputes. Confirm actual failure-event delivery with a declined sandbox card before production. See the [official Airwallex event list](https://www.airwallex.com/docs/developer-tools/webhooks/listen-for-webhook-events/online-payments) and [PaymentAttempt failure fields](https://www.airwallex.com/docs/api/payments/payment_attempts/retrieve).
+
+Screenshots with synthetic local fixtures can be regenerated using `node scripts/capture-payment-failures.mjs`.
 
 ## Before switching `AIRWALLEX_ENV` to `prod`
 

@@ -59,7 +59,7 @@ window.AirwallexComponentsSDK = {
   },
 };`;
 
-export async function mockStore(page, { env = {} } = {}) {
+export async function mockStore(page, { env = {}, orderStatus = "paid", paymentFailure = null } = {}) {
   const calls = { session: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
     route.fulfill({ contentType: "application/javascript", body: AIRWALLEX_STUB }));
@@ -81,7 +81,7 @@ export async function mockStore(page, { env = {} } = {}) {
       if (pathname === `/api/orders/${ORDER_ID}`) {
         const last = calls.session.at(-1);
         const priced = quote(last.items, { state: last.shipping.state, method: last.method }, resolvePricing(env));
-        return reply(200, { id: ORDER_ID, status: "paid", email: "t••••@example.com", ...priced, paymentStatus: "SUCCEEDED" });
+        return reply(200, { id: ORDER_ID, status: orderStatus, email: "t••••@example.com", ...priced, paymentStatus: orderStatus === "paid" ? "SUCCEEDED" : "REQUIRES_PAYMENT_METHOD", paymentFailure });
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {

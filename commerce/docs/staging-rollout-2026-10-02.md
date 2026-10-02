@@ -45,3 +45,13 @@ The next actual checkout test requires the existing staging login. It was not av
 Resend and automatic Amazon MCF are not activated in this rollout. The existing staging login credentials remain in the owner's password vault; they have not been changed or recovered from Cloudflare.
 
 The 29 backend tests passed on October 2, including signed payment settlement, duplicate deliveries, invalid signatures, late deliveries and amount mismatches. These are local mocked-provider tests, not proof of real Airwallex webhook delivery.
+
+## Failed-attempt reporting deployed; subscription expansion prepared
+
+- Worker version: `2056367d-c74b-4020-9aaa-1248aa9441b9`.
+- Added `order_payment_failures` using the idempotent schema migration; existing 2 paid / 5 pending orders are retained. The failure table is empty and MCF still has zero records.
+- Authenticated admin order details now show failed-attempt history. Public messages are predefined and the cart is retained until server-confirmed payment.
+- Verification: 126 unit/backend tests passed; browser suite 125 passed / 6 integration tests skipped for missing configuration; staging bundle dry run passed.
+- Deployed gates remain intact: unauthenticated store/admin requests 401 with noindex; unsigned webhook 400.
+- Existing sandbox webhook still has its original two saved events. Six failed-attempt events are selected in the Edit webhook form. Save was clicked, but Airwallex requires the owner to reauthenticate with their password before applying the edit. The expanded subscription is **not confirmed saved**.
+- Actual Airwallex success/failure delivery and real checkout remain unverified for the staging-login reason above. Local screenshots and mocked-provider tests do not substitute for that verification.
