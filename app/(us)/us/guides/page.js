@@ -441,7 +441,7 @@ export default function GuidesPage() {
               </Link>
               {/* existing: does-an-automatic-car-wash-remove-ceramic-coating */}
               <Link href={routes.autoWashCoating} style={cardStyle(color.orange)}>
-                <img src={asset("generated/auto-wash-vs-hand-wash.png")} alt="" style={cardImg} />
+                <img src={asset("generated/auto-wash-hero-title.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Wash · Care</span>
                 <span style={cardTitle}>Does an Automatic Car Wash Remove Ceramic Coating?</span>
                 <span style={cardExcerpt}>An automatic wash rarely strips spray coating in one pass—but brushes, strong soap, and repeat friction wear it down sooner. Compare tunnel risk vs a gentler hand wash.</span>
@@ -479,7 +479,7 @@ export default function GuidesPage() {
                 <GuideButton>Read the cadence guide →</GuideButton>
               </Link>
               <Link href={routes.rainDamageCoating} style={cardStyle(color.orange)}>
-                <img src={asset("generated/rain-vs-salt-spots.png")} alt="" style={cardImg} />
+                <img src={asset("generated/rain-salt-hero.png")} alt="" style={cardImg} />
                 <span style={cardLabel(color.orange)}>Weather · Care</span>
                 <span style={cardTitle}>Does Rain Damage Ceramic Coating?</span>
                 <span style={cardExcerpt}>Clean rain rarely ruins a spray coating in one shower—dirty water spots and winter road salt that sit on paint are the real risks. Know what to rinse and when.</span>
