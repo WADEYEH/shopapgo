@@ -39,6 +39,9 @@ const pages = [
   { path: routes.coatingMaintenance, lastModified: "2026-09-28" },
   { path: routes.washCoatedCar, lastModified: "2026-09-28" },
   { path: routes.streaksHighSpots, lastModified: "2026-09-28" },
+  // Batch 2 guides (early)
+  { path: routes.winterWash, lastModified: "2026-10-02" },
+  { path: routes.coatingScratches, lastModified: "2026-10-02" },
 ];
 
 export default function sitemap() {
