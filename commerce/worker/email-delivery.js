@@ -75,12 +75,17 @@ async function postEmail(config, row, fetchImpl) {
   } finally { clearTimeout(timer); }
 }
 
-export async function sendOutboxEmail(env, order, kind, config, makeMessage, { retry = false, fetchImpl = fetch, nowMs = Date.now() } = {}) {
+export async function sendOutboxEmail(env, order, kind, config, makeMessage, { retry = false, resumeInitialJob = false, fetchImpl = fetch, nowMs = Date.now() } = {}) {
   if (!['confirmation', 'shipment'].includes(kind) || order.status !== 'paid') return { status: 'blocked', detail: 'A paid order and valid email kind are required.' };
   const db = env.DB;
   const legacy = await db.prepare('SELECT status FROM order_emails WHERE order_id = ? AND kind = ?').bind(order.id, kind).first();
   let row = await getDelivery(db, order.id, kind);
-  if (!row && legacy && legacy.status !== 'skipped') return { status: 'duplicate', detail: 'Existing email record retained; no new send.' };
+  // Only a transaction-created instruction proves that a pending legacy claim
+  // interrupted before outbox creation is safe to resume. Old ambiguous claims
+  // remain protected; sending always happens after the frozen outbox is saved.
+  const resumable = resumeInitialJob && kind === 'confirmation' && legacy?.status === 'pending'
+    && await db.prepare("SELECT order_id FROM order_email_jobs WHERE order_id = ? AND kind = ? AND status = 'pending'").bind(order.id, kind).first();
+  if (!row && legacy && legacy.status !== 'skipped' && !resumable) return { status: 'duplicate', detail: 'Existing email record retained; no new send.' };
   if (row && !retry) return { status: 'duplicate', detail: '' };
   if (row && (row.provider_id || TERMINAL.has(row.status))) return { status: 'blocked', detail: 'This email cannot be retried safely.' };
   await claimOrderEmail(db, order.id, kind);

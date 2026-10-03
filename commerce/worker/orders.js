@@ -75,10 +75,19 @@ export async function settleIntent(db, intent) {
   if (!status) return { status: order.status, changed: false, order };
 
   const timestamp = now();
-  const result = await db
+  const update = db
     .prepare("UPDATE orders SET status = ?, paid_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
-    .bind(status, status === "paid" ? timestamp : null, timestamp, order.id)
-    .run();
+    .bind(status, status === "paid" ? timestamp : null, timestamp, order.id);
+  // Commit payment and its confirmation instruction together. waitUntil is only
+  // a latency optimization; a fresh Worker can recover the instruction via cron.
+  // The timestamp guard excludes historic paid orders if a concurrent call won.
+  const result = status === "paid" ? (await db.batch([
+    update,
+    db.prepare(`INSERT OR IGNORE INTO order_email_jobs (order_id, kind, status, created_at, updated_at)
+      SELECT id, 'confirmation', 'pending', ?, ? FROM orders
+      WHERE id = ? AND status = 'paid' AND paid_at = ? AND updated_at = ?`)
+      .bind(timestamp, timestamp, order.id, timestamp, timestamp),
+  ]))[0] : await update.run();
   const changed = (result?.meta?.changes ?? 1) > 0;
   return { status: changed ? status : (await getOrder(db, order.id)).status, changed, order: changed ? await getOrder(db, order.id) : order };
 }

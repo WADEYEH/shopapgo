@@ -18,7 +18,7 @@
 
 import { getOrder } from "./orders.js";
 import { getFulfillment } from "./fulfillment.js";
-import { sendOutboxEmail } from "./email-delivery.js";
+import { sendOutboxEmail, getDelivery } from "./email-delivery.js";
 
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
@@ -145,9 +145,43 @@ export async function retryCustomerEmail(env, order, kind, options = {}) {
   return sendCustomerEmail(env, order, kind, { ...options, retry: true, shipment });
 }
 
+// Hand off a transaction-created confirmation instruction to the durable outbox.
+// If preparation fails, retain the instruction; if transport has started, its
+// frozen body/key and lease own recovery. This never backfills old paid orders.
+export async function processConfirmationJob(env, order, options = {}) {
+  const db = env.DB;
+  try {
+    const job = await db.prepare("SELECT status FROM order_email_jobs WHERE order_id = ? AND kind = 'confirmation'").bind(order.id).first();
+    if (!job || job.status !== 'pending') return { status: 'duplicate', detail: '' };
+    const legacy = await db.prepare("SELECT status FROM order_emails WHERE order_id = ? AND kind = 'confirmation'").bind(order.id).first();
+    let row = await getDelivery(db, order.id, 'confirmation');
+    // Preserve an explicit opt-out even if configuration changes after a crash.
+    const result = !row && legacy?.status === 'skipped'
+      ? { status: 'skipped', detail: 'Existing skipped email retained.' }
+      : await sendCustomerEmail(env, order, 'confirmation', { ...options, retry: false, resumeInitialJob: true });
+    row = await getDelivery(db, order.id, 'confirmation');
+    const projection = await db.prepare("SELECT status FROM order_emails WHERE order_id = ? AND kind = 'confirmation'").bind(order.id).first();
+    const complete = row || (projection && projection.status !== 'pending');
+    const timestamp = new Date().toISOString();
+    await db.prepare("UPDATE order_email_jobs SET status = ?, next_attempt_at = ?, updated_at = ? WHERE order_id = ? AND kind = 'confirmation' AND status = 'pending'")
+      .bind(complete ? (projection?.status === 'skipped' && !row ? 'skipped' : 'handed_off') : 'pending',
+        complete ? null : new Date(Date.now() + 60_000).toISOString(), timestamp, order.id).run();
+    return result;
+  } catch {
+    console.error('customer_email_job_error', { orderId: order.id, reason: 'confirmation handoff failed' });
+    return { status: 'failed', detail: 'Confirmation task retained for recovery.' };
+  }
+}
+
 export async function scheduledCustomerEmailRetry(env) {
-  if (env.CUSTOMER_EMAIL_RETRY_CRON !== "true" || !customerEmailConfig(env)) return;
+  if (env.CUSTOMER_EMAIL_RETRY_CRON !== "true") return;
   const timestamp = new Date().toISOString();
+  const { results: jobs } = await env.DB.prepare("SELECT order_id FROM order_email_jobs WHERE status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY updated_at, order_id LIMIT 10").bind(timestamp).all();
+  for (const item of jobs) {
+    const order = await getOrder(env.DB, item.order_id);
+    if (order) await processConfirmationJob(env, order);
+  }
+  if (!customerEmailConfig(env)) return;
   const { results } = await env.DB.prepare("SELECT order_id, kind FROM order_email_delivery WHERE status IN ('queued','retry','sending') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?) ORDER BY created_at LIMIT 10").bind(timestamp, timestamp).all();
   for (const item of results) {
     const order = await getOrder(env.DB, item.order_id);

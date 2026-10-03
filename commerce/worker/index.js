@@ -37,7 +37,7 @@ import {
   settleIntent,
 } from "./orders.js";
 import { notifyOrderPaid } from "./notify.js";
-import { sendCustomerEmail, scheduledCustomerEmailRetry } from "./customer-email.js";
+import { sendCustomerEmail, processConfirmationJob, scheduledCustomerEmailRetry } from "./customer-email.js";
 import { handleResendWebhook } from "./email-delivery.js";
 import { scheduledMcfSync, submitOrderToMcf } from "./mcf.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
@@ -145,9 +145,9 @@ async function runNotification(env, order, origin) {
   }
 }
 
-// Customer order-confirmation email: once per order (order_emails claim), never throws.
+// The task is already durable when payment commits; immediate processing is optional.
 async function runCustomerConfirmation(env, order) {
-  await sendCustomerEmail(env, order, "confirmation");
+  await processConfirmationJob(env, order);
 }
 
 // Amazon MCF: only when MCF_AUTO_SUBMIT=true and everything is configured (otherwise just a log line). Runs after

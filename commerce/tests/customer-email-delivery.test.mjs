@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHmac } from 'node:crypto';
 import { createD1, sqliteAvailable } from './helpers/d1.mjs';
-import { sendCustomerEmail, retryCustomerEmail, scheduledCustomerEmailRetry } from '../worker/customer-email.js';
+import { sendCustomerEmail, retryCustomerEmail, scheduledCustomerEmailRetry, processConfirmationJob } from '../worker/customer-email.js';
 import { getDelivery, handleResendWebhook, verifyResendSignature } from '../worker/email-delivery.js';
-import { getOrder, getOrderEmails } from '../worker/orders.js';
+import { getOrder, getOrderEmails, settleIntent } from '../worker/orders.js';
 import worker from '../worker/index.js';
 
 const skip = !(await sqliteAvailable());
@@ -153,4 +153,104 @@ test('cron disabled does not send; enabled recovers a stale lease without sendin
   const original=globalThis.fetch;let calls=0;
   try{globalThis.fetch=async()=>{calls++;return accepted();};await scheduledCustomerEmailRetry(env);assert.equal(calls,0);await scheduledCustomerEmailRetry({...env,CUSTOMER_EMAIL_RETRY_CRON:'true'});assert.equal(calls,1);}finally{globalThis.fetch=original;}
   assert.equal((await getDelivery(db,ID,'confirmation')).status,'accepted');
+});
+
+async function pendingSetup(extra = {}) {
+  const state = await setup(extra);
+  await state.db.prepare("UPDATE orders SET status = 'pending', payment_intent_id = 'int_job', paid_at = NULL WHERE id = ?").bind(ID).run();
+  state.intent = { id:'int_job', merchant_order_id:ID, status:'SUCCEEDED', amount:24.9, currency:'USD' };
+  return state;
+}
+const jobStatus = db => db.raw.prepare('SELECT status FROM order_email_jobs WHERE order_id = ?').get(ID)?.status;
+
+test('payment and confirmation instruction commit atomically; task insert failure rolls back payment', {skip}, async()=>{
+  const {db,intent} = await pendingSetup();
+  db.raw.exec("CREATE TRIGGER reject_task BEFORE INSERT ON order_email_jobs BEGIN SELECT RAISE(ABORT, 'test interrupted transaction'); END");
+  await assert.rejects(settleIntent(db,intent), /interrupted transaction/);
+  assert.equal((await getOrder(db,ID)).status,'pending');
+  assert.equal(jobStatus(db),undefined);
+  db.raw.exec('DROP TRIGGER reject_task');
+  const results = await Promise.all([settleIntent(db,intent),settleIntent(db,intent)]);
+  assert.equal(results.filter(result=>result.changed).length,1);
+  assert.equal((await getOrder(db,ID)).status,'paid');
+  assert.equal(jobStatus(db),'pending');
+  await settleIntent(db,intent);
+  assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM order_email_jobs').get().n,1);
+});
+
+test('a fresh scheduled Worker recovers payment committed before waitUntil; later cron and webhook cannot duplicate', {skip}, async()=>{
+  const {db,env,intent} = await pendingSetup({CUSTOMER_EMAIL_RETRY_CRON:'true'});
+  await settleIntent(db,intent); // Simulate losing the original request before afterSettle.
+  assert.equal(await getDelivery(db,ID,'confirmation'),null);
+  const original = globalThis.fetch; let calls=0;
+  try {
+    globalThis.fetch=async()=>{calls++;return accepted();};
+    const pending=[];
+    worker.scheduled({}, {...env}, {waitUntil:work=>pending.push(work)});
+    await Promise.all(pending);
+    await scheduledCustomerEmailRetry(env);
+    await settleIntent(db,intent);
+  } finally { globalThis.fetch=original; }
+  assert.equal(calls,1);
+  assert.equal(jobStatus(db),'handed_off');
+  assert.equal((await getDelivery(db,ID,'confirmation')).provider_id,'mail_test');
+});
+
+test('interruption after legacy claim and before frozen outbox is recoverable only with a new durable instruction', {skip}, async()=>{
+  const {db,env,intent} = await pendingSetup();
+  const settled=await settleIntent(db,intent);
+  db.raw.exec("CREATE TRIGGER reject_outbox BEFORE INSERT ON order_email_delivery BEGIN SELECT RAISE(ABORT, 'test preparation failure'); END");
+  await processConfirmationJob(env,settled.order,{fetchImpl:()=>assert.fail('not prepared')});
+  assert.equal(jobStatus(db),'pending');
+  assert.equal((await getOrderEmails(db,ID))[0].status,'pending');
+  db.raw.exec('DROP TRIGGER reject_outbox');
+  let calls=0;
+  await Promise.all([processConfirmationJob(env,settled.order,{fetchImpl:async()=>{calls++;return accepted();}}),processConfirmationJob(env,settled.order,{fetchImpl:async()=>{calls++;return accepted();}})]);
+  assert.equal(calls,1);
+  assert.equal(jobStatus(db),'handed_off');
+  const historic=await setup();
+  await historic.db.prepare("INSERT INTO order_emails (order_id,kind,status,created_at,updated_at) VALUES (?,'confirmation','pending',?,?)").bind(ID,new Date().toISOString(),new Date().toISOString()).run();
+  assert.equal((await sendCustomerEmail(historic.env,historic.order,'confirmation',{resumeInitialJob:true,fetchImpl:()=>assert.fail('ambiguous historic claim')})).status,'duplicate');
+});
+
+test('no tasks for cancelled, review or historic paid orders; disabled emails remain skipped after configuration changes', {skip}, async()=>{
+  for(const intentOverride of [{status:'CANCELLED'},{amount:1},{currency:'EUR'}]) {
+    const {db,intent}=await pendingSetup();
+    await settleIntent(db,{...intent,...intentOverride});
+    assert.equal(jobStatus(db),undefined);
+  }
+  const historic=await setup({CUSTOMER_EMAIL_RETRY_CRON:'true'});
+  await scheduledCustomerEmailRetry(historic.env);
+  assert.equal(jobStatus(historic.db),undefined);
+  assert.equal(await getDelivery(historic.db,ID,'confirmation'),null);
+  const {db,env,intent}=await pendingSetup({CUSTOMER_EMAIL_ENABLED:'false'});
+  const settled=await settleIntent(db,intent);
+  await processConfirmationJob(env,settled.order);
+  assert.equal(jobStatus(db),'skipped');
+  await scheduledCustomerEmailRetry({...env,CUSTOMER_EMAIL_ENABLED:'true',CUSTOMER_EMAIL_RETRY_CRON:'true'});
+  assert.equal(await getDelivery(db,ID,'confirmation'),null);
+  // Simulate a crash after recording the skip but before completing the task.
+  db.raw.exec("UPDATE order_email_jobs SET status = 'pending'");
+  await processConfirmationJob({...env,CUSTOMER_EMAIL_ENABLED:'true'},settled.order,{fetchImpl:()=>assert.fail('skip must survive restart')});
+  assert.equal(jobStatus(db),'skipped');
+});
+
+test('interruption after a transport outcome cannot resend accepted email or automatically retry permanent rejection', {skip}, async()=>{
+  for(const outcome of ['accepted','failed']) {
+    const {db,env,intent}=await pendingSetup({CUSTOMER_EMAIL_RETRY_CRON:'true'});
+    const settled=await settleIntent(db,intent);
+    db.raw.exec("CREATE TRIGGER reject_handoff BEFORE UPDATE ON order_email_jobs BEGIN SELECT RAISE(ABORT, 'test handoff failure'); END");
+    let calls=0;
+    await processConfirmationJob(env,settled.order,{fetchImpl:async()=>{calls++;return outcome==='accepted' ? accepted() : new Response('{}',{status:401});}});
+    assert.equal(jobStatus(db),'pending');
+    assert.equal((await getDelivery(db,ID,'confirmation')).status,outcome);
+    db.raw.exec('DROP TRIGGER reject_handoff');
+    const original=globalThis.fetch;
+    try {
+      globalThis.fetch=()=>assert.fail('transport already owns this outcome');
+      await scheduledCustomerEmailRetry(env);
+    } finally { globalThis.fetch=original; }
+    assert.equal(jobStatus(db),'handed_off');
+    assert.equal(calls,1);
+  }
 });

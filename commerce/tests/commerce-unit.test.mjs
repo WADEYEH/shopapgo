@@ -103,6 +103,7 @@ function fakeDb(order) {
   const rows = new Map([[order.id, { ...order }]]);
   return {
     rows,
+    async batch(statements) { return Promise.all(statements.map(statement => statement.run())); },
     prepare(sql) {
       return {
         bind(...args) {

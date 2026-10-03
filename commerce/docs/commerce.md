@@ -497,8 +497,17 @@ Two emails go to the shopper through the same Resend API as the team notificatio
   no delivery-time promise are written; if the owner approves a sentence, put it in
   `CUSTOMER_EMAIL_POLICY_NOTE` (appended verbatim to both emails). All customer-supplied text is
   HTML-escaped.
-- Runs in `ctx.waitUntil` on payment (never delays the webhook); on shipping the admin request
-  waits for the first send (≤ 10 s) and reports acceptance / skipped / failed, separately from delivery.
+- **Initial payment confirmation:** the guarded pending-to-paid update and a minimal
+  `order_email_jobs` instruction commit together in one D1 batch transaction. A database
+  error rolls both back. `waitUntil` starts processing immediately; the email cron can
+  recover a committed instruction if that request stops before processing. Once the
+  frozen outbox exists, its lease/retry policy owns recovery; interrupted task completion
+  does not resend accepted mail or automatically retry permanent transport rejection.
+  Legacy pending claims can resume only with a new transaction-created instruction.
+  Historic paid orders are not backfilled; explicit disabled/allowlist skips stay skipped.
+- On shipping the admin request waits for the first send (≤ 10 s) and reports acceptance /
+  skipped / failed, separately from delivery. The initial shipment task still starts after
+  the shipment write; atomic shipment-task creation is a separate remaining reliability task.
 
 Environment (none is a secret except the key; all are optional):
 
@@ -511,10 +520,12 @@ Environment (none is a secret except the key; all are optional):
 | `CUSTOMER_EMAIL_ENABLED` | `false` disables customer emails |
 | `RESEND_WEBHOOK_SECRET` | secret for the storefront's Resend subscription |
 | `CUSTOMER_EMAIL_TEST_RECIPIENTS` | required staging allowlist, exact comma-separated emails |
-| `CUSTOMER_EMAIL_RETRY_CRON` | `true` enables processing due outbox rows when a Cron Trigger runs |
+| `CUSTOMER_EMAIL_RETRY_CRON` | `true` recovers new payment instructions and due outbox rows when a Cron Trigger runs |
 | `ORDER_NOTIFY_EMAIL_API_URL` | endpoint override for tests/proxies (shared) |
 
-**Decisions still open:** sender name/domain and reply-to address; whether to include a returns /
+Staging uses the owner-approved sender `APGO <orders@apgo.tw>` and reply-to `services@apgo.com.tw`.
+
+**Decisions still open:** whether to include a returns /
 support sentence (needs the Returns page wording to be final) and any delivery-time wording
 (the shipping method text "5–7 business days" is a placeholder and is deliberately *not* used);
 whether to send a "payment received but under review" email; marketing opt-in is not used here

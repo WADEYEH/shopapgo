@@ -152,6 +152,19 @@ CREATE TABLE IF NOT EXISTS order_email_delivery (
 );
 CREATE INDEX IF NOT EXISTS email_delivery_due ON order_email_delivery(status, next_attempt_at);
 
+-- Initial confirmation instructions, committed in the same D1 transaction as
+-- pending -> paid. No historic-order backfill; transport retries live above.
+CREATE TABLE IF NOT EXISTS order_email_jobs (
+  order_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind = 'confirmation'),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'handed_off', 'skipped')),
+  next_attempt_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (order_id, kind)
+);
+CREATE INDEX IF NOT EXISTS email_jobs_due ON order_email_jobs(status, next_attempt_at);
+
 -- Minimal signed event metadata only: no raw webhook payloads or recipients.
 CREATE TABLE IF NOT EXISTS customer_email_events (
   id TEXT PRIMARY KEY,
