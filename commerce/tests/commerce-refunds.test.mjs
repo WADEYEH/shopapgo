@@ -121,6 +121,30 @@ test('signed refund events retrieve current state; duplicate and late delivery c
   assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM order_mcf').get().n,0);
 });
 
+test('signed failed refund creates two durable messages; replay and late acceptance use current failure and never repeat mail',{skip},async()=>{
+  const {db,env}=await setup();let sends=0;let reads=0;
+  const mailEnv={...env,RESEND_API_KEY:'email-test-key',CUSTOMER_EMAIL_FROM:'APGO <orders@apgo.tw>',REFUND_ALERT_EMAIL_TO:'team@example.com'};
+  const current=refund({status:'FAILED',failure_details:{code:'provider_declined'}});
+  await mocked((url,init)=>{
+    if(url==='https://api.resend.com/emails') {
+      assert.equal(init.method,'POST');const body=JSON.parse(init.body);
+      assert.match(body.subject,/could not be completed|refund failed/);return Response.json({id:`mail_failed_${++sends}`});
+    }
+    reads++;assert.equal(init.method,'GET');assert.ok(url.endsWith('/refunds/rfd_test'));return Response.json(current);
+  },async()=>{
+    assert.equal((await worker.fetch(hook(current,{name:'refund.failed'}),mailEnv)).status,200);
+    assert.equal((await (await worker.fetch(hook(current,{name:'refund.failed'}),mailEnv)).json()).duplicate,true);
+    assert.equal((await worker.fetch(hook(refund(),{id:'evt_old_acceptance'}),mailEnv)).status,200);
+  });
+  assert.equal(sends,2);assert.equal(reads,3);
+  assert.equal((await refundView(db,await getOrder(db,ID))).records[0].status,'FAILED');
+  assert.deepEqual(db.raw.prepare('SELECT kind,status FROM order_message_jobs ORDER BY kind').all().map(row=>({...row})),[
+    {kind:'refund:failed:rfd_test',status:'handed_off'},{kind:'refund:team-failed:rfd_test',status:'handed_off'},
+  ]);
+  assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM order_mcf').get().n,0);
+  assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM order_fulfillments').get().n,0);
+});
+
 test('provider or database failure does not acknowledge a refund event; retry repairs it, and foreign events are not imported',{skip},async()=>{
   const {db,env}=await setup();
   await mocked(()=>new Response('{}',{status:503}),async()=>assert.equal((await worker.fetch(hook(refund()),env)).status,502));

@@ -12,7 +12,20 @@ const TERMINAL = new Set(['accepted', 'delivered', 'delivery_delayed', 'bounced'
 const EVENT_STATUS = { 'email.sent': 'accepted', 'email.delivered': 'delivered', 'email.delivery_delayed': 'delivery_delayed', 'email.bounced': 'bounced', 'email.complained': 'complained', 'email.suppressed': 'suppressed', 'email.failed': 'failed' };
 
 export const getDelivery = (db, orderId, kind) => db.prepare('SELECT * FROM order_email_delivery WHERE order_id = ? AND kind = ?').bind(orderId, kind).first();
-export const validEmailKind = kind => ['confirmation','shipment'].includes(kind) || /^refund:[\w-]{1,120}$/.test(kind);
+export function refundEmailKind(kind) {
+  const match = /^refund:(?:(failed|team-failed):)?([\w-]{1,120})$/.exec(kind);
+  return match ? { id: match[2], failed: Boolean(match[1]), team: match[1] === 'team-failed' } : null;
+}
+export const validEmailKind = kind => ['confirmation','shipment'].includes(kind) || Boolean(refundEmailKind(kind));
+
+// The frozen recipient also owns bounce suppression. Staff alerts must never
+// suppress the customer address or silently move to a new configured mailbox.
+function deliveryRecipient(row) {
+  try {
+    const to = JSON.parse(row.payload_json).to;
+    return Array.isArray(to) && to.length === 1 && typeof to[0] === 'string' ? to[0] : null;
+  } catch { return null; }
+}
 
 export function allowedEmailRecipient(env, email) {
   if (env.SITE_ENV !== 'staging') return true;
@@ -40,8 +53,8 @@ export async function reconcileDelivery(db, providerId, timestamp = Date.now()) 
     ELSE 'accepted' END, updated_at = ? WHERE provider_id = ?`).bind(providerId, providerId, providerId, providerId, providerId, providerId, iso(timestamp), providerId).run();
   const status = (await getDelivery(db, row.order_id, row.kind)).status;
   if (['bounced', 'complained', 'suppressed'].includes(status)) {
-    const order = await db.prepare('SELECT email FROM orders WHERE id = ?').bind(row.order_id).first();
-    if (order) await db.prepare('INSERT OR IGNORE INTO customer_email_suppressions (email, reason, created_at) VALUES (?, ?, ?)').bind(order.email.toLowerCase(), status, iso(timestamp)).run();
+    const recipient = deliveryRecipient(row);
+    if (recipient) await db.prepare('INSERT OR IGNORE INTO customer_email_suppressions (email, reason, created_at) VALUES (?, ?, ?)').bind(recipient.toLowerCase(), status, iso(timestamp)).run();
   }
   await db.prepare("UPDATE order_email_delivery SET detail = CASE WHEN status = 'accepted' THEN 'Accepted by email service; delivery not confirmed.' ELSE 'Email ' || replace(status, '_', ' ') || '.' END WHERE provider_id = ?").bind(providerId).run();
   await project(db, await getDelivery(db, row.order_id, row.kind));
@@ -91,22 +104,38 @@ export async function sendOutboxEmail(env, order, kind, config, makeMessage, { r
   if (row && !retry) return { status: 'duplicate', detail: '' };
   if (row && (row.provider_id || TERMINAL.has(row.status))) return { status: 'blocked', detail: 'This email cannot be retried safely.' };
   await claimOrderEmail(db, order.id, kind);
-  if (!config || !allowedEmailRecipient(env, order.email)) {
-    const detail = config ? 'Recipient is not in the staging email allowlist.' : 'Customer email is not configured.';
+  const recipient = row ? deliveryRecipient(row) : config?.recipient || order.email;
+  if (!config || !recipient || !allowedEmailRecipient(env, recipient) || !allowedEmailRecipient(env, order.email)) {
+    const detail = config ? 'Recipient is not in the staging email allowlist.' : 'Email sending is not configured for this recipient.';
     if (!row) await finishOrderEmail(db, order.id, kind, { status: 'skipped', detail });
     return { status: 'skipped', detail };
   }
-  if (await db.prepare('SELECT email FROM customer_email_suppressions WHERE email = ?').bind(order.email.toLowerCase()).first()) {
+  if (await db.prepare('SELECT email FROM customer_email_suppressions WHERE email = ?').bind(recipient.toLowerCase()).first()) {
     if (row) await db.prepare("UPDATE order_email_delivery SET status = 'suppressed', detail = 'Recipient is suppressed.', updated_at = ? WHERE order_id = ? AND kind = ?").bind(iso(nowMs), order.id, kind).run();
     await finishOrderEmail(db, order.id, kind, { status: 'failed', detail: 'Recipient is suppressed; no email sent.' });
     return { status: 'blocked', detail: 'Recipient is suppressed; no email sent.' };
   }
   if (!row) {
     const message = makeMessage();
-    const payload = { from: config.from, to: [order.email], ...message };
+    const payload = { from: config.from, to: [recipient], ...message };
     if (config.replyTo) payload.reply_to = config.replyTo;
     await db.prepare("INSERT OR IGNORE INTO order_email_delivery (order_id,kind,status,payload_json,request_key,created_at,updated_at) VALUES (?,?,'queued',?,?,?,?)").bind(order.id, kind, JSON.stringify(payload), `apgo/${order.id}/${kind}`, iso(nowMs), iso(nowMs)).run();
     row = await getDelivery(db, order.id, kind);
+  }
+  // A concurrent preparation can win INSERT OR IGNORE with a different frozen
+  // recipient. Re-check that actual payload before claiming the transport.
+  const frozenRecipient = deliveryRecipient(row);
+  if (!frozenRecipient || !allowedEmailRecipient(env, frozenRecipient)) {
+    await db.prepare("UPDATE order_email_delivery SET status='review',detail='Frozen recipient is not approved; review before sending.',updated_at=? WHERE order_id=? AND kind=? AND provider_id IS NULL AND status IN ('queued','retry','sending','failed') AND (lease_until IS NULL OR lease_until<=?)")
+      .bind(iso(nowMs),order.id,kind,iso(nowMs)).run();
+    await project(db,await getDelivery(db,order.id,kind));
+    return {status:'blocked',detail:'Frozen recipient is not approved; review before sending.'};
+  }
+  if (frozenRecipient !== recipient && await db.prepare('SELECT email FROM customer_email_suppressions WHERE email=?').bind(frozenRecipient.toLowerCase()).first()) {
+    await db.prepare("UPDATE order_email_delivery SET status='suppressed',detail='Recipient is suppressed.',updated_at=? WHERE order_id=? AND kind=? AND provider_id IS NULL AND (lease_until IS NULL OR lease_until<=?)")
+      .bind(iso(nowMs),order.id,kind,iso(nowMs)).run();
+    await project(db,await getDelivery(db,order.id,kind));
+    return {status:'blocked',detail:'Recipient is suppressed; no email sent.'};
   }
   if (row.first_attempt_at && nowMs - Date.parse(row.first_attempt_at) >= SAFE_WINDOW_MS) {
     await db.prepare("UPDATE order_email_delivery SET status = 'review', detail = 'Retry window expired; review provider history before sending again.', updated_at = ? WHERE order_id = ? AND kind = ? AND status IN ('queued','retry','sending','failed') AND (lease_until IS NULL OR lease_until <= ?)").bind(iso(nowMs), order.id, kind, iso(nowMs)).run();
@@ -120,7 +149,9 @@ export async function sendOutboxEmail(env, order, kind, config, makeMessage, { r
   }
   const token = crypto.randomUUID();
   const claim = await db.prepare(`UPDATE order_email_delivery SET status = 'sending', attempts = attempts + 1, lease_until = ?, lease_token = ?, first_attempt_at = COALESCE(first_attempt_at, ?), updated_at = ? WHERE order_id = ? AND kind = ? AND status IN ('queued','retry','sending','failed') AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?)
-    AND (kind NOT LIKE 'refund:%' OR EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_email_delivery.order_id AND 'refund:'||r.id=order_email_delivery.kind AND r.status IN ('ACCEPTED','SETTLED')))`)
+    AND (kind NOT LIKE 'refund:%' OR EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_email_delivery.order_id AND (
+      ('refund:'||r.id=order_email_delivery.kind AND r.status IN ('ACCEPTED','SETTLED')) OR
+      (order_email_delivery.kind IN ('refund:failed:'||r.id,'refund:team-failed:'||r.id) AND r.status='FAILED'))))`)
     .bind(iso(nowMs + LEASE_MS), token, iso(nowMs), iso(nowMs), order.id, kind, MAX_ATTEMPTS, iso(nowMs), iso(nowMs)).run();
   if (!claim.meta.changes) return { status: 'duplicate', detail: 'Email is already processing or not due for retry.' };
   row = await getDelivery(db, order.id, kind);

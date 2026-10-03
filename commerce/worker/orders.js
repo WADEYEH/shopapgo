@@ -298,7 +298,9 @@ export async function finishOrderEmail(db, orderId, kind, { status, detail = "" 
 export async function getOrderEmails(db, orderId) {
   const { results } = await db
     .prepare(`SELECT e.kind, e.status, e.detail, e.updated_at, d.status AS delivery_status, d.provider_id, d.attempts, d.next_attempt_at, d.first_attempt_at,
-      CASE WHEN e.kind NOT LIKE 'refund:%' OR EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=e.order_id AND 'refund:'||r.id=e.kind AND r.status IN ('ACCEPTED','SETTLED')) THEN 1 ELSE 0 END AS retry_valid
+      CASE WHEN e.kind NOT LIKE 'refund:%' OR EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=e.order_id AND (
+        ('refund:'||r.id=e.kind AND r.status IN ('ACCEPTED','SETTLED')) OR
+        (e.kind IN ('refund:failed:'||r.id,'refund:team-failed:'||r.id) AND r.status='FAILED'))) THEN 1 ELSE 0 END AS retry_valid
       FROM order_emails e LEFT JOIN order_email_delivery d ON d.order_id=e.order_id AND d.kind=e.kind WHERE e.order_id=?
       UNION ALL SELECT j.kind,'pending','Saved notification task; awaiting handoff.',j.updated_at,NULL,NULL,0,j.next_attempt_at,NULL,0
       FROM order_message_jobs j WHERE j.order_id=? AND j.status='pending'

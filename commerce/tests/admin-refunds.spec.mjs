@@ -82,3 +82,25 @@ test('sandbox probe buttons submit only fixed scenarios and explain the provider
   expect(requests).toEqual([{scenario:'above_limit'}]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
+
+test('failure follow-up and team alert retain separate delivery histories and scoped retry controls on mobile',async({page})=>{
+  await page.setViewportSize({width:360,height:780});await mockAdminApi(page);
+  const refundId='rfd_sgpvjqlrxhmv8abey5c_7imv5k';const failureKind=`refund:failed:${refundId}`;const teamKind=`refund:team-failed:${refundId}`;
+  const order={...SAMPLE_ORDERS[0],refunds:{...data,records:[{...data.records[0],id:refundId,status:'FAILED',failureCode:'provider_declined'}]},
+    emails:[{kind:`refund:${refundId}`,status:'sent',deliveryStatus:'delivered',canRetry:false},
+      {kind:failureKind,status:'sent',deliveryStatus:'delivered',canRetry:false},
+      {kind:teamKind,status:'failed',deliveryStatus:'failed',canRetry:true,detail:'Email service returned HTTP 403.'}],audit:[],mcf:{mode:'off'}};
+  await page.route(`**/admin/api/orders/${ID}`,route=>route.fulfill({json:order}));
+  const requests=[];
+  await page.route(`**/admin/api/orders/${ID}/emails/**/retry`,route=>{requests.push(decodeURIComponent(new URL(route.request().url()).pathname));
+    return route.fulfill({json:{email:{status:'sent'},order:{...order,emails:order.emails.map(email=>email.kind===teamKind ? {...email,status:'sent',deliveryStatus:'delivered',canRetry:false} : email)}}});});
+  await page.goto(`/admin/index.html#${ID}`);const history=page.getByRole('region',{name:'History',exact:true});
+  await expect(history).toContainText(`Refund failure notice (${refundId}): delivered`);
+  await expect(history).toContainText(`Team refund failure alert (${refundId}): failed`);
+  await expect(page.getByRole('region',{name:'Refunds',exact:true})).toContainText('No financial refund is retried automatically');
+  await page.getByRole('button',{name:`Retry Team refund failure alert (${refundId})`,exact:true}).click();
+  expect(requests).toEqual([`/admin/api/orders/${ID}/emails/${teamKind}/retry`]);
+  await expect(history).toContainText(`Team refund failure alert (${refundId}): delivered`);
+  await expect(history).toContainText(`Refund notice (${refundId}): delivered`);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});

@@ -947,9 +947,42 @@ delivery events, durable retries and 23-hour ambiguous-send review all apply.
 If a refund becomes FAILED before sending/retry, its success notice stops and any
 ambiguous send is held for operator review. Refunds themselves are never retried
 automatically. The admin shows failed refunds prominently and email status per
-refund. A previously delivered acceptance notice is retained as history. A later
-FAILED transition does not yet send a corrective customer email or staff alert;
-operators must contact the customer. Add that follow-up before production.
+refund. A previously delivered acceptance notice is retained as history.
+
+A current FAILED observation atomically creates two independent instructions:
+`refund:failed:<id>` for the customer and `refund:team-failed:<id>` for staff.
+Customer text says the refund could not be completed and clarifies that an earlier
+acceptance notice was not confirmation of completion. It includes the refund
+amount/reference and support reply path, without provider reason text or codes.
+The staff alert includes the safe failure code, payment/reference, amount and a
+protected back-office link; it includes no customer email, name, address, raw
+provider payload or fraud allegation. Both retain the approved sender/reply-to
+and test note. The existing message table CHECK accepts these `refund:` kinds;
+no additional migration, backend service or provider subscription is needed.
+
+Set `REFUND_ALERT_EMAIL_TO` to one explicitly approved team mailbox. Optional
+`REFUND_ALERT_EMAIL_ENABLED=false` disables staff alerts. Missing/invalid staff
+configuration is recorded as skipped, visible in admin, not silently rerouted.
+Customer mail uses its existing switch; disabling or suppressing it does not
+disable staff alerts. Staging requires both the original customer and the actual
+recipient in `CUSTOMER_EMAIL_TEST_RECIPIENTS`; the deployed test recipient is the
+owner's approved mailbox, not a production team-recipient decision.
+
+Failure messages share frozen payloads/recipients, leases, provider idempotency,
+bounded temporary retries, signed delivery events and manual review limits with
+other notices. Bounce suppression applies to the frozen actual recipient; a
+staff bounce never suppresses the customer's address. Current FAILED state is
+checked before preparation and again when claiming the SQL send lease; a later
+recovery stops unsent failure notices. Already delivered history cannot be
+retracted, and in-flight email delivery order cannot be guaranteed.
+
+Repeated signed events or manual sync cannot create duplicate failure notices.
+A freshly verified FAILED observation can repair a missing failure instruction
+from before this feature, including an already known failed refund. There is no
+background scan/backfill of historical rows. Permanent transport failures,
+missing configuration, suppression and ambiguous outcomes remain visible for
+operator follow-up. Email is an alert, not proof that a team member acted; staff
+must still review the refund and contact the customer. No financial retry occurs.
 
 For sandbox validation only, the authenticated/CSRF-protected
 `POST /admin/api/orders/:id/refunds/sandbox-check` supports two fixed invalid

@@ -327,12 +327,14 @@ function renderHistory(order) {
   return el(
     "section",
     { class: "admin-history", "aria-label": "History" },
-    el("h4", {}, "Customer emails and history"),
+    el("h4", {}, "Emails and history"),
     el(
       "ul",
       { class: "admin-lines" },
       ...emails.map((mail) => {
-        const label = emailLabel[mail.kind] ?? (mail.kind.startsWith('refund:') ? `Refund notice (${mail.kind.slice(7)})` : mail.kind);
+        const label = emailLabel[mail.kind] ?? (mail.kind.startsWith('refund:team-failed:') ? `Team refund failure alert (${mail.kind.slice(19)})`
+          : mail.kind.startsWith('refund:failed:') ? `Refund failure notice (${mail.kind.slice(14)})`
+          : mail.kind.startsWith('refund:') ? `Refund notice (${mail.kind.slice(7)})` : mail.kind);
         const status = mail.deliveryStatus === "accepted" ? "Accepted by email service (delivery not confirmed)" : mail.deliveryStatus || (mail.status === "sent" ? "sent (legacy record; delivery not confirmed)" : mail.status);
         const retry = mail.canRetry ? el("button", { type: "button", class: "btn btn--sm" }, `Retry ${label}`) : null;
         if (retry) retry.addEventListener("click", async () => {
@@ -462,7 +464,7 @@ function renderRefunds(order) {
     })) : null;
   return el('section', {class:'admin-history', 'aria-label':'Refunds', 'data-order-refunds':true},
     el('h4', {}, 'Refunds'),
-    refunds?.records?.some(item=>item.status==='FAILED') && notice('warning','Refund failed — review required','A refund was rejected. Review its failure code and the payment in Airwallex. An earlier acceptance notice may already have been delivered. Contact the customer if needed; failure follow-up emails and financial retries are not automatic.'),
+    refunds?.records?.some(item=>item.status==='FAILED') && notice('warning','Refund failed — review required','A refund was rejected. Review its failure code and the payment in Airwallex. An earlier acceptance notice may already have been delivered. Check the customer failure notice and team alert in the email history; sending or delivery problems require manual follow-up. No financial refund is retried automatically.'),
     el('p', {class:'body body--sm'}, 'Initiate refunds in Airwallex. This button only checks their status.'),
     el('p', {class:'body body--sm'}, refunds?.records?.length
       ? `Refunded: ${money(refunds.refundedCents)} · Pending: ${money(refunds.pendingCents)}${refunds.hold ? ' · Fulfillment on hold' : ''}`

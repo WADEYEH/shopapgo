@@ -234,7 +234,10 @@ async function handleWebhook(request, env, services) {
   }
   const firstDelivery = await recordWebhookEvent(env.DB, event);
   if (refundMessage) {
-    const work = processMessageJob(env,refundMessage.order,refundMessage.kind);
+    const kinds = refundMessage.kind.startsWith('refund:failed:')
+      ? [refundMessage.kind,refundMessage.kind.replace('refund:failed:','refund:team-failed:')]
+      : [refundMessage.kind];
+    const work = Promise.all(kinds.map(kind => processMessageJob(env,refundMessage.order,kind)));
     if (services.ctx?.waitUntil) services.ctx.waitUntil(work);
     else await work;
   }

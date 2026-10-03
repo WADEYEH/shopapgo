@@ -1,4 +1,4 @@
-// Customer emails (confirmation, shipment, per-refund notice) through Resend.
+// Customer notices and separately addressed refund-failure staff alerts through Resend.
 // Same opt-in style as worker/notify.js: nothing is sent unless the operator sets the
 // env below; otherwise the email is skipped and logged. A failure is logged and recorded
 // but never throws and never changes the order. Temporary failures use a durable
@@ -12,13 +12,15 @@
 //                                         (e.g. the approved return-policy sentence). Omitted when unset:
 //                                         this code never invents policy or delivery promises.
 //   CUSTOMER_EMAIL_ENABLED                "false" switches customer emails off
+//   REFUND_ALERT_EMAIL_TO                  one approved staff recipient (separate from customer mail)
+//   REFUND_ALERT_EMAIL_ENABLED             "false" switches staff alerts off independently
 //   ORDER_NOTIFY_EMAIL_API_URL            optional endpoint override (tests / proxies), shared with notify.js
 //
 // Durable delivery state and provider idempotency are in email-delivery.js.
 
 import { getOrder, claimOrderEmail, finishOrderEmail } from "./orders.js";
 import { getFulfillment } from "./fulfillment.js";
-import { sendOutboxEmail, getDelivery, validEmailKind } from "./email-delivery.js";
+import { sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
 
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
@@ -38,6 +40,25 @@ export function customerEmailConfig(env) {
     apiUrl: env.ORDER_NOTIFY_EMAIL_API_URL || DEFAULT_EMAIL_API,
     policyNote: String(env.CUSTOMER_EMAIL_POLICY_NOTE ?? "").trim().slice(0, 1000),
   };
+}
+
+// Team alerts have their own explicit recipient and switch. Turning customer
+// mail off must not silently turn internal incident communication off too.
+export function refundAlertConfig(env) {
+  const recipient = String(env.REFUND_ALERT_EMAIL_TO || '').trim();
+  if (env.REFUND_ALERT_EMAIL_ENABLED === 'false' || !/^[\x21-\x7e]+$/.test(recipient)
+    || !/^[^@,<>]+@[^@,<>]+\.[^@,<>]+$/.test(recipient)) return null;
+  const config = customerEmailConfig({...env,CUSTOMER_EMAIL_ENABLED:'true'});
+  return config ? {...config,recipient} : null;
+}
+
+function refundAdminUrl(env, orderId) {
+  try {
+    const url = new URL(`https://${env.ADMIN_HOST}/admin/`);
+    if (!env.ADMIN_HOST || url.host !== env.ADMIN_HOST || url.username || url.password) return null;
+    url.hash = encodeURIComponent(orderId);
+    return url.href;
+  } catch { return null; }
 }
 
 function orderParts(order) {
@@ -143,14 +164,37 @@ export function buildRefundEmail(order, refund, { policyNote } = {}) {
   return { subject:`Your APGO ${full ? 'full' : 'partial'} refund was accepted · ${order.id}`,text,html };
 }
 
+export function buildRefundFailureEmail(order, refund, { policyNote, team = false, adminUrl } = {}) {
+  const heading = team ? 'Refund failed — action required' : 'Your refund could not be completed';
+  const subject = `${team ? 'Action required: APGO refund failed' : 'Update: your APGO refund could not be completed'} · ${order.id}`;
+  const intro = team
+    ? 'The payment provider reports that this refund failed. Review the payment in Airwallex and contact the customer. Do not assume an earlier acceptance notice means the refund completed.'
+    : 'The payment provider reports that this refund could not be completed. If you received an earlier refund acceptance email, it reflected the initial status and does not confirm that the refund was completed.';
+  const action = team
+    ? 'No financial refund retry is automatic. Check the provider status before deciding any next action.'
+    : 'We have flagged this for our team to review. Please reply to this email if you have questions about this refund.';
+  const greeting = team ? 'APGO team,' : `Hi${orderParts(order).firstName ? ` ${orderParts(order).firstName}` : ''},`;
+  const facts = [['Order number',order.id],['Refund reference',refund.id],['Refund amount',money(refund.amountCents,refund.currency)],['Original order total',money(order.total_cents,order.currency)],
+    ...(team ? [['Failure code',refund.failureCode || 'Not supplied'],['Payment reference',order.payment_intent_id]] : [])];
+  const text = [greeting,'',heading,intro,'',...facts.map(([key,value])=>`${key}: ${value}`),'',action,
+    ...(team && adminUrl ? [`Review order: ${adminUrl}`] : []),...(policyNote ? ['',policyNote] : []),'','APGO'].join('\n');
+  const html = `<!doctype html><html lang="en" dir="ltr"><head><title>${escapeHtml(subject)}</title></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111;background:#fff;line-height:1.5;max-width:560px">
+    <div lang="en" dir="ltr"><h1 style="font-size:22px">${escapeHtml(heading)}</h1><p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p>
+    <table role="presentation">${facts.map(([key,value])=>`<tr><td style="padding:4px 12px 4px 0;color:#555">${escapeHtml(key)}</td><td style="overflow-wrap:anywhere">${escapeHtml(value)}</td></tr>`).join('')}</table>
+    <p>${escapeHtml(action)}</p>${team && adminUrl ? `<p><a href="${escapeHtml(adminUrl)}">Review this order in the APGO back office</a></p>` : ''}
+    ${policyNote ? `<p style="color:#555">${escapeHtml(policyNote)}</p>` : ''}<p>APGO</p></div></body></html>`;
+  return {subject,text,html};
+}
+
 async function refundForEmail(db, order, kind) {
-  if (!/^refund:[\w-]{1,120}$/.test(kind)) return null;
-  const record = await db.prepare('SELECT status,amount_cents,currency FROM order_refunds WHERE order_id=? AND id=?').bind(order.id,kind.slice(7)).first();
+  const parsed = refundEmailKind(kind);
+  if (!parsed) return null;
+  const record = await db.prepare('SELECT status,amount_cents,currency FROM order_refunds WHERE order_id=? AND id=?').bind(order.id,parsed.id).first();
   const job = await db.prepare('SELECT payload_json FROM order_message_jobs WHERE order_id=? AND kind=?').bind(order.id,kind).first();
-  if (!record || !job || !['ACCEPTED','SETTLED'].includes(record.status)) return null;
+  if (!record || !job || !(parsed.failed ? record.status === 'FAILED' : ['ACCEPTED','SETTLED'].includes(record.status))) return null;
   const snapshot = JSON.parse(job.payload_json);
-  if (snapshot.id !== kind.slice(7) || snapshot.amountCents !== record.amount_cents || snapshot.currency !== record.currency
-    || snapshot.currency !== order.currency || !Number.isSafeInteger(snapshot.refundedCents) || snapshot.refundedCents < snapshot.amountCents) return null;
+  if (snapshot.id !== parsed.id || snapshot.amountCents !== record.amount_cents || snapshot.currency !== record.currency
+    || snapshot.currency !== order.currency || (!parsed.failed && (!Number.isSafeInteger(snapshot.refundedCents) || snapshot.refundedCents < snapshot.amountCents))) return null;
   return snapshot;
 }
 
@@ -165,10 +209,12 @@ export async function sendCustomerEmail(env, order, kind, options = {}) {
       await env.DB.prepare(`UPDATE order_email_delivery SET status='review',detail='Refund status requires review; notification stopped.',updated_at=?
         WHERE order_id=? AND kind=? AND provider_id IS NULL AND status IN ('queued','retry','sending','failed')
           AND (lease_until IS NULL OR lease_until<=?)`).bind(new Date().toISOString(),order.id,kind,new Date().toISOString()).run();
-      return { status:'blocked',detail:'Only an accepted refund with a saved notification instruction can be emailed.' };
+      return { status:'blocked',detail:'Refund status does not match the saved notification instruction.' };
     }
-    const config = customerEmailConfig(env);
-    return await sendOutboxEmail(env, order, kind, config, () => refund
+    const parsed = refundEmailKind(kind);
+    const config = parsed?.team ? refundAlertConfig(env) : customerEmailConfig(env);
+    return await sendOutboxEmail(env, order, kind, config, () => parsed?.failed
+      ? buildRefundFailureEmail(order,refund,{policyNote:config.policyNote,team:parsed.team,adminUrl:refundAdminUrl(env,order.id)}) : refund
       ? buildRefundEmail(order,refund,{policyNote:config.policyNote}) : kind === "shipment"
       ? buildShipmentEmail(order, options.shipment, { policyNote: config.policyNote })
       : buildConfirmationEmail(order, { policyNote: config.policyNote }), options);
@@ -227,7 +273,7 @@ export async function processMessageJob(env, order, kind, options = {}) {
       : await sendCustomerEmail(env,order,kind,{...options,shipment,retry:false,resumeInitialJob:true});
     if (result.status === 'blocked' && kind.startsWith('refund:') && !await refundForEmail(env.DB,order,kind)) {
       await claimOrderEmail(env.DB,order.id,kind);
-      await finishOrderEmail(env.DB,order.id,kind,{status:'failed',detail:'Refund status requires review; no new success notice.'});
+      await finishOrderEmail(env.DB,order.id,kind,{status:'failed',detail:'Refund status requires review; no new notice sent.'});
       await env.DB.prepare("UPDATE order_message_jobs SET status='skipped',next_attempt_at=NULL,updated_at=? WHERE order_id=? AND kind=? AND status='pending'")
         .bind(new Date().toISOString(),order.id,kind).run();
       return result;
@@ -259,7 +305,7 @@ export async function scheduledCustomerEmailRetry(env) {
     const order = await getOrder(env.DB,item.order_id);
     if (order) await processMessageJob(env,order,item.kind);
   }
-  if (!customerEmailConfig(env)) return;
+  if (!customerEmailConfig(env) && !refundAlertConfig(env)) return;
   const { results } = await env.DB.prepare("SELECT order_id, kind FROM order_email_delivery WHERE status IN ('queued','retry','sending') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?) ORDER BY created_at LIMIT 10").bind(timestamp, timestamp).all();
   for (const item of results) {
     const order = await getOrder(env.DB, item.order_id);

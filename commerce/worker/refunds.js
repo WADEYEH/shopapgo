@@ -27,6 +27,19 @@ export async function saveRefund(db, order, refund) {
   }
   const updated = new Date(refund.updated_at).toISOString();
   const timestamp = new Date().toISOString();
+  const failureCode = safeCode(refund.failure_details?.code);
+  // Failure communication is separate from an earlier acceptance notice. A
+  // current FAILED observation may repair an old missing failure instruction;
+  // settled, stale or conflicting observations can never create one. No scan
+  // of historical rows and no provider financial retry is involved.
+  const failureJobs = ['failed','team-failed'].map(audience => db.prepare(`INSERT OR IGNORE INTO order_message_jobs
+    (order_id,kind,payload_json,status,created_at,updated_at)
+    SELECT ?,?,json_object('id',?,'amountCents',?,'currency',?,'failureCode',?), 'pending',?,?
+    WHERE ?='FAILED' AND ?='paid'
+      AND NOT EXISTS (SELECT 1 FROM order_refunds WHERE id=? AND
+        (status='SETTLED' OR provider_updated_at>? OR order_id!=? OR amount_cents!=? OR currency!=?))`)
+    .bind(order.id,`refund:${audience}:${refund.id}`,refund.id,cents,refund.currency,failureCode,
+      timestamp,timestamp,refund.status,order.status,refund.id,updated,order.id,cents,refund.currency));
   // A newly accepted refund owns one instruction. Its amount/cumulative total
   // freeze at that transition; accepted -> settled and historical replays do
   // not create another notice. Commit this with the observation, never after it.
@@ -41,6 +54,7 @@ export async function saveRefund(db, order, refund) {
           (status IN ('ACCEPTED','SETTLED') OR provider_updated_at>? OR order_id!=? OR amount_cents!=? OR currency!=?))`)
       .bind(order.id,`refund:${refund.id}`,refund.id,cents,refund.currency,cents,order.id,
         timestamp,timestamp,refund.status,order.status,refund.id,updated,order.id,cents,refund.currency),
+    ...failureJobs,
     db.prepare(`INSERT INTO order_refunds
     (id,order_id,payment_intent_id,amount_cents,currency,status,failure_code,provider_created_at,provider_updated_at,received_at)
     VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
@@ -51,10 +65,11 @@ export async function saveRefund(db, order, refund) {
       AND NOT (order_refunds.status='SETTLED' AND excluded.status!='SETTLED')
       AND NOT (order_refunds.status IN ('ACCEPTED','FAILED') AND excluded.status='RECEIVED')`)
     .bind(refund.id, order.id, order.payment_intent_id, cents, refund.currency, refund.status,
-      safeCode(refund.failure_details?.code), new Date(refund.created_at).toISOString(),
+      failureCode, new Date(refund.created_at).toISOString(),
       updated, timestamp),
   ]);
-  return results[0].meta.changes > 0 ? `refund:${refund.id}` : null;
+  return results[0].meta.changes > 0 ? `refund:${refund.id}`
+    : results[1].meta.changes > 0 || results[2].meta.changes > 0 ? `refund:failed:${refund.id}` : null;
 }
 
 export async function refundHold(db, orderId) {
