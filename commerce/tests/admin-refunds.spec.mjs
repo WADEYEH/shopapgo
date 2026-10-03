@@ -24,6 +24,8 @@ test('refund sync displays partial totals, locks new shipping and performs no fi
   await expect(refunds).toContainText('ACCEPTED');
   await expect(page.getByRole('region',{name:'Fulfilment',exact:true})).toContainText('Existing shipments are not cancelled automatically.');
   await expect(page.getByRole('button',{name:'Mark as shipped',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('region',{name:'Amazon MCF',exact:true})).toContainText('new Amazon and manual fulfillment are on hold');
+  await expect(page.getByRole('region',{name:'Amazon MCF',exact:true})).not.toContainText('ship this order manually');
   expect(requests).toEqual([{method:'POST',body:{}}]);
 });
 test('failed sync is safely rendered and can be retried; already shipped carrier facts remain visible',async({page})=>{

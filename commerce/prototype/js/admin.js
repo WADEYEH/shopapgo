@@ -293,7 +293,8 @@ function renderMcf(order) {
       el(
         "p",
         { class: "body body--sm", "data-mcf-mode": mcf.mode },
-        mcf.mode === "off" ? "MCF not enabled — ship this order manually (the Fulfilment form below)."
+        order.refunds?.hold ? "Refund registered — new Amazon and manual fulfillment are on hold."
+        : mcf.mode === "off" ? "MCF not enabled — ship this order manually (the Fulfilment form below)."
         : mcf.mode === "not_configured" ? `MCF is on but not ready: ${mcf.reason}`
         : "Not sent to Amazon MCF yet.",
       ),
@@ -303,7 +304,7 @@ function renderMcf(order) {
     if (mcf.mode !== "ready" && mcf.reason) children.push(el("p", { class: "field__hint", "data-mcf-mode": mcf.mode }, mcf.mode === "off" ? "MCF_AUTO_SUBMIT is off now; the record above is from earlier." : `MCF is not ready: ${mcf.reason}`));
   }
   const actions = [];
-  if (mcf.canSubmit) {
+  if (mcf.canSubmit && !order.refunds?.hold) {
     const button = el("button", { class: "btn btn--md", type: "button", "data-mcf-submit": true }, record ? "Retry send to Amazon" : "Send to Amazon MCF");
     button.addEventListener("click", () => mcfAction(order, "submit", button, message));
     actions.push(button);
@@ -435,7 +436,7 @@ function renderDetail(order) {
 
 function renderRefunds(order) {
   const refunds = order.refunds;
-  const button = el('button', {type:'button', class:'button button--secondary', disabled:!order.paymentIntentId}, 'Sync refunds');
+  const button = el('button', {type:'button', class:'btn btn--md btn--text', disabled:!order.paymentIntentId}, 'Sync refunds');
   const feedback = el('p', {class:'body body--sm', role:'status'});
   button.addEventListener('click', async () => {
     button.disabled = true;
