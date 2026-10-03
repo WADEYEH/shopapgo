@@ -82,11 +82,15 @@ export async function markShipped(db, orderId, shipment, { actor = "admin" } = {
     .prepare(
       `INSERT OR IGNORE INTO order_fulfillments
          (order_id, fulfillment_status, carrier, tracking_number, tracking_url, shipped_at, shipped_by, created_at, updated_at)
-       SELECT id, 'shipped', ?, ?, ?, ?, ?, ?, ? FROM orders WHERE id = ? AND status = 'paid'`,
+       SELECT id, 'shipped', ?, ?, ?, ?, ?, ?, ? FROM orders WHERE id = ? AND status = 'paid'
+         AND (? = 'mcf' OR NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=orders.id AND r.status!='FAILED'))`,
     )
-    .bind(shipment.carrier, shipment.trackingNumber, shipment.trackingUrl, timestamp, actor, timestamp, timestamp, orderId)
+    .bind(shipment.carrier, shipment.trackingNumber, shipment.trackingUrl, timestamp, actor, timestamp, timestamp, orderId, actor)
     .run();
   if (!(result?.meta?.changes > 0)) {
+    if (actor !== 'mcf' && await db.prepare("SELECT id FROM order_refunds WHERE order_id = ? AND status != 'FAILED' LIMIT 1").bind(orderId).first()) {
+      throw new FulfillmentError(409, 'refund_hold', 'Refund registered; review fulfillment before shipping.');
+    }
     throw new FulfillmentError(409, "already_shipped", "This order is already marked shipped.");
   }
   try {

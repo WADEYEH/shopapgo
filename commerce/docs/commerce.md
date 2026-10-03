@@ -869,7 +869,7 @@ Failed attempts leave the order `pending` so the customer can retry. Success sti
 
 The authenticated order detail has a **Failed payment attempts** section; the public order API exposes only a predefined customer message while the order is pending. Card and wallet SDK errors also use safe retry guidance. The cart is cleared only after the server confirms that the order is paid, including wallet and redirect flows.
 
-This does not cover failed PaymentIntent creation (the existing safe 502 + orphan-order cancellation handles that), browser/network failures before a payment attempt exists, refunds or disputes. Confirm actual failure-event delivery with a declined sandbox card before production. See the [official Airwallex event list](https://www.airwallex.com/docs/developer-tools/webhooks/listen-for-webhook-events/online-payments) and [PaymentAttempt failure fields](https://www.airwallex.com/docs/api/payments/payment_attempts/retrieve).
+Payment failure history does not cover failed PaymentIntent creation (the existing safe 502 + orphan-order cancellation handles that), browser/network failures before a payment attempt exists, refunds or disputes. Refund observation is handled separately below. Confirm actual failure-event delivery with a declined sandbox card before production. See the [official Airwallex event list](https://www.airwallex.com/docs/developer-tools/webhooks/listen-for-webhook-events/online-payments) and [PaymentAttempt failure fields](https://www.airwallex.com/docs/api/payments/payment_attempts/retrieve).
 
 Screenshots with synthetic local fixtures can be regenerated using `node scripts/capture-payment-failures.mjs`.
 
@@ -903,6 +903,37 @@ These are placeholders copied from the design-system kits, not approved terms:
 - [ ] Production Airwallex keys, webhook, and a real `database_id`.
 
 ## Tests
+
+### Refund observation (October 3)
+
+Refunds are initiated in the Airwallex dashboard. The storefront never calls the
+create-refund API. Signed `refund.received`, `refund.accepted`, `refund.settled`
+and `refund.failed` events retrieve the current refund through the provider API
+before storing minimal metadata in `order_refunds`. The admin's authenticated,
+CSRF-protected `POST /admin/api/orders/:id/refunds/sync` also reads the provider's
+order-scoped refund list. A failed or incomplete read is an error, not proof of
+zero refunds. Configure these four events on the existing staging subscription
+before expecting automatic delivery; retaining the eight payment events matters.
+
+The original payment remains `paid`; refund totals and statuses are separate.
+ACCEPTED/SETTLED count toward refunded amount; RECEIVED is pending; FAILED keeps
+its safe error code without holding fulfillment. Every active refund, including
+a partial one, removes the order from To ship and blocks new manual or MCF
+submissions. Duplicate and older observations cannot downgrade settled records.
+Unknown orders from other integrations are not imported. No raw provider payload,
+card data, or freeform failure details are persisted by this module.
+
+Already-submitted or physically shipped Amazon orders are not automatically
+cancelled. Existing shipment/tracking facts remain visible and may still sync.
+A refund arriving after an outbound submission has begun needs operator review;
+the local hold cannot undo that external request. Customer refund notification,
+shipping a partially refunded order after review, disputes, and transactional
+creation of shipment-email instructions remain separate unfinished work.
+
+Backend tests use the real SQLite schema and Worker routes; browser tests cover
+safe errors, retry, hold controls, preserved tracking, and mobile width. They do
+not establish a real provider refund: record sandbox acceptance separately in
+`docs/staging-rollout-2026-10-02.md`.
 
 - `tests/commerce-unit.test.mjs` (node:test): pricing, validation, order ids,
   webhook signatures, order status transitions.

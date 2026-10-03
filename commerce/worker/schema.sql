@@ -39,6 +39,21 @@ CREATE TABLE IF NOT EXISTS order_payment_failures (
 );
 CREATE INDEX IF NOT EXISTS payment_failures_order ON order_payment_failures (order_id, occurred_at);
 
+-- Observed refunds only. No provider payloads, card data or free-text reasons.
+CREATE TABLE IF NOT EXISTS order_refunds (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
+  payment_intent_id TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('RECEIVED','ACCEPTED','SETTLED','FAILED')),
+  failure_code TEXT NOT NULL DEFAULT '',
+  provider_created_at TEXT NOT NULL,
+  provider_updated_at TEXT NOT NULL,
+  received_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS refunds_order ON order_refunds(order_id,status);
+
 -- Airwallex retries deliveries; the event id makes webhook handling idempotent.
 CREATE TABLE IF NOT EXISTS webhook_events (
   id TEXT PRIMARY KEY,

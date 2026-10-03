@@ -2,6 +2,7 @@ import { toMajor } from "./catalog.js";
 import { maskEmail } from "./checkout.js";
 import { getFulfillment, listAudit } from "./fulfillment.js";
 import { listPaymentFailures } from "./payment-failures.js";
+import { refundView } from './refunds.js';
 
 const now = () => new Date().toISOString();
 
@@ -173,6 +174,7 @@ function adminSummary(row) {
     notification: row.notification_status ?? null,
     fulfillmentStatus: row.fulfillment_status ?? "unfulfilled",
     shippedAt: row.shipped_at ?? null,
+    refundHold: Boolean(row.refund_hold),
   };
 }
 
@@ -184,7 +186,7 @@ export async function listOrders(db, { status, fulfillment, q, limit = 50, befor
     args.push(status);
   }
   // "unfulfilled" = paid and not yet shipped (the to-ship queue); "shipped" = has a shipment row.
-  if (fulfillment === "unfulfilled") clauses.push("o.status = 'paid' AND f.order_id IS NULL");
+  if (fulfillment === "unfulfilled") clauses.push("o.status = 'paid' AND f.order_id IS NULL AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED')");
   else if (fulfillment === "shipped") clauses.push("f.order_id IS NOT NULL");
   if (q) {
     clauses.push("(instr(lower(o.id), ?) > 0 OR instr(lower(o.email), ?) > 0 OR instr(lower(o.shipping_json), ?) > 0)");
@@ -200,7 +202,8 @@ export async function listOrders(db, { status, fulfillment, q, limit = 50, befor
   const { results } = await db
     .prepare(
       `SELECT o.*, n.status AS notification_status,
-              COALESCE(f.fulfillment_status, 'unfulfilled') AS fulfillment_status, f.shipped_at AS shipped_at
+              COALESCE(f.fulfillment_status, 'unfulfilled') AS fulfillment_status, f.shipped_at AS shipped_at,
+              EXISTS(SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED') AS refund_hold
          FROM orders o LEFT JOIN order_notifications n ON n.order_id = o.id
          LEFT JOIN order_fulfillments f ON f.order_id = o.id
          ${where} ORDER BY o.created_at DESC LIMIT ?`,
@@ -228,7 +231,7 @@ export async function fulfillmentCounts(db) {
   const row = await db
     .prepare(
       `SELECT
-         SUM(CASE WHEN o.status = 'paid' AND f.order_id IS NULL THEN 1 ELSE 0 END) AS unfulfilled,
+         SUM(CASE WHEN o.status = 'paid' AND f.order_id IS NULL AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED') THEN 1 ELSE 0 END) AS unfulfilled,
          SUM(CASE WHEN f.order_id IS NOT NULL THEN 1 ELSE 0 END) AS shipped
        FROM orders o LEFT JOIN order_fulfillments f ON f.order_id = o.id`,
     )
@@ -258,6 +261,7 @@ export async function adminOrder(db, orderId) {
     totalCents: order.total_cents,
     paymentIntentId: order.payment_intent_id,
     paymentFailures: await listPaymentFailures(db, orderId),
+    refunds: await refundView(db, order),
     createdAt: order.created_at,
     updatedAt: order.updated_at,
     paidAt: order.paid_at,

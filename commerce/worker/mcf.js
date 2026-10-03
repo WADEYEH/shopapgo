@@ -12,6 +12,7 @@
 //     A create that hit a network error is only ever repeated with the SAME id, after asking Amazon whether the
 //     first attempt landed.
 //   * Sync: COMPLETE + a tracking number -> markShipped() (idempotent INSERT) -> shipment email (claimed once).
+import { refundHold } from './refunds.js';
 
 import {
   McfError,
@@ -73,11 +74,12 @@ export async function mcfView(env, order, fulfillment) {
     console.error("mcf_record_unreadable", { orderId: order.id, reason: error?.message });
   }
   const readiness = mcfReadiness(env, order);
-  const eligible = order.status === "paid" && !fulfillment;
+  const held = await refundHold(env.DB, order.id);
+  const eligible = order.status === "paid" && !fulfillment && !held;
   const retryable = !row || RETRYABLE.includes(row.status) || isStaleSubmitting(row);
   return {
     mode: readiness.mode, // off | not_configured | ready
-    reason: readiness.reason,
+    reason: held ? 'Refund registered; review fulfillment before submitting to Amazon.' : readiness.reason,
     canSubmit: readiness.ok && eligible && retryable,
     canSync: Boolean(row) && ["submitted", "submitting"].includes(row.status) && readiness.config.connectionOk,
     record: publicRecord(row),
@@ -128,9 +130,10 @@ async function claim(db, orderId, tier) {
   const inserted = await db
     .prepare(
       `INSERT OR IGNORE INTO order_mcf (order_id, seller_order_id, status, attempts, service_tier, created_at, updated_at)
-       VALUES (?, ?, 'submitting', 1, ?, ?, ?)`,
+       SELECT ?, ?, 'submitting', 1, ?, ?, ? WHERE NOT EXISTS
+         (SELECT 1 FROM order_refunds WHERE order_id = ? AND status != 'FAILED')`,
     )
-    .bind(orderId, orderId, tier, timestamp, timestamp)
+    .bind(orderId, orderId, tier, timestamp, timestamp, orderId)
     .run();
   if (inserted.meta.changes > 0) return { claimed: true, row: null, sellerOrderId: orderId, attempts: 1 };
 
@@ -144,7 +147,8 @@ async function claim(db, orderId, tier) {
     .prepare(
       `UPDATE order_mcf SET status = 'submitting', seller_order_id = ?, attempts = ?, service_tier = ?, mcf_status = '',
          error_kind = '', error_message = '', note = '', updated_at = ?
-       WHERE order_id = ? AND status = ? AND updated_at = ?`,
+       WHERE order_id = ? AND status = ? AND updated_at = ?
+         AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_mcf.order_id AND r.status!='FAILED')`,
     )
     .bind(sellerOrderId, attempts, tier, now(), orderId, row.status, row.updated_at)
     .run();
@@ -183,6 +187,7 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto" } = {}) 
       return { outcome: "skipped", mode: readiness.mode, reason: readiness.reason };
     }
     const fresh = (await getOrder(env.DB, orderId)) ?? order;
+    if (await refundHold(env.DB, orderId)) return { outcome:'skipped', mode:readiness.mode, reason:'Refund registered; review fulfillment before submitting to Amazon.' };
     if (fresh.status !== "paid") return { outcome: "skipped", mode: "ready", reason: "Only paid orders are sent to MCF." };
     const shipped = await env.DB.prepare("SELECT 1 AS x FROM order_fulfillments WHERE order_id = ?").bind(orderId).first();
     if (shipped) return { outcome: "skipped", mode: "ready", reason: "The order is already marked shipped." };

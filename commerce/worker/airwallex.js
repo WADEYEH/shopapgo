@@ -150,6 +150,15 @@ export function retrievePaymentIntent(env, intentId) {
   return request(env, "GET", `/api/v1/pa/payment_intents/${encodeURIComponent(intentId)}`, undefined, { idempotent: true });
 }
 
+export function retrieveRefund(env, refundId) {
+  return request(env, 'GET', `/api/v1/pa/refunds/${encodeURIComponent(refundId)}`, undefined, { idempotent:true });
+}
+
+export function listRefunds(env, intentId) {
+  const query = new URLSearchParams({ payment_intent_id:intentId, page_size:'100', page_num:'0' });
+  return request(env, 'GET', `/api/v1/pa/refunds?${query}`, undefined, { idempotent:true });
+}
+
 // Signature = hex(HMAC-SHA256(secret, x-timestamp + raw body)). Must run on the
 // raw request text, before any JSON parsing.
 // Pass toleranceMs: Infinity to check the signature alone (used to recognise a

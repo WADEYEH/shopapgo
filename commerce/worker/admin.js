@@ -19,6 +19,7 @@ import { FulfillmentError, markShipped, validateShipment, recordAudit } from "./
 import { sendCustomerEmail, retryCustomerEmail } from "./customer-email.js";
 import { siteBasicOpensAdmin } from "./staging.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
+import { refundHold, syncOrderRefunds } from './refunds.js';
 
 export const MIN_ADMIN_TOKEN_LENGTH = 16;
 
@@ -145,6 +146,7 @@ async function handleShip(request, env, orderId) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
   try {
     const shipment = validateShipment(body);
+    if (await refundHold(env.DB, orderId)) return fail(409, 'refund_hold', 'Refund registered; review fulfillment in Airwallex and Amazon before shipping.', NO_INDEX);
     const order = await markShipped(env.DB, orderId, shipment, { actor: "admin" });
     // Emailed after the shipment is saved; a failure is recorded and never undoes it.
     const email = await sendCustomerEmail(env, (await getOrder(env.DB, orderId)) ?? order, "shipment", { shipment });
@@ -174,6 +176,24 @@ export async function handleAdminApi(request, env, pathname) {
     return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
   const ship = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/ship$/);
+  const refundSync = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refunds\/sync$/);
+  if (refundSync) {
+    if (request.method !== 'POST') return fail(405, 'method_not_allowed', 'Use POST.', { ...NO_INDEX, Allow:'POST' });
+    const blocked = csrfProblem(request);
+    if (blocked) return fail(403, 'forbidden', blocked, NO_INDEX);
+    if (!(await readJsonObject(request))) return fail(400,'invalid_json','Request body must be a JSON object.',NO_INDEX);
+    const id = decodeURIComponent(refundSync[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404,'not_found','Order not found.',NO_INDEX);
+    const order = await getOrder(env.DB,id);
+    if (!order) return fail(404,'not_found','Order not found.',NO_INDEX);
+    if (!order.payment_intent_id) return fail(409,'no_payment_intent','This order has no payment intent.',NO_INDEX);
+    try {
+      await syncOrderRefunds(env,order);
+    } catch {
+      return fail(502,'refund_sync_failed','Could not verify refunds with Airwallex. Try again or review the provider dashboard.',NO_INDEX);
+    }
+    return json({order:await adminOrderView(env,id)},200,NO_INDEX);
+  }
   if (ship) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
     const id = decodeURIComponent(ship[1]);

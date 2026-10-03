@@ -48,6 +48,7 @@ function statusBadge(status) {
 }
 
 function shipBadge(order) {
+  if (!order.fulfillment && order.fulfillmentStatus !== 'shipped' && (order.refundHold || order.refunds?.hold)) return el('span', {class:'status status--review'}, 'refund hold');
   const value = order.fulfillmentStatus;
   if (value === "shipped") return el("span", { class: "status status--shipped" }, "shipped");
   return order.status === "paid" ? el("span", { class: "status status--to-ship" }, "to ship") : null;
@@ -177,6 +178,10 @@ function renderFulfillment(order) {
         el("dt", {}, "By"), el("dd", {}, shipped.shippedBy),
       ),
     );
+  }
+  if (order.refunds?.hold) {
+    return el('section', {class:'admin-ship', 'data-admin-fulfillment':'locked', 'aria-label':'Fulfilment'},
+      el('h4', {}, 'Fulfilment'), el('p', {class:'body body--sm'}, 'Refund registered. Review fulfillment in Airwallex and Amazon before shipping. Existing shipments are not cancelled automatically.'));
   }
   if (order.status !== "paid") {
     return el(
@@ -419,12 +424,40 @@ function renderDetail(order) {
       money(order.totalCents),
     ),
     renderPaymentFailures(order),
+    renderRefunds(order),
     ...[renderMcf(order)].filter(Boolean),
     renderFulfillment(order),
     ...[renderHistory(order)].filter(Boolean),
   );
   $("[data-admin-detail-empty]").hidden = true;
   body.hidden = false;
+}
+
+function renderRefunds(order) {
+  const refunds = order.refunds;
+  const button = el('button', {type:'button', class:'button button--secondary', disabled:!order.paymentIntentId}, 'Sync refunds');
+  const feedback = el('p', {class:'body body--sm', role:'status'});
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    feedback.textContent = 'Checking Airwallex…';
+    try {
+      const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/refunds/sync`, {method:'POST', body:{}});
+      renderDetail(result.order);
+      await load({reset:true});
+    } catch(error) { feedback.textContent = error.message; button.disabled = false; }
+  });
+  return el('section', {class:'admin-history', 'aria-label':'Refunds', 'data-order-refunds':true},
+    el('h4', {}, 'Refunds'),
+    el('p', {class:'body body--sm'}, 'Initiate refunds in Airwallex. This button only checks their status.'),
+    el('p', {class:'body body--sm'}, refunds?.records?.length
+      ? `Refunded: ${money(refunds.refundedCents)} · Pending: ${money(refunds.pendingCents)}${refunds.hold ? ' · Fulfillment on hold' : ''}`
+      : 'No refunds recorded. Sync to check the provider.'),
+    ...(refunds?.records ?? []).map(item => el('dl', {class:'admin-facts'},
+      el('dt', {}, 'Refund'), el('dd', {}, item.id), el('dt', {}, 'Status'), el('dd', {}, item.status),
+      el('dt', {}, 'Amount'), el('dd', {}, money(item.amountCents)),
+      el('dt', {}, 'Updated'), el('dd', {}, formatDate(item.updatedAt)),
+      item.failureCode && el('dt', {}, 'Failure code'), item.failureCode && el('dd', {}, item.failureCode))),
+    button,feedback);
 }
 
 async function select(orderId, { focus = true } = {}) {

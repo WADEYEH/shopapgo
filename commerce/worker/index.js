@@ -38,6 +38,7 @@ import {
 } from "./orders.js";
 import { notifyOrderPaid } from "./notify.js";
 import { sendCustomerEmail, processConfirmationJob, scheduledCustomerEmailRetry } from "./customer-email.js";
+import { handleRefundEvent } from './refunds.js';
 import { handleResendWebhook } from "./email-delivery.js";
 import { scheduledMcfSync, submitOrderToMcf } from "./mcf.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
@@ -221,6 +222,7 @@ async function handleWebhook(request, env, services) {
   // The event is recorded after processing so a failed write is retried by
   // Airwallex instead of being skipped as a duplicate.
   const snapshot = event.data?.object;
+  await handleRefundEvent(env, event);
   await recordPaymentFailure(env.DB, event);
   if (String(event.name).startsWith("payment_intent.") && snapshot?.id && snapshot.merchant_order_id) {
     let intent = snapshot;

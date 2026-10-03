@@ -88,8 +88,9 @@ payment or shipment.
 Finalize prices, shipping, tax and policies; configure production D1, secrets,
 domains and Airwallex webhook; validate 3DS and wallets on real devices; configure
 customer emails and decide fulfillment. Then perform a real low-value order
-before enabling the brand-site store switch. The shared-token admin has no
-refund, cancellation, partial shipment or tracking-edit workflow. MCF is opt-in
+before enabling the brand-site store switch. Refunds are initiated in Airwallex;
+the shared-token admin can sync and display their status and hold new shipping.
+It has no refund-creation, cancellation, partial shipment or tracking-edit workflow. MCF is opt-in
 and requires the separate `amazon-spapi-mcp` service.
 
 See `docs/commerce.md` for the imported architecture and service details. Do not
