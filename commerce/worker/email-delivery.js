@@ -12,6 +12,7 @@ const TERMINAL = new Set(['accepted', 'delivered', 'delivery_delayed', 'bounced'
 const EVENT_STATUS = { 'email.sent': 'accepted', 'email.delivered': 'delivered', 'email.delivery_delayed': 'delivery_delayed', 'email.bounced': 'bounced', 'email.complained': 'complained', 'email.suppressed': 'suppressed', 'email.failed': 'failed' };
 
 export const getDelivery = (db, orderId, kind) => db.prepare('SELECT * FROM order_email_delivery WHERE order_id = ? AND kind = ?').bind(orderId, kind).first();
+export const validEmailKind = kind => ['confirmation','shipment'].includes(kind) || /^refund:[\w-]{1,120}$/.test(kind);
 
 export function allowedEmailRecipient(env, email) {
   if (env.SITE_ENV !== 'staging') return true;
@@ -76,15 +77,16 @@ async function postEmail(config, row, fetchImpl) {
 }
 
 export async function sendOutboxEmail(env, order, kind, config, makeMessage, { retry = false, resumeInitialJob = false, fetchImpl = fetch, nowMs = Date.now() } = {}) {
-  if (!['confirmation', 'shipment'].includes(kind) || order.status !== 'paid') return { status: 'blocked', detail: 'A paid order and valid email kind are required.' };
+  if (!validEmailKind(kind) || order.status !== 'paid') return { status: 'blocked', detail: 'A paid order and valid email kind are required.' };
   const db = env.DB;
   const legacy = await db.prepare('SELECT status FROM order_emails WHERE order_id = ? AND kind = ?').bind(order.id, kind).first();
   let row = await getDelivery(db, order.id, kind);
   // Only a transaction-created instruction proves that a pending legacy claim
   // interrupted before outbox creation is safe to resume. Old ambiguous claims
   // remain protected; sending always happens after the frozen outbox is saved.
-  const resumable = resumeInitialJob && kind === 'confirmation' && legacy?.status === 'pending'
-    && await db.prepare("SELECT order_id FROM order_email_jobs WHERE order_id = ? AND kind = ? AND status = 'pending'").bind(order.id, kind).first();
+  const jobTable = kind === 'confirmation' ? 'order_email_jobs' : 'order_message_jobs';
+  const resumable = resumeInitialJob && legacy?.status === 'pending'
+    && await db.prepare(`SELECT order_id FROM ${jobTable} WHERE order_id = ? AND kind = ? AND status = 'pending'`).bind(order.id, kind).first();
   if (!row && legacy && legacy.status !== 'skipped' && !resumable) return { status: 'duplicate', detail: 'Existing email record retained; no new send.' };
   if (row && !retry) return { status: 'duplicate', detail: '' };
   if (row && (row.provider_id || TERMINAL.has(row.status))) return { status: 'blocked', detail: 'This email cannot be retried safely.' };
@@ -117,7 +119,9 @@ export async function sendOutboxEmail(env, order, kind, config, makeMessage, { r
     return { status: 'blocked', detail: 'Retry limit reached; review provider history.' };
   }
   const token = crypto.randomUUID();
-  const claim = await db.prepare("UPDATE order_email_delivery SET status = 'sending', attempts = attempts + 1, lease_until = ?, lease_token = ?, first_attempt_at = COALESCE(first_attempt_at, ?), updated_at = ? WHERE order_id = ? AND kind = ? AND status IN ('queued','retry','sending','failed') AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?)").bind(iso(nowMs + LEASE_MS), token, iso(nowMs), iso(nowMs), order.id, kind, MAX_ATTEMPTS, iso(nowMs), iso(nowMs)).run();
+  const claim = await db.prepare(`UPDATE order_email_delivery SET status = 'sending', attempts = attempts + 1, lease_until = ?, lease_token = ?, first_attempt_at = COALESCE(first_attempt_at, ?), updated_at = ? WHERE order_id = ? AND kind = ? AND status IN ('queued','retry','sending','failed') AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?)
+    AND (kind NOT LIKE 'refund:%' OR EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_email_delivery.order_id AND 'refund:'||r.id=order_email_delivery.kind AND r.status IN ('ACCEPTED','SETTLED')))`)
+    .bind(iso(nowMs + LEASE_MS), token, iso(nowMs), iso(nowMs), order.id, kind, MAX_ATTEMPTS, iso(nowMs), iso(nowMs)).run();
   if (!claim.meta.changes) return { status: 'duplicate', detail: 'Email is already processing or not due for retry.' };
   row = await getDelivery(db, order.id, kind);
   await project(db, row);

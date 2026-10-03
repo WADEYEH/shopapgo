@@ -159,6 +159,15 @@ export function listRefunds(env, intentId) {
   return request(env, 'GET', `/api/v1/pa/refunds?${query}`, undefined, { idempotent:true });
 }
 
+// Fixed negative probes only. Never a general refund-creation API; no automatic
+// retries of the financial POST. Caller independently verifies the paid test order.
+export function createSandboxRefundProbe(env, payload) {
+  if (env.SITE_ENV !== 'staging' || env.AIRWALLEX_ENV !== 'demo' || apiBase(env) !== API_BASE.demo) {
+    throw new Error('Refund probes are sandbox-only.');
+  }
+  return request(env,'POST','/api/v1/pa/refunds/create',payload);
+}
+
 // Signature = hex(HMAC-SHA256(secret, x-timestamp + raw body)). Must run on the
 // raw request text, before any JSON parsing.
 // Pass toleranceMs: Infinity to check the signature alone (used to recognise a

@@ -495,7 +495,7 @@ Two emails go to the shopper through the same Resend API as the team notificatio
   information; protect and retain it like the order table, never return it to public APIs.
 - **No invented promises:** the templates state only facts from the order. No return policy and
   no delivery-time promise are written; if the owner approves a sentence, put it in
-  `CUSTOMER_EMAIL_POLICY_NOTE` (appended verbatim to both emails). All customer-supplied text is
+  `CUSTOMER_EMAIL_POLICY_NOTE` (appended verbatim to all customer messages). All customer-supplied text is
   HTML-escaped.
 - **Initial payment confirmation:** the guarded pending-to-paid update and a minimal
   `order_email_jobs` instruction commit together in one D1 batch transaction. A database
@@ -506,8 +506,9 @@ Two emails go to the shopper through the same Resend API as the team notificatio
   Legacy pending claims can resume only with a new transaction-created instruction.
   Historic paid orders are not backfilled; explicit disabled/allowlist skips stay skipped.
 - On shipping the admin request waits for the first send (≤ 10 s) and reports acceptance /
-  skipped / failed, separately from delivery. The initial shipment task still starts after
-  the shipment write; atomic shipment-task creation is a separate remaining reliability task.
+  skipped / failed, separately from delivery. The shipment and its `order_message_jobs`
+  instruction commit atomically; cron recovers interrupted handoff. New accepted refunds
+  also create per-refund instructions atomically (see Refund observation below).
 
 Environment (none is a secret except the key; all are optional):
 
@@ -516,11 +517,11 @@ Environment (none is a secret except the key; all are optional):
 | `RESEND_API_KEY` | secret, shared with the team notification |
 | `CUSTOMER_EMAIL_FROM` | sender, e.g. `APGO <orders@your-domain>`; falls back to `ORDER_NOTIFY_EMAIL_FROM` |
 | `CUSTOMER_EMAIL_REPLY_TO` | optional reply-to |
-| `CUSTOMER_EMAIL_POLICY_NOTE` | optional approved paragraph appended to both emails |
+| `CUSTOMER_EMAIL_POLICY_NOTE` | optional approved paragraph appended to all customer messages |
 | `CUSTOMER_EMAIL_ENABLED` | `false` disables customer emails |
 | `RESEND_WEBHOOK_SECRET` | secret for the storefront's Resend subscription |
 | `CUSTOMER_EMAIL_TEST_RECIPIENTS` | required staging allowlist, exact comma-separated emails |
-| `CUSTOMER_EMAIL_RETRY_CRON` | `true` recovers new payment instructions and due outbox rows when a Cron Trigger runs |
+| `CUSTOMER_EMAIL_RETRY_CRON` | `true` recovers new payment/shipment/refund instructions and due outbox rows when a Cron Trigger runs |
 | `ORDER_NOTIFY_EMAIL_API_URL` | endpoint override for tests/proxies (shared) |
 
 Staging uses the owner-approved sender `APGO <orders@apgo.tw>` and reply-to `services@apgo.com.tw`.
@@ -926,9 +927,41 @@ card data, or freeform failure details are persisted by this module.
 Already-submitted or physically shipped Amazon orders are not automatically
 cancelled. Existing shipment/tracking facts remain visible and may still sync.
 A refund arriving after an outbound submission has begun needs operator review;
-the local hold cannot undo that external request. Customer refund notification,
-shipping a partially refunded order after review, disputes, and transactional
-creation of shipment-email instructions remain separate unfinished work.
+the local hold cannot undo that external request. Shipping a partially refunded
+order after review and disputes remain separate unfinished work.
+
+`order_message_jobs` stores shipment and per-refund instructions atomically with
+their state writes. The separate table preserves the deployed confirmation-only
+constraint on `order_email_jobs`; no ALTER or historic backfill is needed. A crash
+before handoff is recovered by the existing two-minute email cron. Both manual
+shipping and observed Amazon shipping use the same instruction/outbox path.
+
+Each new ACCEPTED/SETTLED refund owns `refund:<provider-refund-id>`, a frozen amount,
+currency and cumulative accepted-refund summary, and one email idempotency key.
+RECEIVED and FAILED never produce success notices. Accepted -> settled, duplicate
+events, manual sync and historical accepted records never create a second notice.
+Refund text says accepted by the payment provider and explains that statement
+credit timing depends on the customer's bank/payment method. It does not promise
+an arrival date. The existing sender, reply-to, staging allowlist, signed Resend
+delivery events, durable retries and 23-hour ambiguous-send review all apply.
+If a refund becomes FAILED before sending/retry, its success notice stops and any
+ambiguous send is held for operator review. Refunds themselves are never retried
+automatically. The admin shows failed refunds prominently and email status per
+refund. A previously delivered acceptance notice is retained as history. A later
+FAILED transition does not yet send a corrective customer email or staff alert;
+operators must contact the customer. Add that follow-up before production.
+
+For sandbox validation only, the authenticated/CSRF-protected
+`POST /admin/api/orders/:id/refunds/sandbox-check` supports two fixed invalid
+requests (`above_limit`, `fully_refunded`). It requires exactly staging + demo +
+the official sandbox API base, an approved test recipient and a freshly verified
+matching succeeded payment. The fully-refunded check additionally requires a
+complete current refund list. It accepts no arbitrary amount or request ID and
+does not automatically retry its refund POST. Only expected HTTP 400 provider
+codes count as rejection; auth/network/server errors remain unverified. Minimal
+results are retained in order audit. Production answers 404 and shows no controls.
+This diagnostic is not a general create-refund workflow; shopper routes never
+initiate refunds.
 
 Backend tests use the real SQLite schema and Worker routes; browser tests cover
 safe errors, retry, hold controls, preserved tracking, and mobile width. They do

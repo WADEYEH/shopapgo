@@ -297,9 +297,15 @@ export async function finishOrderEmail(db, orderId, kind, { status, detail = "" 
 
 export async function getOrderEmails(db, orderId) {
   const { results } = await db
-    .prepare("SELECT e.kind, e.status, e.detail, e.updated_at, d.status AS delivery_status, d.provider_id, d.attempts, d.next_attempt_at, d.first_attempt_at FROM order_emails e LEFT JOIN order_email_delivery d ON d.order_id = e.order_id AND d.kind = e.kind WHERE e.order_id = ? ORDER BY e.created_at, e.kind")
-    .bind(orderId)
+    .prepare(`SELECT e.kind, e.status, e.detail, e.updated_at, d.status AS delivery_status, d.provider_id, d.attempts, d.next_attempt_at, d.first_attempt_at,
+      CASE WHEN e.kind NOT LIKE 'refund:%' OR EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=e.order_id AND 'refund:'||r.id=e.kind AND r.status IN ('ACCEPTED','SETTLED')) THEN 1 ELSE 0 END AS retry_valid
+      FROM order_emails e LEFT JOIN order_email_delivery d ON d.order_id=e.order_id AND d.kind=e.kind WHERE e.order_id=?
+      UNION ALL SELECT j.kind,'pending','Saved notification task; awaiting handoff.',j.updated_at,NULL,NULL,0,j.next_attempt_at,NULL,0
+      FROM order_message_jobs j WHERE j.order_id=? AND j.status='pending'
+        AND NOT EXISTS (SELECT 1 FROM order_emails e WHERE e.order_id=j.order_id AND e.kind=j.kind)
+      ORDER BY updated_at,kind`)
+    .bind(orderId,orderId)
     .all();
   return results.map((row) => ({ kind: row.kind, status: row.status, detail: row.detail, updatedAt: row.updated_at, deliveryStatus: row.delivery_status || null, providerId: row.provider_id || null, attempts: row.attempts || 0, nextAttemptAt: row.next_attempt_at || null,
-    canRetry: row.status === 'skipped' || (['retry', 'failed'].includes(row.delivery_status) && !row.provider_id && row.attempts < 6 && Date.now() - Date.parse(row.first_attempt_at) < 23 * 60 * 60_000) }));
+    canRetry: Boolean(row.retry_valid) && (row.status === 'skipped' || (['retry', 'failed'].includes(row.delivery_status) && !row.provider_id && row.attempts < 6 && Date.now() - Date.parse(row.first_attempt_at) < 23 * 60 * 60_000)) }));
 }

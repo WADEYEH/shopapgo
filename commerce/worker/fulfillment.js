@@ -78,15 +78,23 @@ export async function markShipped(db, orderId, shipment, { actor = "admin" } = {
     throw new FulfillmentError(409, "not_paid", "Only paid orders can be marked shipped.");
   }
   const timestamp = now();
-  const result = await db
-    .prepare(
+  // Insert the instruction first while there is no shipment. Both writes commit
+  // or roll back together; duplicates never backfill historical shipments.
+  const results = await db.batch([
+    db.prepare(`INSERT OR IGNORE INTO order_message_jobs (order_id,kind,status,created_at,updated_at)
+      SELECT id,'shipment','pending',?,? FROM orders WHERE id=? AND status='paid'
+        AND NOT EXISTS (SELECT 1 FROM order_fulfillments f WHERE f.order_id=orders.id)
+        AND (?='mcf' OR NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=orders.id AND r.status!='FAILED'))`)
+      .bind(timestamp,timestamp,orderId,actor),
+    db.prepare(
       `INSERT OR IGNORE INTO order_fulfillments
          (order_id, fulfillment_status, carrier, tracking_number, tracking_url, shipped_at, shipped_by, created_at, updated_at)
        SELECT id, 'shipped', ?, ?, ?, ?, ?, ?, ? FROM orders WHERE id = ? AND status = 'paid'
          AND (? = 'mcf' OR NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=orders.id AND r.status!='FAILED'))`,
     )
     .bind(shipment.carrier, shipment.trackingNumber, shipment.trackingUrl, timestamp, actor, timestamp, timestamp, orderId, actor)
-    .run();
+  ]);
+  const result = results[1];
   if (!(result?.meta?.changes > 0)) {
     if (actor !== 'mcf' && await db.prepare("SELECT id FROM order_refunds WHERE order_id = ? AND status != 'FAILED' LIMIT 1").bind(orderId).first()) {
       throw new FulfillmentError(409, 'refund_hold', 'Refund registered; review fulfillment before shipping.');

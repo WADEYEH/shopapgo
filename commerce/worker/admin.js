@@ -16,10 +16,12 @@ import { fail, json } from "./http.js";
 import { ORDER_ID_PATTERN } from "./checkout.js";
 import { FULFILLMENT_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, getOrder, listOrders, orderCounts } from "./orders.js";
 import { FulfillmentError, markShipped, validateShipment, recordAudit } from "./fulfillment.js";
-import { sendCustomerEmail, retryCustomerEmail } from "./customer-email.js";
+import { processMessageJob, retryCustomerEmail } from "./customer-email.js";
+import { validEmailKind } from './email-delivery.js';
 import { siteBasicOpensAdmin } from "./staging.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 import { refundHold, syncOrderRefunds } from './refunds.js';
+import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
 
 export const MIN_ADMIN_TOKEN_LENGTH = 16;
 
@@ -94,7 +96,7 @@ async function adminOrderView(env, orderId) {
   const order = await adminOrder(env.DB, orderId);
   if (!order) return null;
   const row = await getOrder(env.DB, orderId);
-  return { ...order, mcf: await mcfView(env, row, order.fulfillment) };
+  return { ...order, sandboxRefundChecks:sandboxRefundChecksEnabled(env), mcf: await mcfView(env, row, order.fulfillment) };
 }
 
 async function readJsonObject(request) {
@@ -149,7 +151,7 @@ async function handleShip(request, env, orderId) {
     if (await refundHold(env.DB, orderId)) return fail(409, 'refund_hold', 'Refund registered; review fulfillment in Airwallex and Amazon before shipping.', NO_INDEX);
     const order = await markShipped(env.DB, orderId, shipment, { actor: "admin" });
     // Emailed after the shipment is saved; a failure is recorded and never undoes it.
-    const email = await sendCustomerEmail(env, (await getOrder(env.DB, orderId)) ?? order, "shipment", { shipment });
+    const email = await processMessageJob(env, (await getOrder(env.DB, orderId)) ?? order, 'shipment');
     return json({ order: await adminOrderView(env, orderId), email: { status: email.status } }, 200, NO_INDEX);
   } catch (error) {
     if (error instanceof FulfillmentError) return fail(error.status, error.code, error.message, NO_INDEX);
@@ -162,17 +164,35 @@ export async function handleAdminApi(request, env, pathname) {
   if (denied) return denied;
 
   const url = new URL(request.url);
-  const emailRetry = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/emails\/(confirmation|shipment)\/retry$/);
+  const sandboxCheck = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refunds\/sandbox-check$/);
+  if (sandboxCheck) {
+    if (!sandboxRefundChecksEnabled(env)) return fail(404,'not_found','Not found.',NO_INDEX);
+    if (request.method !== 'POST') return fail(405,'method_not_allowed','Use POST.',{...NO_INDEX,Allow:'POST'});
+    const problem = csrfProblem(request);
+    if (problem) return fail(403,'forbidden',problem,NO_INDEX);
+    const body = await readJsonObject(request);
+    if (!body || Object.keys(body).some(key=>key !== 'scenario') || !['above_limit','fully_refunded'].includes(body.scenario)) return fail(400,'invalid_probe','Select a fixed negative check.',NO_INDEX);
+    const id=decodeURIComponent(sandboxCheck[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404,'not_found','Order not found.',NO_INDEX);
+    const order = await getOrder(env.DB,id);
+    if (!order) return fail(404,'not_found','Order not found.',NO_INDEX);
+    const result = await runSandboxRefundCheck(env,order,body.scenario);
+    return json({result,order:await adminOrderView(env,id)},result.outcome === 'blocked' ? 409 : 200,NO_INDEX);
+  }
+  const emailRetry = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/emails\/([^/]+)\/retry$/);
   if (emailRetry) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
     const problem = csrfProblem(request);
     if (problem) return fail(403, "forbidden", problem, NO_INDEX);
+    if (!(await readJsonObject(request))) return fail(400,'invalid_json','Request body must be a JSON object.',NO_INDEX);
+    const kind = decodeURIComponent(emailRetry[2]);
+    if (!validEmailKind(kind)) return fail(404,'not_found','Email not found.',NO_INDEX);
     const id = decodeURIComponent(emailRetry[1]);
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
     const order = await getOrder(env.DB, id);
     if (!order) return fail(404, "not_found", "Order not found.", NO_INDEX);
-    const email = await retryCustomerEmail(env, order, emailRetry[2]);
-    await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: "admin", detail: { kind: emailRetry[2], result: email.status } });
+    const email = await retryCustomerEmail(env, order, kind);
+    await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: "admin", detail: { kind, result: email.status } });
     return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
   const ship = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/ship$/);

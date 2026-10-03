@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS order_fulfillments (
 -- status 'sent' means API acceptance, not proven delivery.
 CREATE TABLE IF NOT EXISTS order_emails (
   order_id TEXT NOT NULL,
-  kind TEXT NOT NULL,                   -- confirmation | shipment
+  kind TEXT NOT NULL,                   -- confirmation | shipment | refund:<id>
   status TEXT NOT NULL,                 -- pending | sent | failed | skipped
   detail TEXT NOT NULL DEFAULT '',      -- short reason, never secrets or addresses
   created_at TEXT NOT NULL,
@@ -179,6 +179,21 @@ CREATE TABLE IF NOT EXISTS order_email_jobs (
   PRIMARY KEY (order_id, kind)
 );
 CREATE INDEX IF NOT EXISTS email_jobs_due ON order_email_jobs(status, next_attempt_at);
+
+-- Shipment and per-refund instructions. Created atomically with the underlying
+-- state transition; payload_json contains only the immutable refund summary.
+-- A separate table preserves the existing confirmation-only CHECK constraint.
+CREATE TABLE IF NOT EXISTS order_message_jobs (
+  order_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind = 'shipment' OR kind LIKE 'refund:%'),
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL CHECK (status IN ('pending', 'handed_off', 'skipped')),
+  next_attempt_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (order_id, kind)
+);
+CREATE INDEX IF NOT EXISTS message_jobs_due ON order_message_jobs(status, next_attempt_at);
 
 -- Minimal signed event metadata only: no raw webhook payloads or recipients.
 CREATE TABLE IF NOT EXISTS customer_email_events (

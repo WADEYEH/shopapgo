@@ -82,6 +82,8 @@
 .admin-ship .notice, .admin-detail > div > .notice { margin: 0; }
 .admin-detail [data-admin-detail-body] > .notice { margin-bottom: 16px; }
 .admin-history .admin-lines li small { grid-column: 1 / -1; }
+.admin-history .admin-lines li { overflow-wrap: anywhere; }
+.admin-history .btn { max-width: 100%; min-height: 44px; height: auto; padding: 8px 16px; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .admin-ship__form .btn { justify-self: stretch; } }
 
 .admin-mcf__actions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; align-items: center; }

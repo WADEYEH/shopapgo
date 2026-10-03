@@ -9,6 +9,8 @@ import {resetAirwallexTokenCache} from '../worker/airwallex.js';
 import {submitOrderToMcf} from '../worker/mcf.js';
 import {FAKE_AMAZON_ENV} from './helpers/fake-amazon-mcf.mjs';
 import worker from '../worker/index.js';
+import {handleAdminApi} from '../worker/admin.js';
+import {runSandboxRefundCheck} from '../worker/sandbox-refund-checks.js';
 
 const skip=!(await sqliteAvailable());
 const ID='APGO-US-0123456789AB';
@@ -34,6 +36,47 @@ function hook(object,patch={}) {
   return new Request('https://store.example/api/webhooks/airwallex',{method:'POST',headers:{'x-timestamp':timestamp,'x-signature':createHmac('sha256',SECRET).update(timestamp+body).digest('hex')},body});
 }
 const request=(path,body={},headers={})=>new Request(`https://store.example/admin/api/orders/${ID}/${path}`,{method:'POST',headers:{Authorization:`Bearer ${TOKEN}`,'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+
+test('sandbox rejection probes enforce production, auth, CSRF, fixed input and approved test recipient boundaries',{skip},async()=>{
+  const {env,order}=await setup();const path=`/admin/api/orders/${ID}/refunds/sandbox-check`;
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),env,path)).status,404);
+  const staging={...env,SITE_ENV:'staging',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
+  assert.equal((await handleAdminApi(new Request(request('refunds/sandbox-check'),{headers:{}}),staging,path)).status,401);
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'},{Origin:'https://evil.example'}),staging,path)).status,403);
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit',amount:1}),staging,path)).status,400);
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'anything'}),staging,path)).status,400);
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),{...staging,AIRWALLEX_ENV:'prod'},path)).status,404);
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),{...staging,AIRWALLEX_API_BASE:'https://evil.example'},path)).status,404);
+  await mocked(()=>assert.fail('not an approved test order'),async()=>assert.equal((await runSandboxRefundCheck({...staging,CUSTOMER_EMAIL_TEST_RECIPIENTS:''},order,'above_limit')).outcome,'blocked'));
+});
+
+test('refund probes read current payment identity; fixed over-limit POST is not retried and retains only safe API rejection details',{skip},async()=>{
+  const {db,env,order}=await setup();const staging={...env,SITE_ENV:'staging',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
+  let posts=0;
+  await mocked((url,init)=>{
+    if (init.method==='GET') return Response.json({id:'int_test',merchant_order_id:ID,status:'SUCCEEDED',amount:24.9,currency:'USD'});
+    posts++;const body=JSON.parse(init.body);assert.equal(body.amount,25.9);assert.equal(body.payment_intent_id,'int_test');assert.ok(body.request_id.length<=64);
+    return Response.json({code:'amount_above_limit',message:'private provider details must not be persisted'},{status:400});
+  },async()=>assert.equal((await runSandboxRefundCheck(staging,order,'above_limit')).outcome,'rejected'));
+  assert.equal(posts,1);assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM order_refunds').get().n,0);
+  assert.ok(!JSON.stringify(db.raw.prepare('SELECT * FROM order_audit').all()).includes('private provider details'));
+  await mocked((url,init)=>{assert.equal(init.method,'GET');return Response.json({id:'int_test',merchant_order_id:'other',status:'SUCCEEDED',amount:24.9,currency:'USD'});},async()=>assert.equal((await runSandboxRefundCheck(staging,order,'above_limit')).outcome,'blocked'));
+  posts=0;
+  await mocked((url,init)=>{if (init.method==='GET') return Response.json({id:'int_test',merchant_order_id:ID,status:'SUCCEEDED',amount:24.9,currency:'USD'});posts++;return Response.json({code:'internal_error'},{status:500});},async()=>assert.equal((await runSandboxRefundCheck(staging,order,'above_limit')).outcome,'unverified'));
+  assert.equal(posts,1);
+});
+
+test('already-refunded probe requires complete current provider data; missing refunds and auth errors cannot pass the negative check',{skip},async()=>{
+  const {env,order}=await setup();const staging={...env,SITE_ENV:'staging',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
+  let posts=0;
+  const intent={id:'int_test',merchant_order_id:ID,status:'SUCCEEDED',amount:24.9,currency:'USD'};
+  await mocked((url,init)=>{assert.equal(init.method,'GET');return Response.json(url.includes('/payment_intents/') ? intent : {items:[],has_more:false});},async()=>assert.equal((await runSandboxRefundCheck(staging,order,'fully_refunded')).outcome,'blocked'));
+  await mocked((url,init)=>{
+    if (init.method==='GET') return Response.json(url.includes('/payment_intents/') ? intent : {items:[refund({amount:24.9})],has_more:false});
+    posts++;assert.equal(JSON.parse(init.body).amount,1);return Response.json({code:'invalid_status_for_operation'},{status:400});
+  },async()=>assert.equal((await runSandboxRefundCheck(staging,order,'fully_refunded')).outcome,'rejected'));
+  assert.equal(posts,1);
+});
 
 test('partial/full/pending/failed refund totals remain separate from the original payment and hold the shipping queue',{skip},async()=>{
   const {db,order}=await setup();

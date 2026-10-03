@@ -332,19 +332,20 @@ function renderHistory(order) {
       "ul",
       { class: "admin-lines" },
       ...emails.map((mail) => {
+        const label = emailLabel[mail.kind] ?? (mail.kind.startsWith('refund:') ? `Refund notice (${mail.kind.slice(7)})` : mail.kind);
         const status = mail.deliveryStatus === "accepted" ? "Accepted by email service (delivery not confirmed)" : mail.deliveryStatus || (mail.status === "sent" ? "sent (legacy record; delivery not confirmed)" : mail.status);
-        const retry = mail.canRetry ? el("button", { type: "button", class: "btn btn--sm" }, `Retry ${emailLabel[mail.kind] ?? mail.kind}`) : null;
+        const retry = mail.canRetry ? el("button", { type: "button", class: "btn btn--sm" }, `Retry ${label}`) : null;
         if (retry) retry.addEventListener("click", async () => {
           retry.disabled = true;
           try {
-            const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/emails/${mail.kind}/retry`, { method: "POST", body: {} });
+            const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/emails/${encodeURIComponent(mail.kind)}/retry`, { method: "POST", body: {} });
             renderDetail(result.order);
           } catch (error) {
             retry.parentElement.append(notice("warning", "Email retry failed", error.message));
             retry.disabled = false;
           }
         });
-        return el("li", {}, el("span", {}, `${emailLabel[mail.kind] ?? mail.kind}: ${status}`), el("span", {}, formatDate(mail.updatedAt)), mail.providerId && el("small", {}, `Message ID: ${mail.providerId} · Attempts: ${mail.attempts}`), mail.nextAttemptAt && el("small", {}, `Next attempt: ${formatDate(mail.nextAttemptAt)}`), mail.detail && el("small", {}, mail.detail), retry);
+        return el("li", {}, el("span", {}, `${label}: ${status}`), el("span", {}, formatDate(mail.updatedAt)), mail.providerId && el("small", {}, `Message ID: ${mail.providerId} · Attempts: ${mail.attempts}`), mail.nextAttemptAt && el("small", {}, `Next attempt: ${formatDate(mail.nextAttemptAt)}`), mail.detail && el("small", {}, mail.detail), retry);
       }),
       ...audit.map((entry) => el("li", {}, el("span", {}, `${entry.action} by ${entry.actor}`), el("span", {}, formatDate(entry.at)))),
     ),
@@ -447,8 +448,21 @@ function renderRefunds(order) {
       await load({reset:true});
     } catch(error) { feedback.textContent = error.message; button.disabled = false; }
   });
+  const checks = order.sandboxRefundChecks && order.status === 'paid' ? el('div',{},
+    el('p',{class:'body body--sm'},'Sandbox checks: fixed invalid requests only; no automatic refund retries.'),
+    ...[['above_limit','Test refund above captured amount'],['fully_refunded','Test already refunded payment']].map(([scenario,label])=>{
+      const check=el('button',{type:'button',class:'btn btn--sm btn--text'},label);
+      check.addEventListener('click',async()=>{
+        check.disabled=true;feedback.textContent='Checking sandbox rejection…';
+        try {
+          const {result}=await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/refunds/sandbox-check`,{method:'POST',body:{scenario}});
+          feedback.textContent=`${result.outcome}: ${result.detail}${result.httpStatus ? ` HTTP ${result.httpStatus} · ${result.code}` : ''}`;
+        } catch(error){feedback.textContent=error.message;} finally{check.disabled=false;}
+      });return check;
+    })) : null;
   return el('section', {class:'admin-history', 'aria-label':'Refunds', 'data-order-refunds':true},
     el('h4', {}, 'Refunds'),
+    refunds?.records?.some(item=>item.status==='FAILED') && notice('warning','Refund failed — review required','A refund was rejected. Review its failure code and the payment in Airwallex. An earlier acceptance notice may already have been delivered. Contact the customer if needed; failure follow-up emails and financial retries are not automatic.'),
     el('p', {class:'body body--sm'}, 'Initiate refunds in Airwallex. This button only checks their status.'),
     el('p', {class:'body body--sm'}, refunds?.records?.length
       ? `Refunded: ${money(refunds.refundedCents)} · Pending: ${money(refunds.pendingCents)}${refunds.hold ? ' · Fulfillment on hold' : ''}`
@@ -458,7 +472,7 @@ function renderRefunds(order) {
       el('dt', {}, 'Amount'), el('dd', {}, money(item.amountCents)),
       el('dt', {}, 'Updated'), el('dd', {}, formatDate(item.updatedAt)),
       item.failureCode && el('dt', {}, 'Failure code'), item.failureCode && el('dd', {}, item.failureCode))),
-    button,feedback);
+    button,checks,feedback);
 }
 
 async function select(orderId, { focus = true } = {}) {

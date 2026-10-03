@@ -1,4 +1,4 @@
-// Customer emails (order confirmation, shipment notice) through the Resend API.
+// Customer emails (confirmation, shipment, per-refund notice) through Resend.
 // Same opt-in style as worker/notify.js: nothing is sent unless the operator sets the
 // env below; otherwise the email is skipped and logged. A failure is logged and recorded
 // but never throws and never changes the order. Temporary failures use a durable
@@ -8,7 +8,7 @@
 //   CUSTOMER_EMAIL_FROM                   sender, e.g. "APGO <orders@your-domain>"; falls back to
 //                                         ORDER_NOTIFY_EMAIL_FROM. The domain must be verified in Resend.
 //   CUSTOMER_EMAIL_REPLY_TO               optional reply-to address
-//   CUSTOMER_EMAIL_POLICY_NOTE            optional plain-text paragraph appended to both emails
+//   CUSTOMER_EMAIL_POLICY_NOTE            optional plain-text paragraph appended to all messages
 //                                         (e.g. the approved return-policy sentence). Omitted when unset:
 //                                         this code never invents policy or delivery promises.
 //   CUSTOMER_EMAIL_ENABLED                "false" switches customer emails off
@@ -16,9 +16,9 @@
 //
 // Durable delivery state and provider idempotency are in email-delivery.js.
 
-import { getOrder } from "./orders.js";
+import { getOrder, claimOrderEmail, finishOrderEmail } from "./orders.js";
 import { getFulfillment } from "./fulfillment.js";
-import { sendOutboxEmail, getDelivery } from "./email-delivery.js";
+import { sendOutboxEmail, getDelivery, validEmailKind } from "./email-delivery.js";
 
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
@@ -106,7 +106,7 @@ export function buildConfirmationEmail(order, { policyNote } = {}) {
   const subject = `We received your APGO order ${order.id}`;
   const body = render({
     heading: "Thanks for your order",
-    intro: "Thanks for your order. Your payment was received. We'll email you again when your order ships.",
+    intro: "Thanks for your order. Your payment was received. We'll email you with updates about your order.",
     order,
     policyNote,
   });
@@ -126,11 +126,50 @@ export function buildShipmentEmail(order, shipment, { policyNote } = {}) {
   return { subject, ...body };
 }
 
+export function buildRefundEmail(order, refund, { policyNote } = {}) {
+  const full = refund.refundedCents >= order.total_cents;
+  const heading = full ? 'Your full refund was accepted' : 'Your partial refund was accepted';
+  const intro = 'Your payment provider has accepted this refund to your original payment method. When the credit appears depends on your bank or payment method.';
+  const firstName = orderParts(order).firstName;
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+  const facts = [['Order number',order.id],['Refund reference',refund.id],['This refund',money(refund.amountCents,refund.currency)],
+    ['Total refunds accepted',money(refund.refundedCents,refund.currency)],['Original order total',money(order.total_cents,order.currency)],['Refund type',full ? 'Full' : 'Partial']];
+  const text = [greeting,'',heading,intro,'',...facts.map(([key,value])=>`${key}: ${value}`),
+    '', 'For questions about this refund, reply to this email.',...(policyNote ? ['',policyNote] : []),'','APGO'].join('\n');
+  const html = `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;max-width:560px">
+    <h1 style="font-size:20px">${escapeHtml(heading)}</h1><p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p>
+    <table role="presentation">${facts.map(([key,value])=>`<tr><td style="padding:2px 12px 2px 0;color:#555">${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}</table>
+    <p>For questions about this refund, reply to this email.</p>${policyNote ? `<p style="color:#555">${escapeHtml(policyNote)}</p>` : ''}<p>APGO</p></body></html>`;
+  return { subject:`Your APGO ${full ? 'full' : 'partial'} refund was accepted · ${order.id}`,text,html };
+}
+
+async function refundForEmail(db, order, kind) {
+  if (!/^refund:[\w-]{1,120}$/.test(kind)) return null;
+  const record = await db.prepare('SELECT status,amount_cents,currency FROM order_refunds WHERE order_id=? AND id=?').bind(order.id,kind.slice(7)).first();
+  const job = await db.prepare('SELECT payload_json FROM order_message_jobs WHERE order_id=? AND kind=?').bind(order.id,kind).first();
+  if (!record || !job || !['ACCEPTED','SETTLED'].includes(record.status)) return null;
+  const snapshot = JSON.parse(job.payload_json);
+  if (snapshot.id !== kind.slice(7) || snapshot.amountCents !== record.amount_cents || snapshot.currency !== record.currency
+    || snapshot.currency !== order.currency || !Number.isSafeInteger(snapshot.refundedCents) || snapshot.refundedCents < snapshot.amountCents) return null;
+  return snapshot;
+}
+
 // "sent" remains the compatibility result for API acceptance. Delivery is separate.
 export async function sendCustomerEmail(env, order, kind, options = {}) {
   try {
+    if (!validEmailKind(kind)) return { status:'blocked', detail:'Invalid email kind.' };
+    const refund = kind.startsWith('refund:') ? await refundForEmail(env.DB,order,kind) : null;
+    if (kind.startsWith('refund:') && !refund) {
+      // Do not retry an unsent success notice after the provider changes to FAILED.
+      // Any attempted/ambiguous send is retained for operator review.
+      await env.DB.prepare(`UPDATE order_email_delivery SET status='review',detail='Refund status requires review; notification stopped.',updated_at=?
+        WHERE order_id=? AND kind=? AND provider_id IS NULL AND status IN ('queued','retry','sending','failed')
+          AND (lease_until IS NULL OR lease_until<=?)`).bind(new Date().toISOString(),order.id,kind,new Date().toISOString()).run();
+      return { status:'blocked',detail:'Only an accepted refund with a saved notification instruction can be emailed.' };
+    }
     const config = customerEmailConfig(env);
-    return await sendOutboxEmail(env, order, kind, config, () => kind === "shipment"
+    return await sendOutboxEmail(env, order, kind, config, () => refund
+      ? buildRefundEmail(order,refund,{policyNote:config.policyNote}) : kind === "shipment"
       ? buildShipmentEmail(order, options.shipment, { policyNote: config.policyNote })
       : buildConfirmationEmail(order, { policyNote: config.policyNote }), options);
   } catch {
@@ -173,6 +212,40 @@ export async function processConfirmationJob(env, order, options = {}) {
   }
 }
 
+// Shipment and refund instructions use the same frozen outbox and transport as
+// confirmations. A crash before handoff leaves the pending instruction intact.
+export async function processMessageJob(env, order, kind, options = {}) {
+  if (!validEmailKind(kind) || kind === 'confirmation') return { status:'blocked',detail:'Invalid message instruction.' };
+  try {
+    const job = await env.DB.prepare('SELECT status FROM order_message_jobs WHERE order_id=? AND kind=?').bind(order.id,kind).first();
+    if (!job || job.status !== 'pending') return { status:'duplicate',detail:'' };
+    const legacy = await env.DB.prepare('SELECT status FROM order_emails WHERE order_id=? AND kind=?').bind(order.id,kind).first();
+    let row = await getDelivery(env.DB,order.id,kind);
+    const shipment = kind === 'shipment' ? await getFulfillment(env.DB,order.id) : undefined;
+    if (kind === 'shipment' && !shipment) throw new Error('Shipment instruction has no shipment.');
+    const result = !row && legacy?.status === 'skipped' ? {status:'skipped',detail:'Existing skipped email retained.'}
+      : await sendCustomerEmail(env,order,kind,{...options,shipment,retry:false,resumeInitialJob:true});
+    if (result.status === 'blocked' && kind.startsWith('refund:') && !await refundForEmail(env.DB,order,kind)) {
+      await claimOrderEmail(env.DB,order.id,kind);
+      await finishOrderEmail(env.DB,order.id,kind,{status:'failed',detail:'Refund status requires review; no new success notice.'});
+      await env.DB.prepare("UPDATE order_message_jobs SET status='skipped',next_attempt_at=NULL,updated_at=? WHERE order_id=? AND kind=? AND status='pending'")
+        .bind(new Date().toISOString(),order.id,kind).run();
+      return result;
+    }
+    row = await getDelivery(env.DB,order.id,kind);
+    const projection = await env.DB.prepare('SELECT status FROM order_emails WHERE order_id=? AND kind=?').bind(order.id,kind).first();
+    const complete = row || (projection && projection.status !== 'pending');
+    const timestamp = new Date().toISOString();
+    await env.DB.prepare("UPDATE order_message_jobs SET status=?,next_attempt_at=?,updated_at=? WHERE order_id=? AND kind=? AND status='pending'")
+      .bind(complete ? (projection?.status === 'skipped' && !row ? 'skipped' : 'handed_off') : 'pending',
+        complete ? null : new Date(Date.now()+60_000).toISOString(),timestamp,order.id,kind).run();
+    return result;
+  } catch {
+    console.error('customer_message_job_error',{orderId:order.id,kind,reason:'message handoff failed'});
+    return {status:'failed',detail:'Message instruction retained for recovery.'};
+  }
+}
+
 export async function scheduledCustomerEmailRetry(env) {
   if (env.CUSTOMER_EMAIL_RETRY_CRON !== "true") return;
   const timestamp = new Date().toISOString();
@@ -180,6 +253,11 @@ export async function scheduledCustomerEmailRetry(env) {
   for (const item of jobs) {
     const order = await getOrder(env.DB, item.order_id);
     if (order) await processConfirmationJob(env, order);
+  }
+  const {results: messages} = await env.DB.prepare("SELECT order_id,kind FROM order_message_jobs WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY updated_at,order_id,kind LIMIT 10").bind(timestamp).all();
+  for (const item of messages) {
+    const order = await getOrder(env.DB,item.order_id);
+    if (order) await processMessageJob(env,order,item.kind);
   }
   if (!customerEmailConfig(env)) return;
   const { results } = await env.DB.prepare("SELECT order_id, kind FROM order_email_delivery WHERE status IN ('queued','retry','sending') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?) ORDER BY created_at LIMIT 10").bind(timestamp, timestamp).all();

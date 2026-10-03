@@ -28,7 +28,7 @@ import {
   shipmentFromMcfOrder,
 } from "./amazon-mcf.js";
 import { FulfillmentError, markShipped, recordAudit, validateShipment } from "./fulfillment.js";
-import { sendCustomerEmail } from "./customer-email.js";
+import { processMessageJob } from "./customer-email.js";
 import { getOrder } from "./orders.js";
 import { PRODUCTS } from "./catalog.js";
 
@@ -291,7 +291,7 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
     await saveState(env.DB, orderId, { ...base, status: "shipped", carrier: checked.carrier, trackingNumber: checked.trackingNumber, errorKind: "", errorMessage: "", note: "" });
     await audit(env.DB, orderId, "mcf.shipped", actor, { carrier: checked.carrier, trackingNumber: checked.trackingNumber });
     // The shipment row is saved; the email is claimed once per order (order_emails), so nothing can send it twice.
-    const email = await sendCustomerEmail(env, (await getOrder(env.DB, orderId)) ?? order, "shipment", { shipment: checked });
+    const email = await processMessageJob(env, (await getOrder(env.DB, orderId)) ?? order, 'shipment');
     return { changed: true, shipped: true, email: email.status };
   } catch (error) {
     if (error instanceof FulfillmentError && error.code === "already_shipped") {
