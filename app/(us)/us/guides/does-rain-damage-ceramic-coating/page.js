@@ -222,7 +222,7 @@ export default function RainDamageCoatingPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["afterWashing", "autoWashCoating", "howOftenReapply"]} />
+        <RelatedGuides items={["afterWashing", "autoWashCoating", "coatingMaintenance", "winterWash"]} />
       </main>
     </div>
   );

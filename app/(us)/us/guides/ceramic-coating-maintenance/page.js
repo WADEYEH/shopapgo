@@ -304,7 +304,7 @@ export default function CeramicCoatingMaintenancePage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["howOftenReapply", "autoWashCoating", "rainDamageCoating"]} />
+        <RelatedGuides items={["washCoatedCar", "waitToWash", "howOftenReapply"]} />
       </main>
     </div>
   );

@@ -233,6 +233,9 @@ export default function WhatIsCarGlazePage() {
             <p style={body}>
               Glaze is a separate category. The APGO products covered below are a silicone-based spray glaze, not a ceramic coating. For the full range of options beyond glaze and ceramic, see <Link href={routes.paintProtectionTypes} className="us-text-link">types of car paint protection</Link>.
             </p>
+            <p style={body}>
+              For how a ceramic spray compares with a liquid ceramic coating, see <Link href={routes.sprayVsCoating} className="us-text-link">ceramic spray vs ceramic coating</Link>.
+            </p>
           </section>
 
           <section id="apgo" style={section}>
@@ -278,6 +281,9 @@ export default function WhatIsCarGlazePage() {
             <p style={body}>
               The two products are alternative routines, not a two-product layering system, so contact APGO before combining them. You can <Link href={routes.compare} className="us-text-link">compare APGO's silicone-based spray glaze</Link> options, and for the routines themselves, see <Link href={routes.coloredGlaze} className="us-text-link">how to apply APGO Atomic Colored Glaze</Link> and <Link href={routes.glazeCoating} className="us-text-link">how to apply APGO Atomic Glaze Coating</Link>. If you're unsure which suits you, start with <Link href={routes.wetOrDry} className="us-text-link">choosing between APGO's wet and dry glaze routines</Link>.
             </p>
+            <p style={body}>
+              Before you apply either one, see <Link href={routes.prepForSpray} className="us-text-link">how to prep your car for ceramic spray</Link>.
+            </p>
           </section>
 
           <section id="why-glaze" style={section}>
@@ -312,7 +318,7 @@ export default function WhatIsCarGlazePage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["waxVsSprayCoating", "wetOrDry", "coloredGlaze"]} />
+        <RelatedGuides items={["paintProtectionTypes", "whatIsSprayCeramic", "coloredGlaze"]} />
       </main>
     </div>
   );

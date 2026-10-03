@@ -295,7 +295,7 @@ export default function CeramicSprayStreaksHighSpotsPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["coloredGlaze", "glazeCoating", "howOftenReapply"]} />
+        <RelatedGuides items={["prepForSpray", "waitToWash", "coloredGlaze"]} />
       </main>
     </div>
   );

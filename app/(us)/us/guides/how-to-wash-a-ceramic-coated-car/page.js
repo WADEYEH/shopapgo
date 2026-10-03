@@ -230,6 +230,9 @@ export default function HowToWashCeramicCoatedCarPage() {
               APGO Atomic Glaze Coating (D215) is one of them. It's a silicone-based spray glaze applied after washing and rinsing, while the paint is still wet. "Wet" here means freshly washed and rinsed; it doesn't mean wet from rain or still dusty. You spread it with a damp application cloth, towel-dry the car, and then buff with a clean coral-fleece microfiber towel. The details are in <Link href={routes.glazeCoating} className="us-text-link">how to apply APGO Atomic Glaze Coating</Link>, and you can compare <Link href={routes.compare} className="us-text-link">APGO's silicone-based spray glaze</Link> options side by side.
             </p>
             <p style={body}>
+              If you're washing the car so you can apply a spray product afterward, see <Link href={routes.prepForSpray} className="us-text-link">how to prep your car for ceramic spray</Link> for the full wash, decontamination, and drying sequence.
+            </p>
+            <p style={body}>
               If you've just applied any spray product and are still inside its waiting period, see <Link href={routes.waitToWash} className="us-text-link">how long to wait before washing after a spray</Link>.
             </p>
           </section>
@@ -299,7 +302,7 @@ export default function HowToWashCeramicCoatedCarPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["afterWashing", "autoWashCoating", "rainDamageCoating"]} />
+        <RelatedGuides items={["coatingMaintenance", "waitToWash", "autoWashCoating"]} />
       </main>
     </div>
   );

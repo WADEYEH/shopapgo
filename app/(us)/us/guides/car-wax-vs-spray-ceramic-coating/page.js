@@ -235,7 +235,7 @@ export default function WaxVsSprayCoatingPage() {
           </p>
         </ArticleBody>
 
-<RelatedGuides items={["coatingOverWax", "howOftenReapply", "afterWashing", "wetOrDry"]} />
+<RelatedGuides items={["coatingOverWax", "paintProtectionTypes", "sprayVsCoating", "wetOrDry"]} />
       </main>
     </div>
   );

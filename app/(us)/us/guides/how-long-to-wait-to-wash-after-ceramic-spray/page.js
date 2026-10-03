@@ -219,7 +219,7 @@ export default function HowLongToWaitToWashAfterCeramicSprayPage() {
           </p>
         </ArticleBody>
 
-        <RelatedGuides items={["howOftenReapply", "autoWashCoating", "rainDamageCoating"]} />
+        <RelatedGuides items={["washCoatedCar", "coatingMaintenance", "autoWashCoating"]} />
       </main>
     </div>
   );
