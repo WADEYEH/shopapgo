@@ -107,11 +107,20 @@ database_id = "00000000-0000-0000-0000-000000000000"
 
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
+# Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
+# path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
+# while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
+META_DATASET_ID = "2606879866471418"
 # ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set either: production admin accepts ADMIN_TOKEN only (owner's decision if that should change).
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
 # prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
 # Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
-# AIRWALLEX_WEBHOOK_SECRET, ADMIN_TOKEN, plus the optional notification / email / MCF secrets.
+# AIRWALLEX_WEBHOOK_SECRET, ADMIN_TOKEN, META_CAPI_ACCESS_TOKEN, plus the optional notification / email / MCF secrets.
+
+# Cron, production only (staging and local have none): every 15 minutes the Worker's scheduled() re-sends Meta CAPI events that
+# failed, and (only when the MCF_SYNC_CRON var is switched on) syncs Amazon MCF shipment status. Both are no-ops when their switch is off.
+[env.production.triggers]
+crons = ["*/15 * * * *"]
 
 [env.production.observability]
 enabled = true

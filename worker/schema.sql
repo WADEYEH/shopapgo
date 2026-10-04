@@ -114,3 +114,38 @@ CREATE TABLE IF NOT EXISTS order_mcf (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS order_mcf_status ON order_mcf (status, updated_at);
+
+-- ---------------------------------------------------------------------------------
+-- Meta Conversions API (CAPI). Both tables are new (CREATE TABLE IF NOT EXISTS, no ALTER) and are only written when
+-- META_DATASET_ID is set (production), so staging and existing databases behave exactly as before.
+-- ---------------------------------------------------------------------------------
+-- Browser/ad attribution captured when the order is created. Every value is format-checked and length-capped in
+-- worker/meta-attribution.js before it is stored. IP + user agent are kept on purpose (Meta matching; no consent banner).
+CREATE TABLE IF NOT EXISTS order_attribution (
+  order_id TEXT PRIMARY KEY,
+  fbp TEXT NOT NULL DEFAULT '',         -- _fbp cookie value (fb.1.<ms>.<random>)
+  fbc TEXT NOT NULL DEFAULT '',         -- _fbc cookie value, or fb.1.<ms>.<fbclid> built from the click id
+  fbclid TEXT NOT NULL DEFAULT '',
+  source_url TEXT NOT NULL DEFAULT '',  -- event_source_url (page the checkout started on)
+  client_ip TEXT NOT NULL DEFAULT '',
+  client_user_agent TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+-- One row per (order, event): the primary key is the atomic claim that keeps a webhook redelivery or two parallel
+-- requests from sending the same event twice. event_id / event_time are fixed at claim time so a retry (cron) sends
+-- the identical event and Meta deduplicates it. error never holds PII or tokens (HTTP status + Meta error codes only).
+CREATE TABLE IF NOT EXISTS order_meta_events (
+  order_id TEXT NOT NULL,
+  event_name TEXT NOT NULL,             -- InitiateCheckout | Purchase
+  event_id TEXT NOT NULL,               -- ic_<order id> | purchase_<order id>
+  event_time INTEGER NOT NULL,          -- unix seconds (order created / paid time)
+  status TEXT NOT NULL,                 -- sending | sent | failed
+  attempts INTEGER NOT NULL DEFAULT 0,  -- HTTP attempts so far (the cron stops after a fixed cap)
+  error TEXT NOT NULL DEFAULT '',
+  sent_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (order_id, event_name)
+);
+CREATE INDEX IF NOT EXISTS order_meta_events_status ON order_meta_events (status, updated_at);

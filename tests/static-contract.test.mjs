@@ -172,7 +172,7 @@ test(".dev.vars.example documents every secret with no real values", async () =>
 test("wrangler serves /admin through the Worker first and commits no secret values", async () => {
   const toml = await read("wrangler.toml");
   assert.match(toml, /run_worker_first\s*=\s*\[[^\]]*"\/admin\/\*"/);
-  for (const name of ["ADMIN_TOKEN", "AIRWALLEX_API_KEY", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_WEBHOOK_SECRET", "RESEND_API_KEY"]) {
+  for (const name of ["ADMIN_TOKEN", "AIRWALLEX_API_KEY", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_WEBHOOK_SECRET", "RESEND_API_KEY", "META_CAPI_ACCESS_TOKEN", "META_TEST_EVENT_CODE"]) {
     assert.ok(!new RegExp(`^\\s*${name}\\s*=\\s*"[^"]+"`, "m").test(toml), `${name} must be a secret, not a wrangler var`);
   }
 });

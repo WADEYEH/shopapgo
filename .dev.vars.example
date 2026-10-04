@@ -50,6 +50,15 @@ CUSTOMER_EMAIL_POLICY_NOTE=
 # "false" = authorize only instead of capturing immediately (default capture).
 # PAYMENT_AUTO_CAPTURE=
 
+# --- Meta Conversions API (production only; see docs/meta-tracking.md) -------------------------
+# Leave META_DATASET_ID empty locally and on staging: with no dataset id every Meta CAPI step is skipped.
+# In production the dataset id is a plain var in wrangler.toml [env.production.vars]; the token is a secret
+# (`npx wrangler secret put META_CAPI_ACCESS_TOKEN --env production`). Never commit real values.
+META_CAPI_ACCESS_TOKEN=
+# Events Manager > Test events code (e.g. TEST12345). While set, events show up in Test Events only; remove it for real traffic.
+META_TEST_EVENT_CODE=
+META_DATASET_ID=
+
 # --- Amazon Multi-Channel Fulfillment (MCF, optional; OFF unless MCF_AUTO_SUBMIT=true) ----------
 # Logistics: paid orders are sent to Amazon MCF (real shipments that use your FBA stock). This Worker holds NO
 # Amazon credentials: it calls the internal outbound endpoints of the amazon-spapi-mcp Worker (v1.5.0+), which
