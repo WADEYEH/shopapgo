@@ -43,7 +43,7 @@ enabled = true
 # bindings / vars / assets into [env.*], so each environment repeats them. Secrets are per environment too.
 #
 #   staging     deployed:  npm run deploy:staging   -> https://apgo-us-store-staging.<account>.workers.dev
-#   production  PLANNED ONLY, never deployed yet (see docs/commerce.md "Go-live checklist").
+#   production  store.shopapgo.com + admin.shopapgo.com; checkout stays 503 until PRICING_APPROVED (see docs/commerce.md "Go-live checklist").
 # ---------------------------------------------------------------------------------------------------------------
 
 [env.staging]
@@ -84,29 +84,30 @@ EXPRESS_CHECKOUT = "true"                   # worker/catalog.js publicConfig: ca
 [env.staging.observability]
 enabled = true
 
-# PLANNED, NOT DEPLOYED. Do not run `wrangler deploy --env production` before the go-live checklist is done.
+# Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office, ADMIN_TOKEN only). Checkout answers 503 until PRICING_APPROVED="true".
 [env.production]
 name = "apgo-us-store"
 workers_dev = false
-# Uncomment when store.shopapgo.com is ready to be bound (zone shopapgo.com):
-# routes = [
-#   { pattern = "store.shopapgo.com", custom_domain = true },
-#   { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host; also set ADMIN_HOST = "admin.shopapgo.com" in [env.production.vars]
-# ]
+# Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy.
+routes = [
+  { pattern = "store.shopapgo.com", custom_domain = true },
+  { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host (ADMIN_HOST below); the store host answers 404 for /admin*
+]
 
 [env.production.assets]
 directory = "./prototype"
 binding = "ASSETS"
 run_worker_first = ["/api/*", "/admin", "/admin/*", "/.well-known/apple-developer-merchantid-domain-association"]
 
-# Placeholder id: create the production database first (`npx wrangler d1 create apgo-us-store`) and paste its id.
+# Production D1 (created with `npx wrangler d1 create apgo-us-store`; the id is not a secret).
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "apgo-us-store"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "b409b132-2f2d-4da8-970c-2cf5560ac830"
 
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
+ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
 # Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
