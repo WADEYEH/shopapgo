@@ -81,7 +81,9 @@ export async function mockStore(page, { env = {} } = {}) {
       if (pathname === `/api/orders/${ORDER_ID}`) {
         const last = calls.session.at(-1);
         const priced = quote(last.items, { state: last.shipping.state, method: last.method }, resolvePricing(env));
-        return reply(200, { id: ORDER_ID, status: "paid", email: "t••••@example.com", ...priced, paymentStatus: "SUCCEEDED" });
+        // Same public shape as worker/orders.js publicOrder(): lines carry lineCents but no unitCents.
+        const lines = priced.lines.map(({ id, sku, name, routine, size, qty, lineCents }) => ({ id, sku, name, routine, size, qty, lineCents }));
+        return reply(200, { id: ORDER_ID, status: "paid", email: "t••••@example.com", ...priced, lines, paymentStatus: "SUCCEEDED" });
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {
