@@ -3,6 +3,7 @@ import "./us.css";
 import SiteChrome from "@/components/us/SiteChrome";
 import SiteFooter from "@/components/us/SiteFooter";
 import GtmScripts from "@/components/us/GtmScripts";
+import MetaPixel from "@/components/us/MetaPixel";
 import { SITE_URL } from "@/lib/site";
 
 const barlow = Barlow({
@@ -32,6 +33,7 @@ export default function USLayout({ children }) {
       <body className="us-site">
         <SiteChrome footer={<SiteFooter />}>{children}</SiteChrome>
         <GtmScripts />
+        <MetaPixel />
       </body>
     </html>
   );
