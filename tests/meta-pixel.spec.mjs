@@ -30,7 +30,9 @@ async function serveHost(page, host) {
   await page.route(`https://${host}/**`, async (route) => {
     let { pathname } = new URL(route.request().url());
     if (pathname === "/") pathname = "/index.html";
-    if (pathname.startsWith("/api/")) return route.fallback();
+    // API calls never leave the test: mockStore() (registered after this, so it runs first) answers them,
+    // and without it the store is "down". The real store host must never be reached.
+    if (/^\/(admin\/)?api\//.test(pathname)) return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     if (pathname.endsWith("/")) pathname += "index.html";
     try {
       const file = path.join(PROTOTYPE, pathname);
@@ -181,6 +183,69 @@ test.describe("product page events", () => {
       expect(call[2]).not.toHaveProperty("value");
       expect(call[2].content_ids.length).toBeGreaterThan(0);
     }
+  });
+});
+
+test.describe("product pages", () => {
+  const price = (sku) => DEFAULT_PRICING.products[sku].priceCents / 100;
+
+  test("view_item -> one ViewContent per view, add to cart -> AddToCart with API prices; a pair is one AddToCart per product", async ({ page }) => {
+    await serveHost(page, STORE);
+    await mockStore(page);
+    await page.goto(`https://${STORE}/products/d204.html`);
+    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
+    await page.waitForTimeout(300);
+    expect(await tracked(page, "ViewContent")).toHaveLength(1);
+    expect((await tracked(page, "ViewContent"))[0][2]).toEqual({
+      content_type: "product", content_ids: ["D204"], contents: [{ id: "D204", quantity: 1, item_price: price("d204") }], currency: "USD", value: price("d204"),
+    });
+
+    await page.locator("[data-qty-inc]").click();
+    await page.locator("[data-buyrow] [data-pdp-add]").click();
+    await expect.poll(async () => (await tracked(page, "AddToCart")).length).toBe(1);
+    expect((await tracked(page, "AddToCart"))[0][2]).toEqual({
+      content_type: "product", content_ids: ["D204"], contents: [{ id: "D204", quantity: 2, item_price: price("d204") }], currency: "USD", value: Number((price("d204") * 2).toFixed(2)),
+    });
+
+    await page.locator("[data-pair-card]").click();
+    await page.locator("[data-buyrow] [data-pdp-add]").click();
+    await expect.poll(async () => (await tracked(page, "AddToCart")).length).toBe(3);
+    const pair = (await tracked(page, "AddToCart")).slice(1).map((c) => [c[2].content_ids[0], c[2].value]);
+    expect(pair).toEqual([["D204", Number((price("d204") * 2).toFixed(2))], ["D215", price("d215")]]);
+    // Nothing else (no InitiateCheckout/Purchase/duplicate AddToCart) came from these actions.
+    expect(await tracked(page, "InitiateCheckout")).toHaveLength(0);
+  });
+
+  test("switching the product sends a ViewContent for the new SKU; the product page loads Meta only on the store host", async ({ page }) => {
+    await serveHost(page, STORE);
+    await mockStore(page);
+    await page.goto(`https://${STORE}/product.html#dry`);
+    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
+    await page.locator('[data-compare-body] [data-switch-to="d215"]').click();
+    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(2);
+    expect((await tracked(page, "ViewContent")).map((c) => c[2].content_ids[0])).toEqual(["D204", "D215"]);
+  });
+
+  for (const host of ["staging.shopapgo.com", "admin.shopapgo.com"]) {
+    test(`${host}: the product page loads no Meta and still works`, async ({ page }) => {
+      const meta = await serveHost(page, host);
+      await mockStore(page);
+      await page.goto(`https://${host}/products/d215.html?fbclid=TEST123`);
+      await page.locator("[data-buyrow] [data-pdp-add]").click();
+      await expect(page.locator("[data-added]")).toContainText("Added to cart");
+      expect(meta.fbeventsRequests).toBe(0);
+      expect(await page.evaluate(() => typeof window.fbq)).toBe("undefined");
+    });
+  }
+
+  test("product pages have no serious or critical axe violations with the pixel active", async ({ page }) => {
+    await serveHost(page, STORE);
+    await mockStore(page);
+    await page.goto(`https://${STORE}/products/d204.html`);
+    await page.waitForLoadState("networkidle");
+    const results = await new AxeBuilder({ page }).analyze();
+    const blocking = results.violations.filter((v) => ["serious", "critical"].includes(v.impact));
+    expect(blocking.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(", ")}`)).toEqual([]);
   });
 });
 

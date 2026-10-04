@@ -6,6 +6,7 @@ import {
   money,
   notice,
   priceRows,
+  productName,
   renderCartCount,
   routineWord,
   track,
@@ -64,7 +65,7 @@ function renderSummary(source) {
         el(
           "div",
           { class: "line-item__body" },
-          el("span", { class: "line-item__title" }, routineWord(line.routine), el("span", { class: "product-name" }, line.name.replace(/^APGO /, ""))),
+          el("span", { class: "line-item__title" }, routineWord(line.routine), productName(line, { newTab: true })),
           el("span", { class: "label" }, `Qty ${line.qty}`),
         ),
         el("span", { class: "summary-line__price" }, money(line.lineCents)),

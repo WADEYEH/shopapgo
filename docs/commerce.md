@@ -169,6 +169,52 @@ to jump to the cart) on a page that loads `js/commerce/shared.js`.
 `js/commerce/landing-cart.js` and add the same markup; first amend
 `IMPLEMENTATION_CONTRACT.md` (root integrator).
 
+## Product pages (`/products/d204`, `/products/d215`)
+
+One page design for both SKUs, built from the Claude Design **product-v2** kit
+(source and decisions: [product-pages.md](product-pages.md)).
+
+| Address | File | Notes |
+|---|---|---|
+| `/products/d204` | `prototype/products/d204.html` | DRY, Atomic Colored Glaze. Cloudflare serves `x.html` at `/x`, so the `.html` form redirects to the clean URL. |
+| `/products/d215` | `prototype/products/d215.html` | WET, Atomic Glaze Coating. |
+| `/product` | `prototype/product.html` | Default entry: `?sku=D204\|D215`, `#dry` / `#wet`, otherwise DRY. |
+
+* **No Worker change.** The pages are plain static assets; production needs no route, staging
+  (`run_worker_first = true`) just passes them on to the assets binding.
+* **Generated.** `node scripts/build-product-pages.mjs` (`npm run build:product-pages`) writes the three
+  files from one template; `test:static` fails when they are out of date. Edit the script or
+  `prototype/js/commerce/product-data.js`, never the HTML. Only `<head>` and `data-sku` differ per file.
+* **Runtime:** `js/commerce/product.js` fills the page and switches DRY/WET in place (URL, title,
+  canonical, og tags and JSON-LD follow). Styles: `css/product.css` on top of `commerce.css`.
+* **Prices come only from `/api/store/config`** (`worker/pricing.js`): the buy box, the sticky bar, the
+  compare table and the analytics `value`. The static HTML has no price. If the config cannot be loaded
+  the price reads "—" and the cart still works (it only stores SKU and quantity).
+* **Add to cart** uses `shared.js` `cart.add`. Ticking the pair upsell also adds the other product
+  (quantity 1). `add_to_cart` events (`apgo:analytics` / `dataLayer`) carry `sku`, `quantity`,
+  `placement` (`pdp-buybox` / `pdp-sticky` / `pdp-quiz` / `pdp-compare` / `pdp-guarantee`), `pair`,
+  `currency`, `value` and `items[]` (`item_id`, `item_name`, `quantity`, `price`). `view_item` fires per view.
+* **Placeholders are marked `[TO CONFIRM]`** (same `mark[data-to-confirm]` style as the policy pages): the
+  pair price, "Free US shipping", "30-day returns" and the guarantee and FAQ wording, the placeholder
+  price (while `estimate` is true), and the before/after photo slots. The pair upsell is priced as the
+  sum of the two config prices; no discount is invented.
+* **Reviews and photos are never invented.** `js/commerce/product-reviews.js` ships empty. The rating
+  line and the reviews section appear only for a product with at least 3 *verified* reviews
+  (FTC 16 CFR Part 465). Before/after shows labelled placeholders only while `estimate` is true and is
+  hidden once pricing is approved, until real photos are added.
+* **SEO:** per-page title, description, canonical (made absolute at runtime), og tags and a Product
+  JSON-LD. `offers` is injected only when `/api/store/config` says `estimate: false` (pricing approved),
+  so a placeholder price never reaches search engines. All three pages are `noindex,nofollow` like the
+  rest of the store until launch (flip the one line in the generator). Staging also sends
+  `X-Robots-Tag: noindex`.
+* **Entry points:** v3 header "Products" link, a "View full product details" link in each v3 product
+  panel and final choice, and the product name in cart lines and the checkout summary (new tab there, so
+  a shopper mid-checkout keeps the form).
+* Tests: `tests/product-pages.test.mjs` (static contract) and `tests/product-pages.spec.mjs`
+  (Playwright: both SKUs, switch, add to cart and analytics, pair, sticky bar, config prices, hide rules,
+  JSON-LD, 390 / 1440 overflow, axe, 44 px targets, keyboard). `npm run capture:product-pages` writes the
+  desktop and mobile screenshots for both products to `review/`.
+
 ## Prices, shipping and tax: one source (`worker/pricing.js`)
 
 Every number that changes what a shopper pays lives in **`worker/pricing.js`**
@@ -882,6 +928,7 @@ These are placeholders copied from the design-system kits, not approved terms:
 - `tests/v3-cart-entry.spec.mjs` (Playwright): v3 Add to cart in every placement,
   badge and cross-tab sync, Amazon stays as the secondary link, sticky bar,
   overflow at 320/390/1440, axe, no price on the landing page.
+- `tests/product-pages.test.mjs` and `tests/product-pages.spec.mjs`: the product pages (see "Product pages").
 - `tests/admin.spec.mjs` (Playwright, `/admin/api/*` stubbed): list, filters,
   search, detail contents, unconfigured notice, overflow, axe.
 - `tests/admin-fulfillment.spec.mjs` (Playwright, stubbed API built on the real email templates

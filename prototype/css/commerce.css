@@ -187,6 +187,15 @@ img { max-width: 100%; }
   color: var(--text-primary);
 }
 
+/* Product name that links to its product page (cart lines, checkout summary). */
+.product-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+.product-link:hover { color: var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
+
 /* ---------- Buttons ---------- */
 
 .btn {

@@ -30,7 +30,7 @@ test("header cart link starts with no badge and leads to the cart", async ({ pag
   await expect(link).toHaveAttribute("href", "cart.html");
   await expect(link).toHaveAttribute("aria-label", "Cart, 0 items");
   await expect(link.locator("[data-cart-count]")).toBeHidden();
-  await expect(page.locator(".v3-nav a")).toHaveText(["How It Works", "Choose", "Why APGO"]);
+  await expect(page.locator(".v3-nav a")).toHaveText(["How It Works", "Choose", "Why APGO", "Products"]);
 });
 
 for (const sku of ["d204", "d215"]) {

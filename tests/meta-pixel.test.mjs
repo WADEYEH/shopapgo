@@ -13,7 +13,7 @@ import { DEFAULT_PRICING } from "../worker/pricing.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
-const PIXEL_PAGES = ["cart", "checkout", "v3", "index", "v2", "contact", "privacy", "returns", "terms"];
+const PIXEL_PAGES = ["cart", "checkout", "v3", "index", "v2", "contact", "privacy", "returns", "terms", "product", "products/d204", "products/d215"];
 
 const head = (html) => html.slice(html.indexOf("<head"), html.indexOf("</head>"));
 
@@ -21,7 +21,7 @@ test("every public store page loads js/meta-pixel.js (deferred, in <head>) plus 
   for (const page of PIXEL_PAGES) {
     const html = await read(`prototype/${page}.html`);
     const h = head(html);
-    assert.equal((h.match(/<script src="js\/meta-pixel\.js" defer><\/script>/g) || []).length, 1, `${page}.html: one deferred meta-pixel script in head`);
+    assert.equal((h.match(/<script src="\/?js\/meta-pixel\.js" defer><\/script>/g) || []).length, 1, `${page}.html: one deferred meta-pixel script in head`);
     assert.ok(h.includes(`facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`), `${page}.html: noscript pixel in head`);
     assert.match(h, /<noscript><img [^>]*alt=""[^>]*><\/noscript>/, `${page}.html: noscript image has an empty alt`);
   }
@@ -258,4 +258,51 @@ test("AddToCart and ViewContent take prices from /api/store/config and omit valu
   await single.load();
   await tick();
   assert.equal(single.calls()[2][2].value, DEFAULT_PRICING.products.d204.priceCents / 100);
+});
+
+test("product pages: view_item -> ViewContent and add_to_cart(items[]) -> AddToCart use the page's own items; no second ViewContent from the page load", async () => {
+  // A product page: body[data-page=product] with no [data-add-to-cart] buttons. Even if the DOM lookup
+  // returned buttons the data-page guard keeps the load-time ViewContent off.
+  const h = run({ config: CONFIG, addToCartIds: ["d204"] });
+  h.sandbox.document.body = { getAttribute: (name) => (name === "data-page" ? "product" : null) };
+  await h.load();
+  await tick();
+  assert.deepEqual(h.calls().slice(2), [], "no load-time ViewContent on a product page");
+
+  const item = (id, price, quantity = 1) => ({ item_id: id, item_name: "x", quantity, price });
+  h.emit({ event: "view_item", sku: "d204", placement: "pdp", currency: "USD", value: 59.99, items: [item("D204", 59.99)] });
+  h.emit({ event: "add_to_cart", sku: "d215", quantity: 3, placement: "pdp-buybox", pair: false, currency: "USD", value: 89.97, items: [item("D215", 29.99, 3)] });
+  h.emit({ event: "add_to_cart", sku: "d204", quantity: 1, pair: true, currency: "USD", value: 59.99, items: [item("D204", 59.99)] });
+  h.emit({ event: "pdp_pair_added", value: 89.98, currency: "USD" });
+  await tick();
+  const calls = h.calls().slice(2);
+  assert.deepEqual(calls.map((c) => c[1]), ["ViewContent", "AddToCart", "AddToCart"], "one Meta event per store event; pdp_pair_added sends nothing");
+  assert.deepEqual(calls[0][2], { content_type: "product", content_ids: ["D204"], contents: [{ id: "D204", quantity: 1, item_price: 59.99 }], currency: "USD", value: 59.99 });
+  assert.deepEqual(calls[1][2], { content_type: "product", content_ids: ["D215"], contents: [{ id: "D215", quantity: 3, item_price: 29.99 }], currency: "USD", value: 89.97 });
+  assert.equal(calls[2][2].value, 59.99);
+  assert.equal(h.sandbox.fetchCalls.length, 0, "items[] events need no extra /api/store/config call");
+  for (const call of calls) assert.ok(call.length === 3, "no eventID on ViewContent/AddToCart");
+});
+
+test("product pages: without prices (config failed) the events still go out, without value", async () => {
+  const h = run();
+  await h.load();
+  h.emit({ event: "view_item", sku: "d215", placement: "pdp", currency: "USD", items: [{ item_id: "D215", item_name: "x", quantity: 1 }] });
+  h.emit({ event: "add_to_cart", sku: "d215", quantity: 2, currency: "USD", items: [{ item_id: "D215", quantity: 2 }] });
+  const [view, add] = h.calls().slice(2);
+  for (const call of [view, add]) {
+    assert.deepEqual(call[2].content_ids, ["D215"]);
+    assert.ok(!("value" in call[2]) && !("item_price" in call[2].contents[0]));
+  }
+  assert.equal(add[2].contents[0].quantity, 2);
+});
+
+test("an add_to_cart without items[] (v3 buttons) still resolves the price from the catalog, once", async () => {
+  const h = run({ config: CONFIG });
+  await h.load();
+  h.emit({ event: "add_to_cart", sku: "d204", quantity: 1, placement: "selected" });
+  await tick();
+  const adds = h.calls().filter((c) => c[1] === "AddToCart");
+  assert.equal(adds.length, 1);
+  assert.equal(adds[0][2].value, DEFAULT_PRICING.products.d204.priceCents / 100);
 });

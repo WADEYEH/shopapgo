@@ -8,7 +8,8 @@ Browser half of APGO US Meta tracking. The server half (Conversions API) lives i
 - Code: `prototype/js/meta-pixel.js` (new), `prototype/js/commerce/checkout.js` (attribution +
   `checkout_session_created` event + order items on `purchase`)
 - Pages that load it (`<script src="js/meta-pixel.js" defer>` + `<noscript>` image in `<head>`):
-  `index`, `v2`, `v3`, `cart`, `checkout`, `contact`, `privacy`, `returns`, `terms`.
+  `index`, `v2`, `v3`, `cart`, `checkout`, `contact`, `privacy`, `returns`, `terms`, and the generated product pages
+  `product`, `products/d204`, `products/d215` (`scripts/build-product-pages.mjs`, absolute `/js/meta-pixel.js`).
   Policy pages come from `scripts/build-policy-pages.py`; change the template and re-run it.
   **Not** loaded on `/admin/` and `v3-style.html`. The pixel is deliberately not in `shared.js`
   (admin pages load that file).
@@ -31,7 +32,9 @@ On the store host the script:
 | Store event (`apgo:analytics`, same object as `dataLayer`) | Meta event | `eventID` | Price source |
 | --- | --- | --- | --- |
 | page load of a page with `[data-add-to-cart]` buttons (v3) | `ViewContent` | none | `/api/store/config` `products[].priceCents`; `value` only when exactly one product is on the page, otherwise per-item `item_price` only |
-| `add_to_cart` (`sku`, `quantity`) | `AddToCart` | none | `/api/store/config`; `value = price x quantity` |
+| `view_item` (product pages: `sku`, `currency`, `value`, `items[]`) | `ViewContent` | none | the page's own `items[]`/`value` (read from `/api/store/config` by `product.js`); no price = no `value`. Product pages (`body[data-page=product]`) skip the load-time ViewContent above, so a view is sent once. Switching DRY/WET sends one for the new SKU |
+| `add_to_cart` with `items[]` (product pages: also `value`, `currency`, `pair`) | `AddToCart` | none | the event's `items[]` / `value`. A DRY+WET pair dispatches one `add_to_cart` per product, so Meta gets one AddToCart per product; `pdp_pair_added` is not sent to Meta |
+| `add_to_cart` without `items[]` (v3 buttons: `sku`, `quantity`) | `AddToCart` | none | `/api/store/config`; `value = price x quantity` |
 | `checkout_session_created` (new, see below) | `InitiateCheckout` | `ic_<orderId>` | `/api/checkout/session` response `quote` |
 | `add_payment_info` | `AddPaymentInfo` (optional extra) | none | session quote (same contents as InitiateCheckout) |
 | `purchase` (`transaction_id`, `value`, `items`) | `Purchase` | `purchase_<orderId>` | `GET /api/orders/:id` (server order) |

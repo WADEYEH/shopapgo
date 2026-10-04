@@ -135,7 +135,7 @@
     return items
       .filter(function (item) { return item && item.item_id; })
       .map(function (item) {
-        var content = { id: String(item.item_id), quantity: Number(item.quantity) || 1 };
+        var content = { id: String(item.item_id).toUpperCase(), quantity: Number(item.quantity) || 1 };
         if (Number.isFinite(item.price)) content.item_price = item.price;
         return content;
       });
@@ -158,7 +158,11 @@
   var lastCheckout = null; // contents of the most recent checkout session, for AddPaymentInfo
   var sentInitiate = {};
 
+  // ViewContent for the landing pages: the products behind their [data-add-to-cart] buttons.
+  // Product pages (body[data-page="product"]) send theirs through the "view_item" event instead,
+  // so this load-time one is skipped there (one ViewContent per view, never two).
   function onViewContent() {
+    if (document.body && document.body.getAttribute("data-page") === "product") return;
     var triggers = document.querySelectorAll("[data-add-to-cart]");
     if (!triggers.length) return;
     var ids = [];
@@ -184,7 +188,51 @@
     });
   }
 
+  // Totals from items that carry a price (price x quantity); null when any price is missing.
+  function itemsValue(contents) {
+    var total = 0;
+    for (var i = 0; i < contents.length; i += 1) {
+      if (!Number.isFinite(contents[i].item_price)) return null;
+      total += contents[i].item_price * contents[i].quantity;
+    }
+    return contents.length ? Number(total.toFixed(2)) : null;
+  }
+
+  // Product pages (view_item) describe the product themselves: items[] with SKU and the price they
+  // read from /api/store/config, plus value/currency. No price there = no value here.
+  function onViewItem(detail) {
+    var contents = contentsFromItems(detail.items);
+    if (!contents.length) {
+      if (!detail.sku) return;
+      contents = [{ id: String(detail.sku).toUpperCase(), quantity: 1 }];
+    }
+    var params = {
+      content_type: "product",
+      content_ids: contents.map(function (c) { return c.id; }),
+      contents: contents,
+      currency: detail.currency || "USD",
+    };
+    var value = Number.isFinite(detail.value) ? detail.value : itemsValue(contents);
+    if (value !== null) params.value = value;
+    send("ViewContent", params);
+  }
+
   function onAddToCart(detail) {
+    // Product pages and any caller that sends items[]: use them as they are (one event, one AddToCart).
+    var contents = contentsFromItems(detail.items);
+    if (contents.length) {
+      if (Number(detail.quantity) > 0 && contents.length === 1) contents[0].quantity = Number(detail.quantity);
+      var fromItems = {
+        content_type: "product",
+        content_ids: contents.map(function (c) { return c.id; }),
+        contents: contents,
+        currency: detail.currency || "USD",
+      };
+      var total = Number.isFinite(detail.value) ? detail.value : itemsValue(contents);
+      if (total !== null) fromItems.value = total;
+      send("AddToCart", fromItems);
+      return;
+    }
     var quantity = Number(detail.quantity) > 0 ? Number(detail.quantity) : 1;
     loadCatalog().then(function (config) {
       var product = productFor(config, detail.sku);
@@ -236,6 +284,7 @@
     var detail = event && event.detail;
     if (!detail || typeof detail.event !== "string") return;
     switch (detail.event) {
+      case "view_item": return onViewItem(detail);
       case "add_to_cart": return onAddToCart(detail);
       case "checkout_session_created": return onCheckoutSession(detail);
       case "add_payment_info": return onAddPaymentInfo(detail);
