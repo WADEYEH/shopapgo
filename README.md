@@ -129,6 +129,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 | `NEXT_PUBLIC_APGO_US_SHOW_ORIGIN` | `false` 則 hero eyebrow 不顯示「Made in Taiwan」 |
 | `NEXT_PUBLIC_APGO_US_ANALYTICS_READY` | 分析總開關，只在 Vercel Production 設 `true`，預覽與本機留空才不會汙染 GA4 |
 | `NEXT_PUBLIC_APGO_US_GTM_ID` | GTM 容器 ID，格式 `GTM-XXXXXXX`；GA4 評估 ID 設在 GTM 後台，不進程式碼 |
+| `NEXT_PUBLIC_APGO_US_META_PIXEL_ID` | Meta Pixel（資料集）ID，純數字 8–20 碼；與 `ANALYTICS_READY=true` 同時成立才載入（官網 /us 僅送 PageView 與 `AmazonClick`）；正式站為公開值 `2606879866471418`，其他環境留空 |
 | `NEXT_PUBLIC_APGO_US_AMAZON_ATTRIBUTION` | 附加到商品網址的歸因查詢字串，無前置 `?`；支援 `{sku}` / `{placement}` |
 | `NEXT_PUBLIC_APGO_US_D204_AMAZON_ATTRIBUTION` / `..._D215_...` | 單品歸因，會覆寫上面那一項 |
 
