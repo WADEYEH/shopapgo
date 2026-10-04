@@ -130,6 +130,7 @@ export function publicOrder(order) {
     currency: order.currency,
     lines: JSON.parse(order.lines_json).map(({ id, sku, name, routine, size, qty, lineCents }) => ({
       id, sku, name, routine, size, qty, lineCents,
+      unitCents: qty > 0 ? Math.round(lineCents / qty) : lineCents,
     })),
     shippingMethod: order.shipping_method,
     subtotalCents: order.subtotal_cents,

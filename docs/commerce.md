@@ -49,7 +49,7 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 
 Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `EXPRESS_CHECKOUT`, `PRICING_APPROVED`, `PRICING_JSON`,
 `PAYMENT_AUTO_CAPTURE`, `APPLE_PAY_ENABLED`, `GOOGLE_PAY_ENABLED`, `WALLET_MERCHANT_NAME`, `CUSTOMER_EMAIL_FROM`, `CUSTOMER_EMAIL_REPLY_TO`, `CUSTOMER_EMAIL_POLICY_NOTE`,
-`CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `MCF_NOTIFY_AMAZON_EMAIL`.
+`CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`.
 Each is explained in the section named after its feature below.
 
 ### Where the credentials are
@@ -61,7 +61,7 @@ Each is explained in the section named after its feature below.
 
 ### Decisions still open (owner / counsel)
 
-Prices D204 / D215 (placeholders $29.90 / $24.90) · shipping methods and fees · sales tax · how delivery time is described · return terms (window, accepted products, remedy) ·
+Prices D204 / D215 (working prices $59.99 / $29.99, still pending approval) · shipping methods and fees · sales tax · how delivery time is described · return terms (window, accepted products, remedy) ·
 governing law (準據法) in the Terms · customer-service copy (see `docs/customer-email-policy-note.md` and the `[TO CONFIRM]` marks in the policy pages) ·
 whether Amazon also sends its own shipment notice (`MCF_NOTIFY_AMAZON_EMAIL`, default off, so only our email goes out).
 
@@ -322,8 +322,8 @@ Nothing below is decided; the store refuses production traffic until
 
 | Decision | Today (placeholder) | Where to set it |
 | --- | --- | --- |
-| D204 price | $29.90 | `products.d204.priceCents` |
-| D215 price | $24.90 | `products.d215.priceCents` |
+| D204 price | $59.99 | `products.d204.priceCents` |
+| D215 price | $29.99 | `products.d215.priceCents` |
 | Shipping methods, fees, delivery promises | Standard free (5–7 business days), Express $9.00 (2 business days) | `shippingMethods`, `defaultShippingMethod` |
 | Who fulfils DTC orders / shipping regions | Amazon MCF from FBA stock is built, **off** by default (US addresses only) | `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, see "Amazon MCF" |
 | Sales tax: collect or not, rates per state, nexus/registration, or a tax service | $0 everywhere (`tax.status = undecided`) | `tax.defaultRateBps`, `tax.stateRatesBps`; or replace `computeTax` with a tax service |
@@ -587,8 +587,9 @@ There is no token handling in this Worker any more: the MCP Worker does the Logi
 * Amazon `COMPLETE` with no tracking yet → waits ("Amazon shipped; waiting for a tracking number"), next sync picks it up.
 * Amazon `UNFULFILLABLE` / `CANCELLED` / `INVALID` → `rejected`, error shown, retry button offered; the order stays unshipped.
 * A failed poll (Amazon unreachable) only writes a note; it never turns a submitted order into a failure.
-* **Cron (optional, not configured):** the Worker exports `scheduled()`; it does nothing unless `MCF_SYNC_CRON=true`. To use it add to `wrangler.toml`
-  `[triggers] crons = ["*/30 * * * *"]` **and** set `MCF_SYNC_CRON=true` (both are off today).
+* **Cron:** the Worker exports one `scheduled()` that runs the MCF status sync **and** the Meta CAPI re-send (see "Meta Conversions API" below). The MCF part does
+  nothing unless `MCF_SYNC_CRON=true`. Production has `[env.production.triggers] crons = ["*/15 * * * *"]` (for the Meta re-send); staging has no cron.
+  MCF stays off in production until `MCF_SYNC_CRON=true` is set deliberately.
 
 ### Environment
 
@@ -628,6 +629,21 @@ The old `SPAPI_LWA_CLIENT_ID` / `SPAPI_LWA_CLIENT_SECRET` / `SPAPI_REFRESH_TOKEN
 
 Tests: `tests/commerce-mcf.test.mjs` (node:test, fake outbound endpoints in `tests/helpers/fake-amazon-mcf.mjs`; `fetch` is replaced, neither Amazon nor the MCP Worker is ever called) and
 `tests/admin-mcf.spec.mjs` (Playwright, stubbed `/admin/api`). `npm run capture:admin-mcf` writes `review/admin-mcf-{off,failed,sent,shipped}-{desktop,mobile}.png`.
+
+## Meta Conversions API (server-side events)
+
+Production only. The Worker sends `InitiateCheckout` (when the Airwallex PaymentIntent is created) and `Purchase` (when the order turns paid, via the webhook or
+the confirmation-page poll, exactly once) to Meta's Conversions API, deduplicated against the browser Pixel by `event_id` (`ic_<orderId>`, `purchase_<orderId>`).
+`Purchase.value` is the D1 `total_cents / 100` in USD (Airwallex itself is sent dollars; D1 stores cents). Code: `worker/meta-capi.js`, `worker/meta-attribution.js`.
+
+* **Switch:** `META_DATASET_ID` (a plain var, set only in `[env.production.vars]`). Unset (staging, local) = the whole feature is skipped: no Graph call, no attribution
+  stored, Airwallex metadata unchanged, `scheduled()` does not touch the database for it. The token is the secret `META_CAPI_ACCESS_TOKEN`; without it events are skipped.
+* **Tables (new, in `worker/schema.sql`):** `order_attribution` (fbp, fbc, fbclid, source URL, client IP and user agent) and `order_meta_events`
+  (`PK(order_id, event_name)`, status `sending|sent|failed`, attempts, a PII-free error code). No cookie banner is used (owner decision), so IP and UA are stored.
+* **Reliability:** an atomic claim on the primary key prevents double sends; 3 tries per request (network error, timeout, 429, 5xx); failures are re-sent by the cron
+  with the original `event_id` and `event_time`; Meta rejects events older than 7 days, so the cron stops at 6.
+* **Logs:** time, event name, event id, HTTP status, `events_received`, `fbtrace_id`. Never email, phone, name, IP, token or payload.
+* Full detail, secrets, Airwallex webhook registration, deploy commands and the Events Manager check: `docs/meta-tracking.md`.
 
 ## Airwallex integration review
 
@@ -794,6 +810,7 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 - [ ] Production secrets with `--env production`: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (production keys), `AIRWALLEX_WEBHOOK_SECRET`, `ADMIN_TOKEN`,
       plus optional notification / email / MCF secrets.
 - [ ] Register the Airwallex production webhook `https://store.shopapgo.com/api/webhooks/airwallex` (`payment_intent.succeeded`, `payment_intent.cancelled`).
+- [ ] Meta CAPI (production only; see `docs/meta-tracking.md`): the owner sets `META_CAPI_ACCESS_TOKEN` (and `META_TEST_EVENT_CODE` while testing) with `--env production`; run `worker/schema.sql` on the production D1 first (adds `order_attribution`, `order_meta_events`).
 - [ ] Approve prices / shipping / tax (see "Before switching `AIRWALLEX_ENV` to `prod`"), then set `PRICING_APPROVED = "true"` (until then prod takes no payments).
 - [ ] Decide MCF, emails, Apple Pay domain verification for `store.shopapgo.com`.
 - [ ] Leave `EXPRESS_CHECKOUT` unset in production until the cart-page express payment flow is built (today it is UI only).
@@ -826,7 +843,7 @@ secret as `AIRWALLEX_WEBHOOK_SECRET`.
 
 These are placeholders copied from the design-system kits, not approved terms:
 
-- [ ] Prices in `worker/pricing.js` / `PRICING_JSON` (D204 $29.90, D215 $24.90).
+- [ ] Prices in `worker/pricing.js` / `PRICING_JSON` (D204 $59.99, D215 $29.99).
 - [ ] Shipping methods and costs (Standard free / Express $9.00) and what shoppers are told about MCF delivery.
 - [ ] Amazon MCF: Amazon Fulfillment role on the MCP's SP-API app, outbound connection secrets, confirmed SKU map, a first real test order,
       then `MCF_AUTO_SUBMIT=true` (see "Amazon MCF"; production orders are real shipments).
@@ -877,6 +894,9 @@ These are placeholders copied from the design-system kits, not approved terms:
 - `tests/commerce-mcf.test.mjs` (node:test) and `tests/admin-mcf.spec.mjs` (Playwright): Amazon MCF (see "Amazon MCF"):
   off by default, missing credentials / SKU map, idempotent submit and races, failure + retry button, lost-reply reconciliation,
   retry rules and error classes, sync → shipped once, cron switch. All against a fake Amazon; the real one is never called.
+- `tests/commerce-meta-capi.test.mjs` (node:test) with `tests/helpers/fake-meta-capi.mjs`: Meta CAPI (see "Meta Conversions API"): hashing and
+  normalisation, payloads, ids, cents to dollars, attribution validation, off-by-default, once-only sends (webhook redelivery, parallel paths), inline retry, cron re-send,
+  no PII or token in logs. Meta is never called.
 - `tests/commerce.spec.mjs` (Playwright): cart and full checkout against the
   real catalog/validation modules with `/api/*` and Airwallex.js stubbed;
   decline + retry, empty cart, overflow at 320/390/1440 px, axe.

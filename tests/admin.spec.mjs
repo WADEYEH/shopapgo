@@ -22,9 +22,9 @@ test("lists orders with status counts and opens the detail with address, items, 
   await expect(detail).toContainText("Apt 4");
   await expect(detail).toContainText("Austin, TX 78701");
   await expect(detail).toContainText("2 × APGO Atomic Glaze Coating");
-  await expect(detail).toContainText("D204 · 300 mL · 10.1 fl oz · $29.90 each");
+  await expect(detail).toContainText("D204 · 300 mL · 10.1 fl oz · $59.99 each");
   await expect(detail).toContainText("int_demo_1");
-  await expect(detail.locator(".price-row--total")).toContainText("$88.70");
+  await expect(detail.locator(".price-row--total")).toContainText("$128.97");
   await expect(detail).toContainText("skipped (none: skipped)");
   await expect(detail.locator('a[href^="mailto:"]')).toHaveText("ada.lee@example.com");
   await expect(page).toHaveURL(/#APGO-US-0123456789AB$/);

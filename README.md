@@ -45,6 +45,7 @@ It is **off by default**: set `MCF_AUTO_SUBMIT=true` and `MCF_SKU_MAP_JSON` (our
 email of its own unless `MCF_NOTIFY_AMAZON_EMAIL=true`. Before enabling it: Amazon Fulfillment role on the MCP's app, confirmed SKU map, a first real test order
 and a decision on shipping fee/delivery wording; see `docs/commerce.md` "Amazon MCF".
 Real production MCF orders ship real stock; all tests use a fake Amazon.
+Meta Conversions API (server-side `InitiateCheckout` / `Purchase`, production only, off unless `META_DATASET_ID` is set): `docs/meta-tracking.md`.
 Setup, architecture, the notification assessment, the Airwallex review and the
 go-live checklist (prices, shipping and tax are still undecided placeholders)
 are in `docs/commerce.md`.
