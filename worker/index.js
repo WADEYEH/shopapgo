@@ -11,6 +11,9 @@
 //   POST /admin/api/orders/:id/mcf/submit | /mcf/sync, POST /admin/api/mcf/sync   Amazon MCF retry / status sync (ADMIN_TOKEN)
 //   GET  /admin/                   order back office page (ADMIN_TOKEN)
 //
+// Meta Conversions API (production only, worker/meta-capi.js): InitiateCheckout when the PaymentIntent is created and Purchase
+// when an order turns paid; a cron re-sends failures. All of it is skipped unless META_DATASET_ID is set.
+//
 // With ADMIN_HOST set, /admin* is served only on that hostname and the store hostnames answer 404 (worker/hosts.js).
 
 import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
@@ -38,6 +41,8 @@ import {
 import { notifyOrderPaid } from "./notify.js";
 import { sendCustomerEmail } from "./customer-email.js";
 import { scheduledMcfSync, submitOrderToMcf } from "./mcf.js";
+import { attributionMetadata, readAttribution, saveAttribution } from "./meta-attribution.js";
+import { metaEnabled, scheduledMetaRetry, sendMetaEvent } from "./meta-capi.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
@@ -60,7 +65,7 @@ async function handleQuote(request, env) {
   return json(quote(body.items, { state: body.state || undefined, method: body.method || undefined }, resolvePricing(env)));
 }
 
-async function handleCheckoutSession(request, env) {
+async function handleCheckoutSession(request, env, services) {
   // With AIRWALLEX_ENV=prod the store stays closed until the owner sets
   // PRICING_APPROVED=true, so placeholder prices/shipping/tax cannot go live by accident.
   if (!storeReadiness(env).ready) {
@@ -73,6 +78,10 @@ async function handleCheckoutSession(request, env) {
   const origin = new URL(request.url).origin;
 
   await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
+
+  // Meta attribution (production only): browser-sent ids, cookies, IP and user agent, validated and stored per order.
+  // Optional by design: a missing or malformed `attribution` never affects checkout.
+  const attribution = await captureAttribution(env, request, body, orderId, origin);
 
   let intent;
   try {
@@ -114,7 +123,8 @@ async function handleCheckoutSession(request, env) {
       },
       // Same capture mode for cards and the Apple Pay / Google Pay elements.
       payment_method_options: paymentMethodOptions(env),
-      metadata: { source: "apgo-us-store", order_id: orderId },
+      // Attribution first so it can never overwrite source / order_id.
+      metadata: { ...attributionMetadata(attribution), source: "apgo-us-store", order_id: orderId },
     });
   } catch (error) {
     // The shopper retries with a new order; don't leave this one "pending" forever.
@@ -123,12 +133,45 @@ async function handleCheckoutSession(request, env) {
   }
 
   await attachPaymentIntent(env.DB, orderId, intent.id);
+  await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
 
   return json({
     orderId,
     quote: priced,
     intent: { id: intent.id, clientSecret: intent.client_secret, currency: intent.currency },
   });
+}
+
+// Stores the attribution for a new order. Returns it (for the PaymentIntent metadata) or null when Meta is off / on error.
+async function captureAttribution(env, request, body, orderId, origin) {
+  if (!metaEnabled(env)) return null;
+  try {
+    const attribution = readAttribution(body, request, { fallbackUrl: `${origin}/checkout.html?order=${orderId}` });
+    await saveAttribution(env.DB, orderId, attribution);
+    return attribution;
+  } catch (error) {
+    console.error("order_attribution_error", { orderId, reason: error?.name });
+    return null;
+  }
+}
+
+// Meta CAPI event for one order, once. Reads the order fresh; never throws.
+async function runMetaEvent(env, orderId, eventName) {
+  if (!metaEnabled(env)) return;
+  try {
+    await sendMetaEvent(env, await getOrder(env.DB, orderId), eventName);
+  } catch (error) {
+    console.error("meta_capi_error", { eventName, reason: error?.name });
+  }
+}
+
+// Runs background work after the response when the runtime allows it (ctx.waitUntil), otherwise inline.
+function deferred(services, work) {
+  if (services?.ctx?.waitUntil) {
+    services.ctx.waitUntil(work);
+    return undefined;
+  }
+  return work;
 }
 
 // Runs the one-time "new paid order" notification. The claim row makes it fire at
@@ -160,6 +203,7 @@ function afterSettle(settled, { env, ctx, adminOrigin }) {
     runNotification(env, settled.order, adminOrigin),
     runCustomerConfirmation(env, settled.order),
     runMcfSubmit(env, settled.order),
+    runMetaEvent(env, settled.order.id, "Purchase"),
   ]);
   if (ctx?.waitUntil) {
     ctx.waitUntil(work);
@@ -237,7 +281,7 @@ async function route(request, env, services) {
 
   if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env));
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
-  if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env);
+  if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env, services);
   if (pathname === "/api/webhooks/airwallex" && method === "POST") return handleWebhook(request, env, services);
   const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)$/);
   if (orderMatch && method === "GET") return handleOrder(decodeURIComponent(orderMatch[1]), env, services);
@@ -281,8 +325,9 @@ export default {
   fetch(request, env, ctx) {
     return withStaging(request, env, () => handleRequest(request, env, ctx));
   },
-  // Optional cron (none is configured in wrangler.toml): syncs Amazon MCF shipment status when MCF_SYNC_CRON=true.
+  // Cron (wrangler.toml configures one in production only). Two independent jobs, each a no-op unless enabled:
+  // Amazon MCF status sync (MCF_SYNC_CRON=true) and the Meta CAPI re-send of failed events (META_DATASET_ID set).
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(scheduledMcfSync(env));
+    ctx.waitUntil(Promise.allSettled([scheduledMcfSync(env), scheduledMetaRetry(env)]));
   },
 };

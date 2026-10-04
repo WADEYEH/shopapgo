@@ -94,7 +94,7 @@ function signedWebhook(event, { secret = WEBHOOK_SECRET, timestamp = String(Date
 const succeededEvent = (orderId, patch = {}) => ({
   id: `evt_${Math.random().toString(36).slice(2)}`,
   name: "payment_intent.succeeded",
-  data: { object: { id: "int_123", merchant_order_id: orderId, status: "SUCCEEDED", currency: "USD", amount: 88.7, ...patch } },
+  data: { object: { id: "int_123", merchant_order_id: orderId, status: "SUCCEEDED", currency: "USD", amount: 128.97, ...patch } },
 });
 
 // ---------- checkout session ----------
@@ -107,7 +107,7 @@ test("checkout session sends an idempotent, correctly shaped PaymentIntent", { s
   assert.equal(session.intent.clientSecret, "cs_secret");
   assert.equal(sent.request_id, session.orderId, "request_id is stable per order so retries cannot duplicate the intent");
   assert.equal(sent.merchant_order_id, session.orderId);
-  assert.equal(sent.amount, 88.7, "amount is sent in major units");
+  assert.equal(sent.amount, 128.97, "amount is sent in major units");
   assert.equal(sent.order.shipping.fee_amount, 9);
   assert.equal(sent.order.shipping.address.street, "100 Example Ave, Apt 4");
   assert.ok(sent.order.products.every((p) => p.code.length <= 12));
@@ -172,7 +172,7 @@ test("webhook: valid signed success marks paid, notifies once, and dedupes redel
   assert.ok(order.paid_at);
   assert.equal(notifyCalls.length, 1, "exactly one notification");
   assert.equal(notifyCalls[0].order.id, orderId);
-  assert.equal(notifyCalls[0].order.totalCents, 8870);
+  assert.equal(notifyCalls[0].order.totalCents, 12897);
   assert.ok(!JSON.stringify(notifyCalls[0]).match(/ada@example|100 Example|78701/), "no email or street address in the payload");
 });
 
@@ -199,18 +199,18 @@ test("webhook: a genuine but late delivery settles from the Retrieve API, not fr
   const db = await createD1();
   const env = baseEnv(db);
   const { orderId } = await createOrder(env);
-  const stale = succeededEvent(orderId, { status: "SUCCEEDED", amount: 88.7 });
+  const stale = succeededEvent(orderId, { status: "SUCCEEDED", amount: 128.97 });
   const old = String(Date.now() - 2 * 60 * 60 * 1000);
 
   // Retrieve says the intent is actually still unpaid: the stale "succeeded" body must not win.
   resetAirwallexTokenCache();
-  await withFetch(airwallexFake({ intent: { status: "REQUIRES_PAYMENT_METHOD", merchant_order_id: orderId, amount: 88.7 } }), async () => {
+  await withFetch(airwallexFake({ intent: { status: "REQUIRES_PAYMENT_METHOD", merchant_order_id: orderId, amount: 128.97 } }), async () => {
     assert.equal((await call(env, "/api/webhooks/airwallex", signedWebhook(stale, { timestamp: old }))).status, 200);
   });
   assert.equal((await db.prepare("SELECT status FROM orders WHERE id = ?").bind(orderId).first()).status, "pending");
 
   resetAirwallexTokenCache();
-  await withFetch(airwallexFake({ intent: { status: "SUCCEEDED", merchant_order_id: orderId, amount: 88.7 } }), async () => {
+  await withFetch(airwallexFake({ intent: { status: "SUCCEEDED", merchant_order_id: orderId, amount: 128.97 } }), async () => {
     assert.equal((await call(env, "/api/webhooks/airwallex", signedWebhook({ ...stale, id: "evt_late_2" }, { timestamp: old }))).status, 200);
   });
   assert.equal((await db.prepare("SELECT status FROM orders WHERE id = ?").bind(orderId).first()).status, "paid");
@@ -238,7 +238,7 @@ test("GET /api/orders/:id settles through Retrieve and notifies once across conc
   await withFetch(
     (url, init) => {
       if (url.startsWith("https://hooks.example")) { notifications += 1; return new Response("ok"); }
-      return airwallexFake({ intent: { merchant_order_id: orderId, amount: 88.7 } })(url, init);
+      return airwallexFake({ intent: { merchant_order_id: orderId, amount: 128.97 } })(url, init);
     },
     async () => {
       const ctx = ctxStub();
@@ -291,7 +291,7 @@ test("admin: Bearer and Basic auth list orders with address, items, totals and p
   assert.equal(detail.status, "paid");
   assert.equal(detail.shipping.street2, "Apt 4");
   assert.equal(detail.email, "ada@example.com");
-  assert.equal(detail.totalCents, 8870);
+  assert.equal(detail.totalCents, 12897);
   assert.equal(detail.lines.length, 2);
   assert.equal(detail.paymentIntentId, "int_123");
 
@@ -323,7 +323,7 @@ test("public order endpoint never exposes the address or full email", { skip }, 
 // ---------- notifications ----------
 
 const sampleOrder = {
-  id: "APGO-US-0123456789AB", currency: "USD", total_cents: 8870, shipping_method: "express",
+  id: "APGO-US-0123456789AB", currency: "USD", total_cents: 12897, shipping_method: "express",
   created_at: "2026-09-30T00:00:00.000Z", paid_at: "2026-09-30T00:01:00.000Z",
   lines_json: JSON.stringify([{ sku: "D204", name: "APGO Atomic Colored Glaze", qty: 1 }]),
   shipping_json: JSON.stringify({ state: "TX", street: "secret street", zip: "78701" }),
@@ -355,7 +355,7 @@ test("notify: webhook is HMAC-signed, email uses the API, failures are contained
   assert.equal(sent[1].init.headers.Authorization, "Bearer rk");
 
   const message = buildNotification(sampleOrder, { adminUrl: `${ORIGIN}/admin/` });
-  assert.match(message.subject, /APGO-US-0123456789AB · \$88\.70/);
+  assert.match(message.subject, /APGO-US-0123456789AB · \$128\.97/);
   assert.ok(!message.text.includes("secret street"));
   assert.ok(!results.some((r) => r.detail.includes("rk") || r.detail.includes("s3cret")));
 });
@@ -495,7 +495,7 @@ test("payment success sends exactly one customer confirmation with order id, ite
   for (const part of [mail.text, mail.html]) {
     assert.ok(part.includes(orderId));
     assert.ok(part.includes("APGO Atomic Colored Glaze") && part.includes("APGO Atomic Glaze Coating"));
-    assert.ok(part.includes("$88.70"));
+    assert.ok(part.includes("$128.97"));
     assert.ok(part.includes("100 Example Ave") && part.includes("Austin, TX 78701"));
     assert.ok(part.includes("Policy note from owner."));
   }
@@ -582,7 +582,7 @@ test("ship: a paid order is marked shipped once, stores time + carrier + trackin
   assert.match(payload.subject, /has shipped/);
   for (const part of [payload.text, payload.html]) {
     assert.ok(part.includes(orderId) && part.includes("1Z999AA10123456784") && part.includes("UPS"));
-    assert.ok(part.includes("APGO Atomic Colored Glaze") && part.includes("$88.70") && part.includes("Austin, TX 78701"));
+    assert.ok(part.includes("APGO Atomic Colored Glaze") && part.includes("$128.97") && part.includes("Austin, TX 78701"));
     assert.ok(part.includes(SHIPMENT.trackingUrl.replace("&", "&amp;")) || part.includes(SHIPMENT.trackingUrl));
   }
   assert.ok(!/business days|guarantee|arrive by|refund/i.test(payload.text), "no invented delivery or returns promise");
@@ -702,8 +702,8 @@ test("admin list filters by fulfilment status and exposes the to-ship queue coun
 
 test("customer email builders escape HTML, omit policy text when unset and never throw on odd input", () => {
   const order = {
-    ...sampleOrder, email: "x@example.com", subtotal_cents: 8870, shipping_cents: 0, tax_cents: 0,
-    lines_json: JSON.stringify([{ sku: "D204", name: "<b>Glaze</b>", qty: 1, lineCents: 8870 }]),
+    ...sampleOrder, email: "x@example.com", subtotal_cents: 12897, shipping_cents: 0, tax_cents: 0,
+    lines_json: JSON.stringify([{ sku: "D204", name: "<b>Glaze</b>", qty: 1, lineCents: 12897 }]),
     shipping_json: JSON.stringify({ firstName: "A<script>", lastName: "Lee", street: "1 & 2 St", street2: "", city: "Austin", state: "TX", zip: "78701" }),
   };
   const confirmation = buildConfirmationEmail(order);

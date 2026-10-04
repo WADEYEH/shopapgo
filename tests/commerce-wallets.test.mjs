@@ -122,7 +122,7 @@ test("checkout session sends payment_method_options for cards and wallets", { sk
   const { response, payloads } = await createSession(envFor(await createD1()));
   assert.equal(response.status, 200);
   assert.deepEqual(payloads[0].payment_method_options, { card: { auto_capture: true } });
-  assert.equal(payloads[0].amount, 29.9);
+  assert.equal(payloads[0].amount, 59.99);
 
   const held = await createSession(envFor(await createD1(), { PAYMENT_AUTO_CAPTURE: "false" }));
   assert.deepEqual(held.payloads[0].payment_method_options, { card: { auto_capture: false } });

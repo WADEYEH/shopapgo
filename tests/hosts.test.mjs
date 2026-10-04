@@ -107,7 +107,7 @@ test("ADMIN_HOST unset (local dev / tests): one host serves store and back offic
   assert.equal((await call(ADMIN, "/v3.html", { e })).status, 200);
 });
 
-test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; production stays unbound", async () => {
+test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; production binds store + admin hosts, admin token only", async () => {
   const { readFile } = await import("node:fs/promises");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
   const staging = toml.slice(toml.indexOf("[env.staging]"), toml.indexOf("[env.production]"));
@@ -116,8 +116,10 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(staging, /^ADMIN_HOST = "admin-staging\.shopapgo\.com"/m);
   assert.match(staging, /^ADMIN_ACCEPT_SITE_BASIC = "true"/m);
   const production = toml.slice(toml.indexOf("[env.production]"));
-  assert.ok(!/^\s*routes\s*=/m.test(production), "production routes stay commented out (planned: admin.shopapgo.com)");
-  assert.ok(!/^\s*ADMIN_HOST\s*=/m.test(production));
+  assert.match(production, /pattern = "store\.shopapgo\.com", custom_domain = true/);
+  assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
+  assert.match(production, /^ADMIN_HOST = "admin\.shopapgo\.com"/m);
+  assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|ROOT_PAGE|MCF_AUTO_SUBMIT|SITE_ENV)\s*=/m.test(production), "no flag that would open payments or the staging gate in production");
   assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production), "prod admin accepts ADMIN_TOKEN only unless the owner decides otherwise");
 });
 

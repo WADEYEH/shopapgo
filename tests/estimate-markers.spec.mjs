@@ -25,7 +25,7 @@ test.describe("[TO CONFIRM] markers", () => {
     await expect(summary.locator(".price-row", { hasText: "Shipping" })).toContainText("[TO CONFIRM]");
     await expect(summary.locator(".price-row", { hasText: "Tax" })).toContainText("[TO CONFIRM]");
     // The total row is untouched.
-    await expect(summary.locator(".price-row--total dd")).toHaveText("$29.90");
+    await expect(summary.locator(".price-row--total dd")).toHaveText("$59.99");
     await expect(page.locator("[data-checkout-button]")).toBeEnabled();
   });
 

@@ -132,7 +132,7 @@ const storedOrder = {
   currency: "USD",
   total_cents: 5480,
   payment_intent_id: "int_1",
-  lines_json: JSON.stringify([{ id: "d204", sku: "D204", name: "APGO Atomic Colored Glaze", routine: "dry", size: "300 mL", qty: 1, unitCents: 2990, lineCents: 2990 }]),
+  lines_json: JSON.stringify([{ id: "d204", sku: "D204", name: "APGO Atomic Colored Glaze", routine: "dry", size: "300 mL", qty: 1, unitCents: 5999, lineCents: 5999 }]),
   shipping_method: "standard",
   subtotal_cents: 5480,
   shipping_cents: 0,
@@ -163,5 +163,5 @@ test("publicOrder hides the address and masks the email", () => {
   const view = publicOrder({ ...storedOrder, shipping_json: JSON.stringify({ street: "1 Main St" }) });
   assert.equal(view.email, "s••••••@example.com");
   assert.ok(!JSON.stringify(view).includes("Main St"));
-  assert.ok(!("unitCents" in view.lines[0]));
+  assert.equal(view.lines[0].unitCents, view.lines[0].lineCents / view.lines[0].qty, "unitCents = lineCents / qty (added for the Pixel front end)");
 });

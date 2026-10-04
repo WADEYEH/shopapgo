@@ -104,7 +104,7 @@ test("the header cart link opens cart.html with the added item", async ({ page }
     const { pathname } = new URL(route.request().url());
     const reply = (data) => route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
     if (pathname === "/api/cart/quote") {
-      return reply({ currency: "USD", lines: [{ id: "d204", sku: "D204", name: "APGO Atomic Colored Glaze", routine: "dry", size: "300 mL", qty: 1, unitCents: 2990, lineCents: 2990 }], shippingMethod: "standard", subtotalCents: 2990, shippingCents: 0, taxCents: null, totalCents: 2990 });
+      return reply({ currency: "USD", lines: [{ id: "d204", sku: "D204", name: "APGO Atomic Colored Glaze", routine: "dry", size: "300 mL", qty: 1, unitCents: 5999, lineCents: 5999 }], shippingMethod: "standard", subtotalCents: 5999, shippingCents: 0, taxCents: null, totalCents: 5999 });
     }
     return reply({ currency: "USD", shippingMethods: [{ id: "standard", label: "Standard", detail: "", amountCents: 0 }], defaultShippingMethod: "standard", states: [] });
   });
