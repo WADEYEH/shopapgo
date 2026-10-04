@@ -1419,3 +1419,20 @@ body[data-v3-page="full"] .v3-footer .v3-footer__links a {
     font-size: 10px;
   }
 }
+
+/* Link from the landing page to each product page */
+.product-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 8px;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.product-detail-link:hover { text-decoration-thickness: 2px; }
+.product-detail-link:focus-visible { outline: 3px solid var(--orange, #f47b20); outline-offset: 3px; }
+.final-product__copy .product-detail-link { color: #fff; }

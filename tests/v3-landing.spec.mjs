@@ -32,7 +32,7 @@ test("V3 starts neutral and exposes the complete six-section story", async ({ pa
   await expect(page.locator('[data-final-state="none"]')).toBeVisible();
   await expect(page.locator("[data-mobile-sticky]")).toHaveAttribute("data-visible", "false");
 
-  await expect(page.locator(".v3-nav a")).toHaveText(["How It Works", "Choose", "Why APGO"]);
+  await expect(page.locator(".v3-nav a")).toHaveText(["How It Works", "Choose", "Why APGO", "Products"]);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Professional paint protection, made simple to apply.",
   );
