@@ -392,17 +392,51 @@ function setPlacing(placing) {
   button.replaceChildren(placing ? "Processing…" : `Place order · ${money(state.quote?.totalCents ?? 0)}`);
 }
 
+function readCookie(name) {
+  const hit = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  if (!hit) return "";
+  const raw = hit.slice(name.length + 1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+// Meta attribution for the server-side Conversions API (worker). Every field is optional and
+// absent fields are omitted. fbclid comes from the URL, else from the _fbc cookie
+// ("fb.1.<ms>.<fbclid>") because checkout.html is normally reached without the query string.
+function readAttribution() {
+  const fbp = readCookie("_fbp");
+  const fbc = readCookie("_fbc");
+  const fbclid = new URLSearchParams(window.location.search).get("fbclid") || fbc.split(".").slice(3).join(".");
+  const attribution = { fbp, fbc, fbclid, sourceUrl: window.location.href };
+  return Object.fromEntries(Object.entries(attribution).filter(([, value]) => value));
+}
+
+// GA4-style item list for the analytics event; prices are the server's (quote line unit price).
+const analyticsItems = (lines) =>
+  lines.map((line) => ({ item_id: line.sku, item_name: line.name, quantity: line.qty, price: line.unitCents / 100 }));
+
 async function ensureSession() {
   const payload = { items: cart.items(), contact: state.contact, shipping: state.shipping, method: state.method };
+  // The cache key is the order content only: attribution (cookies, URL) must never force a new PaymentIntent.
   const key = JSON.stringify(payload);
   const fresh = state.session && state.sessionKey === key && Date.now() - state.session.createdAt < SESSION_MAX_AGE_MS;
   if (fresh) return state.session;
 
-  const session = await api("/api/checkout/session", { method: "POST", body: payload });
+  const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, attribution: readAttribution() } });
   state.session = { ...session, createdAt: Date.now() };
   state.sessionKey = key;
   state.quote = session.quote;
   renderSummary(session.quote);
+  // The order (merchant_order_id) now exists: this is the InitiateCheckout moment for Meta.
+  track("checkout_session_created", {
+    order_id: session.orderId,
+    value: session.quote.totalCents / 100,
+    currency: session.quote.currency,
+    items: analyticsItems(session.quote.lines),
+  });
   return state.session;
 }
 
@@ -462,7 +496,14 @@ function trackPurchaseOnce(order) {
   } catch {
     // Without storage a refresh may re-send; acceptable for analytics.
   }
-  track("purchase", { transaction_id: order.id, value: order.totalCents / 100, currency: order.currency });
+  // GET /api/orders/:id lines carry lineCents but no unit price, so the unit price is derived.
+  const items = (order.lines ?? []).map((line) => ({
+    item_id: line.sku,
+    item_name: line.name,
+    quantity: line.qty,
+    price: line.lineCents / line.qty / 100,
+  }));
+  track("purchase", { transaction_id: order.id, value: order.totalCents / 100, currency: order.currency, ...(items.length ? { items } : {}) });
 }
 
 async function showConfirmation(orderId) {
