@@ -17,6 +17,26 @@ window.AirwallexComponentsSDK = {
   async init(options) { window.__awxInit = options; },
   async createElement(type, options) {
     const handlers = {};
+    if (type === "dropIn") {
+      (window.__awxDropInCreates ||= []).push({ type, options });
+      const element = {
+        mount(id) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.stubDropIn = (options?.methods || []).join(",") || "dropIn";
+          button.textContent = "Airwallex Pay";
+          button.style.cssText = "width:100%;min-height:48px";
+          button.addEventListener("click", () => handlers.success && handlers.success());
+          document.getElementById(id).append(button);
+          setTimeout(() => handlers.ready && handlers.ready(), 0);
+        },
+        on(name, handler) { handlers[name] = handler; },
+        async update(patch) { (window.__awxDropInUpdates ||= []).push(patch); },
+        destroy() {},
+      };
+      window.__awxDropIn = { fire: (name, detail) => handlers[name] && handlers[name]({ detail }) };
+      return element;
+    }
     if (type === "applePayButton" || type === "googlePayButton") {
       // Wallet elements: feature-detection mock. A wallet only reports "ready" when the
       // test says the device supports it (window.__awxWalletReady[type] === true).
@@ -171,7 +191,18 @@ export async function seedCart(page, items) {
   }, items);
 }
 
-export async function fillToPayment(page) {
+export async function selectPayMethod(page, id) {
+  const radio = page.locator(`input[name="payMethod"][value="${id}"]`);
+  if (!(await radio.count())) return;
+  // Custom .check__box sits over the native input (opacity 0), so a normal
+  // check() is intercepted. Click the visible label instead.
+  const label = page.locator(`label:has(input[name="payMethod"][value="${id}"]) .check__label`);
+  await label.scrollIntoViewIfNeeded();
+  await label.click({ force: true });
+  await expect(radio).toBeChecked();
+}
+
+export async function fillToPayment(page, { payMethod } = {}) {
   await page.locator("#email").fill("test.shopper@example.com");
   await page.getByRole("button", { name: /Continue to shipping/ }).click();
   await page.getByLabel("First name").fill("Test");
@@ -182,6 +213,7 @@ export async function fillToPayment(page) {
   await page.getByLabel("ZIP code").fill("78701");
   await page.getByRole("button", { name: /Continue to payment/ }).click();
   await expect(page.locator('[data-step="payment"]')).toBeVisible();
+  if (payMethod) await selectPayMethod(page, payMethod);
 }
 
 export async function fillCard(page) {
@@ -191,5 +223,5 @@ export async function fillCard(page) {
 }
 
 export async function choosePayWith(page, method) {
-  await page.locator(`label:has(input[name="payWith"][value="${method}"])`).click();
+  await selectPayMethod(page, method);
 }

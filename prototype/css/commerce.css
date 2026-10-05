@@ -625,6 +625,15 @@ legend { padding: 0; }
 .wallets__divider::before,
 .wallets__divider::after { content: ""; flex: 1; height: 1px; background: var(--border-default); }
 
+/* ---------- Payment method chooser (Card / Airwallex Pay / PayPal) ---------- */
+
+[data-pay-methods] { margin: 0; }
+[data-pay-methods][hidden] { display: none; }
+[data-pay-panel][hidden] { display: none; }
+.pay-options { margin-top: 12px; }
+.airwallex-pay { min-width: 0; min-height: 72px; }
+.airwallex-pay > * { width: 100%; }
+
 /* ---------- Footer links + policy pages ---------- */
 
 .shop-footer__links { display: flex; flex-wrap: wrap; gap: 4px 24px; }

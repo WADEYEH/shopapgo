@@ -1,6 +1,6 @@
 // APGO US store Worker: serves prototype/ as static assets and owns /api/* and /admin/*.
 //
-//   GET  /api/store/config         prices, shipping methods, tax status, wallets, states, Airwallex env, PayPal
+//   GET  /api/store/config         prices, shipping methods, tax status, wallets, states, Airwallex env, Airwallex Pay, PayPal
 //   GET  /.well-known/apple-developer-merchantid-domain-association   Apple Pay domain check
 //   POST /api/cart/quote           server-priced cart ({ items, state?, method? })
 //   POST /api/checkout/session     create order + Airwallex PaymentIntent
@@ -144,7 +144,8 @@ async function handleCheckoutSession(request, env, services) {
           },
         },
       },
-      // Same capture mode for cards and the Apple Pay / Google Pay elements.
+      // Same capture mode for cards, wallets, and Airwallex Pay (Drop-in confirms
+      // `airwallex_pay` against this intent; no extra create fields are required).
       payment_method_options: paymentMethodOptions(env),
       // Attribution first so it can never overwrite source / order_id.
       metadata: { ...attributionMetadata(attribution), source: "apgo-us-store", order_id: orderId },

@@ -105,11 +105,9 @@ test("checkout.html hides the PayPal slot until JS enables it", async () => {
   assert.ok(html.includes('id="paypal-button"'));
   assert.ok(html.includes("data-paypal hidden"));
   assert.ok(html.includes("data-payment-intro"));
-  assert.ok(html.includes("data-pay-choice"));
-  assert.ok(html.includes('name="payWith"'));
-  assert.ok(html.includes('value="paypal"'));
-  assert.ok(html.includes('value="card"'));
-  assert.ok(html.includes("data-card-panel"));
+  assert.ok(html.includes("data-pay-methods"));
+  assert.ok(html.includes('data-pay-panel="paypal"'));
+  assert.ok(html.includes('data-pay-panel="card"'));
   assert.ok(!html.includes("www.paypal.com/sdk/js"), "SDK is loaded from config.clientId, not hard-coded in HTML");
 });
 
@@ -123,8 +121,9 @@ test("checkout.js persists the draft in sessionStorage and treats PayPal vs card
   assert.ok(source.includes("clearCheckoutDraft"));
   assert.ok(!source.includes("localStorage"));
   assert.ok(source.includes("applyPayMethod"));
-  assert.ok(source.includes('state.payWith !== "paypal"'));
-  assert.ok(source.includes('state.payWith === "card"'));
-  assert.ok(source.includes("[data-card-panel]"));
-  assert.ok(source.includes("[data-pay-choice]"));
+  assert.ok(source.includes("renderPayMethods"));
+  assert.ok(source.includes('state.payMethod !== "paypal"'));
+  assert.ok(source.includes('state.payMethod !== "card"'));
+  assert.ok(source.includes("[data-pay-panel]"));
+  assert.ok(source.includes("[data-pay-methods]"));
 });

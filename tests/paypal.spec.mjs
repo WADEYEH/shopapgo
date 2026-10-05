@@ -5,11 +5,11 @@ import {
   ENABLED_PAYPAL,
   ORDER_ID,
   PAYPAL_ID,
-  choosePayWith,
   fillCard,
   fillToPayment,
   mockStore,
   seedCart,
+  selectPayMethod,
 } from "./helpers/store-mock.mjs";
 
 const usd = (cents) => `$${(cents / 100).toFixed(2)}`;
@@ -20,16 +20,20 @@ async function toPaypalPayment(page, items = [{ sku: "d204", qty: 1 }]) {
   await fillToPayment(page);
 }
 
+async function choosePaypal(page) {
+  await selectPayMethod(page, "paypal");
+}
+
 test.describe("PayPal checkout button", () => {
   test("hidden when paypal config is missing or disabled", async ({ page }) => {
     await mockStore(page);
     await toPaypalPayment(page);
     await expect(page.locator("[data-paypal]")).toBeHidden();
     await expect(page.locator("#paypal-button")).toBeHidden();
-    await expect(page.locator("[data-pay-choice]")).toBeHidden();
-    await expect(page.locator("[data-card-panel]")).toBeVisible();
+    await expect(page.locator('input[name="payMethod"][value="paypal"]')).toHaveCount(0);
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeVisible();
     await expect(page.locator("[data-wallet-divider]")).toBeHidden();
-    await expect(page.locator("[data-payment-intro]")).toHaveText("Card details are encrypted by Airwallex and never stored by APGO.");
+    await expect(page.locator("[data-payment-intro]")).toContainText("Airwallex Pay");
   });
 
   test("hidden when paypal.enabled is false", async ({ page }) => {
@@ -52,26 +56,28 @@ test.describe("PayPal checkout button", () => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL });
     await toPaypalPayment(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]);
 
-    await expect(page.locator("[data-pay-choice]")).toBeVisible();
+    await expect(page.locator("[data-pay-methods]")).toBeVisible();
+    await expect(page.locator('input[name="payMethod"][value="paypal"]')).toBeVisible();
+    await expect(page.locator('input[name="payMethod"][value="card"]')).toBeChecked();
     await expect(page.locator("[data-paypal]")).toBeHidden();
-    await expect(page.locator("[data-card-panel]")).toBeHidden();
-    await expect(page.locator("[data-place-order]")).toBeHidden();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeVisible();
+    await expect(page.locator("[data-place-order]")).toBeVisible();
     await expect(page.locator("[data-wallet-divider]")).toBeHidden();
-    await expect(page.locator("[data-payment-intro]")).toContainText("Choose PayPal or a card");
+    await expect(page.locator("[data-payment-intro]")).toContainText("Airwallex Pay");
     await expect(page.locator("[data-summary-note]")).toContainText("Airwallex and PayPal");
 
-    await choosePayWith(page, "paypal");
+    await choosePaypal(page);
     await expect(page.locator("[data-paypal]")).toBeVisible();
     await expect(page.locator("[data-stub-paypal]")).toBeVisible();
-    await expect(page.locator("[data-card-panel]")).toBeHidden();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeHidden();
     await expect(page.locator("[data-place-order]")).toBeHidden();
 
-    await choosePayWith(page, "card");
+    await selectPayMethod(page, "card");
     await expect(page.locator("[data-paypal]")).toBeHidden();
-    await expect(page.locator("[data-card-panel]")).toBeVisible();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeVisible();
     await expect(page.locator("[data-place-order]")).toBeVisible();
 
-    await choosePayWith(page, "paypal");
+    await choosePaypal(page);
     const total = usd(DEFAULT_PRICING.products.d204.priceCents + 2 * DEFAULT_PRICING.products.d215.priceCents);
     await expect(page.locator(".price-row--total")).toContainText(total);
     await expect(page.locator("[data-place-order]")).toBeHidden();
@@ -115,7 +121,7 @@ test.describe("PayPal checkout button", () => {
   test("review capture is not treated as a Purchase", async ({ page }) => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL, paypalCaptureStatus: "review" });
     await toPaypalPayment(page);
-    await choosePayWith(page, "paypal");
+    await choosePaypal(page);
     await page.locator("[data-stub-paypal]").click();
 
     await expect(page.locator("[data-confirmation]")).toContainText("Order received");
@@ -132,7 +138,7 @@ test.describe("PayPal checkout button", () => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL });
     await page.addInitScript(() => { window.__paypalCancel = true; });
     await toPaypalPayment(page);
-    await choosePayWith(page, "paypal");
+    await choosePaypal(page);
     await page.locator("[data-stub-paypal]").click();
 
     await expect(page.locator("[data-checkout-flow]")).toBeVisible();
@@ -187,8 +193,8 @@ test.describe("PayPal checkout button", () => {
   test("card checkout still works when PayPal is available as the other choice", async ({ page }) => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL });
     await toPaypalPayment(page);
-    await choosePayWith(page, "card");
-    await expect(page.locator("[data-card-panel]")).toBeVisible();
+    await expect(page.locator('input[name="payMethod"][value="paypal"]')).toBeVisible();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeVisible();
     await expect(page.locator("[data-paypal]")).toBeHidden();
 
     await fillCard(page);

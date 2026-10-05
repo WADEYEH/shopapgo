@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { DEFAULT_PRICING } from "../worker/pricing.js";
-import { ORDER_ID, fillCard, fillToPayment, mockStore, seedCart } from "./helpers/store-mock.mjs";
+import { ORDER_ID, fillCard, fillToPayment, mockStore, seedCart, selectPayMethod } from "./helpers/store-mock.mjs";
 
 const usd = (cents) => `$${(cents / 100).toFixed(2)}`;
 const { d204, d215 } = DEFAULT_PRICING.products;
@@ -145,6 +145,36 @@ test.describe("checkout", () => {
     expect(draft.step).toBe("payment");
     expect(draft.contact).toEqual({ email: "ada@example.com", marketingOptIn: true });
     expect(draft.shipping).toMatchObject({ firstName: "Ada", state: "TX", zip: "78701" });
+  });
+
+  test("Airwallex Pay is a choose-one option and confirms through the same session", async ({ page }) => {
+    const calls = await mockStore(page);
+    await seedCart(page, [{ sku: "d204", qty: 1 }]);
+    await page.goto("/checkout.html");
+    await fillToPayment(page);
+
+    await expect(page.locator('input[name="payMethod"][value="airwallex_pay"]')).toBeVisible();
+    await expect(page.locator('input[name="payMethod"][value="card"]')).toBeChecked();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeVisible();
+    await expect(page.locator("#card-number")).toBeVisible();
+
+    await selectPayMethod(page, "airwallex_pay");
+    await expect(page.locator("[data-pay-panel=\"airwallex_pay\"]")).toBeVisible();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeHidden();
+    await expect(page.locator("[data-place-order]")).toBeHidden();
+    await expect(page.locator('[data-stub-drop-in="airwallex_pay"]')).toBeVisible();
+
+    await page.locator('[data-stub-drop-in="airwallex_pay"]').click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
+    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    expect(calls.session).toHaveLength(1);
+    const created = await page.evaluate(() => window.__awxDropInCreates);
+    expect(created).toHaveLength(1);
+    expect(created[0].options.methods).toEqual(["airwallex_pay"]);
+    expect(created[0].options.intent_id).toBe("int_test");
+    expect(created[0].options.client_secret).toBe("secret_test");
+    expect(created[0].options.currency).toBe("USD");
+    expect(created[0].options.country_code).toBe("US");
   });
 
   test("an empty cart does not start checkout", async ({ page }) => {

@@ -96,7 +96,7 @@ test.describe("Apple Pay / Google Pay", () => {
     expect(apple).toMatchObject({ countryCode: "US", totalPriceLabel: "APGO", buttonType: "buy" });
     // 59.99 + 2 × 29.99 from the server quote (standard shipping is free)
     expect(apple.amount).toEqual({ value: "119.97", currency: "USD" });
-    await expect(page.locator("[data-wallet-divider]")).toContainText("Or pay by card");
+    await expect(page.locator("[data-wallet-divider]")).toContainText("Or pay another way");
   });
 
   test("Apple Pay is not attempted when the device cannot pay, even if Google Pay can", async ({ page }) => {

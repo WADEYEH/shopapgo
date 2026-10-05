@@ -113,7 +113,7 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     a
                                           ├─ worker/customer-email.js  order confirmation + shipment emails (Resend, opt-in)
                                           ├─ worker/amazon-mcf.js  Amazon MCF client (bearer call to the amazon-spapi-mcp outbound endpoints)
                                           └─ worker/mcf.js         MCF order flow: submit · retry · status sync (opt-in, default OFF)
-                     └─ Airwallex.js split card elements (cardNumber / expiry / cvc, iframes)
+                     └─ Airwallex.js split card elements + Drop-in restricted to airwallex_pay
 ```
 
 1. The browser keeps only `{ sku, qty }` in `localStorage` (`apgo_us_cart_v1`).
@@ -122,8 +122,12 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     a
    re-prices the cart, stores a `pending` order in D1 and creates an Airwallex
    PaymentIntent (`merchant_order_id` = order id). Only the intent's
    `client_secret` reaches the browser.
-3. The browser calls `cardNumber.confirm({ intent_id, client_secret })`. A
-   declined card can be retried; the same PaymentIntent is reused while the
+3. On the payment step the shopper chooses **Card**, **Airwallex Pay**, or
+   **PayPal** (PayPal only when enabled). Card still calls
+   `cardNumber.confirm({ intent_id, client_secret })`. Airwallex Pay mounts
+   Airwallex.js Drop-in restricted to `methods: ['airwallex_pay']` on the same
+   PaymentIntent (`intent_id`, `client_secret`, `currency`, `country_code: 'US'`).
+   A declined card can be retried; the same PaymentIntent is reused while the
    cart/address is unchanged and younger than 50 minutes.
 4. `payment_intent.succeeded` (webhook) or `GET /api/orders/:id` (retrieve
    fallback, used after 3DS redirects) marks the order `paid`. A succeeded
@@ -133,7 +137,7 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     a
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/store/config` | prices, shipping methods, tax status, wallet flags, US states, Airwallex env, PayPal `{ enabled, clientId, env }`, `storeReady` |
+| `GET /api/store/config` | prices, shipping methods, tax status, wallet flags, US states, Airwallex env, `airwallexPay.enabled`, PayPal `{ enabled, clientId, env }`, `storeReady` |
 | `POST /api/cart/quote` | `{ items, state?, method? }` → priced lines and totals |
 | `POST /api/checkout/session` | `{ items, contact, shipping, method }` → `{ orderId, quote, intent }` |
 | `POST /api/checkout/paypal/order` | `{ items, contact, shipping?, method? }` → `{ orderId, quote, paypal, eventIds }` (PayPal Orders v2; see [paypal.md](paypal.md)) |
@@ -281,11 +285,12 @@ gets `origin` and `merchantInfo.merchantName`. Airwallex handles Apple's and
 Google's gateway registration (web only); we do not need our own Apple Merchant ID,
 certificates or a Google merchant id.
 
-**Where it appears.** On the checkout **Payment** step, above the card fields, with
-an "Or pay by card" divider. The order and PaymentIntent are the same ones the card
-form uses, so a shopper who tries a wallet and then pays by card does not create a
-second order. Settlement is unchanged: `payment_intent.succeeded` webhook or
-`GET /api/orders/:id` (retrieve fallback), then the same notification.
+**Where it appears.** On the checkout **Payment** step, above the payment-method
+chooser, with an "Or pay another way" divider. The order and PaymentIntent are the
+same ones the card form and Airwallex Pay Drop-in use, so a shopper who tries a
+wallet and then pays another way does not create a second order. Settlement is
+unchanged: `payment_intent.succeeded` webhook or `GET /api/orders/:id` (retrieve
+fallback), then the same notification.
 
 **Hidden unless it can really work** (`prototype/js/commerce/wallets.js`):
 
@@ -373,6 +378,48 @@ in production:
    on `http://localhost`; the automated tests mock feature detection.
 
 Until steps 1–3 are done the buttons simply never become `ready` and stay hidden.
+
+## Airwallex Pay
+
+The production Airwallex account currently has **Airwallex Pay** enabled and Cards
+Visa/Mastercard return `card_brand_not_supported`. The card fields stay on the
+page for when Cards are turned on; Airwallex Pay is the working Airwallex method.
+
+**How it is mounted.** There is no dedicated `createElement('airwallexPay')` type
+in current Airwallex.js docs. The payment step mounts Drop-in restricted to that
+one method:
+
+```js
+createElement('dropIn', {
+  intent_id,
+  client_secret,
+  currency,              // from the PaymentIntent
+  country_code: 'US',
+  methods: ['airwallex_pay'],
+  alwaysShowMethodLabel: true,
+  shopper_email,         // checkout contact
+  shopper_name,          // shipping first + last
+})
+```
+
+The Drop-in iframe has its own confirm button (`showConfirmButton` defaults to
+`true`). On `success` the page uses the same confirmation poll as card / wallets
+(`GET /api/orders/:id` plus the Airwallex webhook).
+
+**Create PaymentIntent.** No extra fields. `/api/checkout/session` already sends
+`return_url`, `customer`, `order` (including `shipping.address.country_code`), and
+`payment_method_options.card.auto_capture`. Drop-in confirms `airwallex_pay`
+against that intent.
+
+**Choose-one UX.** Card / Airwallex Pay / PayPal (when PayPal is enabled) are
+radios. Selecting one hides the others. Apple Pay and Google Pay stay in the
+express block above the chooser.
+
+**Operator flag.** `AIRWALLEX_PAY_ENABLED=false` hides the option (default on).
+`GET /api/store/config` includes `airwallexPay: { enabled }`. Honour `storeReady`.
+
+Code: `prototype/js/commerce/airwallex-pay.js`, wiring in
+`prototype/js/commerce/checkout.js`. Tests: `tests/airwallex-pay.test.mjs`.
 
 ## Go-live decisions ("needs your decision before prod")
 
@@ -991,6 +1038,8 @@ These are placeholders copied from the design-system kits, not approved terms:
   decline + retry, empty cart, overflow at 320/390/1440 px, axe.
 - `tests/commerce-pricing.test.mjs` (node:test): pricing defaults, `PRICING_JSON`
   overrides and validation, configurable tax, prod gate, no price in front-end code.
+- `tests/airwallex-pay.test.mjs` (node:test): Airwallex Pay Drop-in options (`airwallex_pay`),
+  config flag, checkout.js / checkout.html wiring.
 - `tests/commerce-wallets.test.mjs` (node:test): Apple/Google Pay detection, Airwallex.js
   element options, `payment_method_options`, flags, Apple domain-file route, wrangler routing.
 - `tests/wallets.spec.mjs` (Playwright, feature-detection mocks): no-wallet device shows

@@ -120,41 +120,25 @@
               <h2 class="heading-guide-h2" tabindex="-1">Payment</h2>
               <p class="body body--sm" data-payment-intro>Card details are encrypted by Airwallex and never stored by APGO.</p>
             </div>
-            <!-- Apple/Google Pay stay collapsed unless ready. PayPal vs card is choose-one below. -->
+            <!-- Apple/Google Pay stay collapsed unless ready. Card / Airwallex Pay / PayPal are choose-one. -->
             <div class="wallets" data-wallets role="group" aria-label="Express payment">
               <div class="wallet-slot" data-wallet-slot="applePay"><div id="wallet-applepay"></div></div>
               <div class="wallet-slot" data-wallet-slot="googlePay"><div id="wallet-googlepay"></div></div>
-              <p class="wallets__divider label label--xs" data-wallet-divider hidden><span>Or pay by card</span></p>
+              <p class="wallets__divider label label--xs" data-wallet-divider hidden><span>Or pay another way</span></p>
             </div>
-            <fieldset class="pay-choice" data-pay-choice hidden>
-              <legend class="label label--xs">Choose how to pay</legend>
-              <div class="pay-choice__options">
-                <div class="ship-option">
-                  <label class="check">
-                    <span class="check__control">
-                      <input type="radio" name="payWith" value="paypal">
-                      <span class="check__box" aria-hidden="true"></span>
-                    </span>
-                    <span class="check__label">PayPal</span>
-                    <span class="check__description">Pay with your PayPal account</span>
-                  </label>
-                </div>
-                <div class="ship-option">
-                  <label class="check">
-                    <span class="check__control">
-                      <input type="radio" name="payWith" value="card">
-                      <span class="check__box" aria-hidden="true"></span>
-                    </span>
-                    <span class="check__label">Card</span>
-                    <span class="check__description">Visa, Mastercard, and other cards</span>
-                  </label>
-                </div>
-              </div>
+            <fieldset data-pay-methods hidden>
+              <legend class="label label--xs">Payment method</legend>
+              <div class="ship-options pay-options" data-pay-options></div>
             </fieldset>
-            <div class="paypal" data-paypal hidden>
-              <div id="paypal-button"></div>
+            <div data-pay-panel="airwallex_pay" hidden>
+              <div class="airwallex-pay" id="airwallex-pay"></div>
             </div>
-            <div class="card-panel" data-card-panel>
+            <div data-pay-panel="paypal" hidden>
+              <div class="paypal" data-paypal hidden>
+                <div id="paypal-button"></div>
+              </div>
+            </div>
+            <div data-pay-panel="card">
               <div class="field" data-field="cardNumber">
                 <span class="field__label" id="card-number-label">Card number<span class="req" aria-hidden="true"> *</span></span>
                 <div class="card-input" id="card-number" role="group" aria-labelledby="card-number-label"></div>

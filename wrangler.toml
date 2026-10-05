@@ -26,6 +26,7 @@ AIRWALLEX_ENV = "demo"
 #   PRICING_JSON      partial override of worker/pricing.js DEFAULT_PRICING (prices, shipping, tax)
 #   PRICING_APPROVED  must be "true" before AIRWALLEX_ENV="prod" will take payments
 #   APPLE_PAY_ENABLED / GOOGLE_PAY_ENABLED   "false" hides that wallet button (default on)
+#   AIRWALLEX_PAY_ENABLED                    "false" hides Airwallex Pay (default on)
 #   PAYMENT_AUTO_CAPTURE                     "false" = authorize only (default capture)
 #   WALLET_MERCHANT_NAME                     label shown on the wallet sheet (default "APGO")
 #   EXPRESS_CHECKOUT  "true" shows the cart-page Apple Pay / Google Pay block (default off; staging on, production unset)
