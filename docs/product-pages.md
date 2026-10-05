@@ -28,12 +28,17 @@ Copy is the design's (FTC-reviewed) text, unchanged.
 ## Where this build differs from the design
 
 * **Prices:** the design shows placeholder prices ($29.90 / $24.90 / pair $49.90). The page reads prices
-  from `/api/store/config`; the pair price is the sum of the two, with the pair discount marked `[TO CONFIRM]`.
-* **Trust strip, guarantee and FAQ shipping/returns lines** are placeholders in the design; they carry a
-  `[TO CONFIRM]` mark here (the returns policy page still has open items).
+  from `/api/store/config`; the pair total is the sum of the two. The design's pair discount is not shown
+  (no confirmed discount price); the "add the other routine" checkbox stays, without any offer wording.
+* **Trust strip, guarantee and FAQ shipping/returns lines** are placeholders in the design. Since the store
+  went live (PRICING_APPROVED) they are not shown: the "Free US shipping" / "30-day returns" trust items and
+  the "30 days to change your mind" guarantee section are removed, and the FAQ answer only says shipping
+  options and cost are shown at checkout and links the Returns & Refunds page. No `[TO CONFIRM]` marker is
+  shown to shoppers on the product pages; restore these only with brand-confirmed wording.
 * **Rating slot / review slots:** the design draws dashed placeholder boxes. They are not shown to
-  shoppers: the rating line and reviews appear only with 3+ verified reviews. Before/after slots show
-  (labelled `[TO CONFIRM: real photo pending]`) only while the store is in estimate mode.
+  shoppers: the rating line and reviews appear only with 3+ verified reviews. The before/after section is
+  hidden entirely until a real photo pair exists in product-reviews.js (no placeholder slots, in any mode).
+* **Price note:** no "placeholder price" note; the note only appears when the price could not be loaded.
 * **Quiz** uses native radio groups (keyboard and screen-reader friendly); upcoming questions are dimmed by
   colour, not opacity, to keep contrast.
 * **Keep reading:** the design links two guide articles that do not exist in this repo, so the section
