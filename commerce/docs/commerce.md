@@ -13,6 +13,10 @@ pages and a Cloudflare Worker.
 
 ## Handoff
 
+**Current takeover entry point:** [October 5 agent handoff](handoff-2026-10-05.md) summarizes the latest verified implementation, owner decisions, remaining work and historical statements below that are obsolete.
+
+Latest owner decisions: see [October 4 launch decisions](launch-decisions-2026-10-04.md) for the confirmed MCF route, single-bottle SKUs, intended Amazon-matching prices, team mailbox and the owner's decision not to arrange a real fulfillment test. This is not a production deployment approval. Older configuration snapshots below may have been superseded; use the chronological staging rollout record for verified implementation status.
+
 Start here if you are taking over the project. **This section contains no passwords, tokens or keys, only their names and where they live.**
 
 ### Status in one paragraph
