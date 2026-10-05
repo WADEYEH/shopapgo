@@ -86,7 +86,7 @@ test("landing shopper CTAs and price copy no longer send buyers to Amazon", () =
     "components/us/landing/FinalSection.js",
     "components/us/landing/ProductCta.js",
     "lib/us/faq.js",
-    "app/(us)/us/page.js",
+    "app/(us)/page.js",
     "app/(us)/layout.js",
   ];
   for (const file of files) {

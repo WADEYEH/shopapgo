@@ -28,17 +28,14 @@ Vercel 帳號的 GitHub 連結是 `WADEYEH`；本機 git 以 `anpuuuuu`（collab
 | Output directory | `out` |
 | Framework | Next.js (Static HTML Export) |
 
-### 根路徑重導（雙主機期間）
+### 首頁與 /us 重導
 
-原本 `next.config.mjs` 的 `redirects()` 函數（`/ → /us` 301）在靜態匯出模式不支援。
-遷移期間需要兩套重導向機制，分別給 Vercel 和 Cloudflare Pages 使用：
+美國站首頁已掛在網域根路徑 `/`。精確路徑 `/us` 與 `/us/` 301 到 `https://www.shopapgo.com/`；`/us/guides` 與 `/us/assets` 維持原 URL、不重導。
 
 | 檔案 | 平台 | 說明 |
 |------|------|------|
-| `vercel.json` | Vercel | DNS 切換前，Vercel production 使用此設定 |
-| `public/_redirects` | Cloudflare Pages | DNS 切換後，Cloudflare Pages 使用此設定 |
-
-兩者都設定 `/ → /us` 301 永久重導向。**DNS 切換到 Cloudflare Pages 後**，可選擇移除 `vercel.json` 中的 redirects 區塊（若不再需要 Vercel 部署）。
+| `vercel.json` | Vercel（若仍部署） | `/us`、`/us/` → `/` 301 |
+| `public/_redirects` | Cloudflare Pages | 同上（絕對 URL 目標） |
 
 ### 遷移階段
 
@@ -72,14 +69,13 @@ push 到 `main` 後 Vercel 會自動建置並部署到 shopapgo.com。
 
 ```
 app/
-  (tw)/                 # 台灣站 root layout（lang=zh-Hant）
+  (tw)/                 # 預留給台灣站（目前無 page；勿與 US 根路徑衝突）
     layout.js
-    page.js             # / 首頁（目前為建置中佔位頁）
   (us)/                 # 美國站 root layout（lang=en、Barlow 字體、us.css）
     layout.js
     us.css
+    page.js             # / 美國落地頁（CTA 連同域商品頁）
     us/
-      page.js           # /us 美國落地頁（CTA 連同域商品頁）
       guides/
         page.js         # /us/guides 指南總覽
         after-washing-your-car/page.js
@@ -94,11 +90,11 @@ components/us/
   guides/               # 指南共用 article、麵包屑、響應式目錄元件
 app/
   robots.js             # /robots.txt（必須在 app 根目錄，放進 route group 會失效）
-  sitemap.js            # /sitemap.xml，六個可索引頁面，刻意不含 308 轉走的 /
+  sitemap.js            # /sitemap.xml：首頁為 /，指南仍為 /us/guides/*；不含會 301 的 /us
 lib/
   site.js               # SITE_URL：正式網域的唯一來源，metadataBase、JSON-LD、sitemap 共用
 lib/us/
-  routes.js             # 所有站內連結與素材路徑的唯一來源（US_BASE = "/us"）
+  routes.js             # 站內連結唯一來源（home="/"；guides/assets 仍用 US_BASE="/us"）
   navigation.js         # 主選單、頁尾共用的分組與短標題；首頁段落目錄
   company.js            # apgo.tw 公開公司資料、電話、地址、營業時間與預設客服信箱
   tokens.js             # 設計 tokens：色票、字體、產品基本資料
@@ -109,9 +105,9 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 .env.example            # 美國站所需環境變數清單
 ```
 
-## 美國站（/us）
+## 美國站（/ 首頁；指南 /us/guides）
 
-`/us` 是 APGO 美國落地頁，依設計交付包高保真重建。主要購買 CTA 連到同域商店商品頁（`/products/d204`、`/products/d215`）；結帳由同一主機的 Worker 處理。產品與指南正文仍維持原核准文案。
+`/` 是 APGO 美國落地頁（原 `/us`），依設計交付包高保真重建。精確 `/us` 會 301 到 `/`。主要購買 CTA 連到同域商店商品頁（`/products/d204`、`/products/d215`）；結帳由同一主機的 Worker 處理。產品與指南正文仍維持原核准文案。
 
 ### 環境變數
 

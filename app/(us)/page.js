@@ -7,14 +7,17 @@ const title = "APGO Atomic Colored Glaze & Atomic Glaze Coating · Professional 
 const description =
   "Same simple core: spray, spread, and finish with a clean towel. The only difference is timing—Dry after you've dried the paint, Wet while it's still wet. Shop D204 and D215 on this site.";
 
+// Next metadata normalizes pathname "/" to origin without a trailing slash
+// (resolveAbsoluteUrlWithPathname). SEO wants https://www.shopapgo.com/ exactly,
+// so canonical + og:url are emitted as raw head tags below instead of via metadata.
+const homeUrl = new URL(routes.home, SITE_URL).href;
+
 export const metadata = {
   title: { absolute: title },
   description,
-  alternates: { canonical: routes.home },
   openGraph: {
     title,
     description,
-    url: routes.home,
     images: [asset("products/d204-packshot.png")],
   },
 };
@@ -24,7 +27,7 @@ const jsonLd = [
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "APGO",
-    url: SITE_URL + routes.home,
+    url: homeUrl,
     logo: SITE_URL + asset("brand/apgo-logo.png"),
     foundingDate: "2011",
     address: { "@type": "PostalAddress", addressLocality: "Taipei", addressCountry: "TW" },
@@ -43,6 +46,8 @@ const jsonLd = [
 export default function USLandingPage() {
   return (
     <>
+      <link rel="canonical" href={homeUrl} />
+      <meta property="og:url" content={homeUrl} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <Landing />
     </>

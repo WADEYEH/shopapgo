@@ -1,7 +1,6 @@
-// No <GtmScripts /> here on purpose. "/" is 308-redirected to /us by next.config.mjs,
-// so this layout never loads today. When the Taiwan storefront takes over "/", mount
-// the same component behind its own NEXT_PUBLIC_APGO_TW_* pair rather than reusing the
-// US container: the two markets want separate GA4 properties.
+// Reserved for a future Taiwan storefront. The domain root "/" now serves the US
+// homepage (app/(us)/page.js). Do not add a competing page.js here without moving
+// the US landing off "/".
 import { SITE_URL } from "@/lib/site";
 
 export const metadata = {
