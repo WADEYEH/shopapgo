@@ -4,9 +4,8 @@ import { SITE_URL } from "@/lib/site";
 // Required for Next.js static export (output: "export").
 export const dynamic = "force-static";
 
-// Indexable pages only. "/" is left out on purpose: public/_redirects 301s it to /us,
-// and a redirecting URL in a sitemap is a permanent "Page with redirect" row in
-// Search Console.
+// Indexable pages only. The US homepage is at "/"; public/_redirects 301s exact
+// /us and /us/ to root. Do not list /us itself (redirect URL). Guides stay under /us/guides.
 //
 // lastModified is the date the PROSE last changed. Bump it for copy edits, not for
 // styling or component refactors, and never derive it from the build date: a sitemap
