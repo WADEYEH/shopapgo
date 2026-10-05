@@ -6,7 +6,7 @@ import { asset, routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
 import { track } from "@/lib/us/analytics";
-import AmazonCta from "./AmazonCta";
+import ProductCta from "./ProductCta";
 import RoutineSelector from "./RoutineSelector";
 
 // Per-product content for the routine section. Copy is FTC-reviewed; do not edit.
@@ -28,7 +28,7 @@ const PANEL = {
       { img: "application/d204-step-2.webp", alt: "Spreading with an applicator cloth", cap: "Spread" },
       { img: "application/d204-step-3.webp", alt: "Buffing with a clean microfiber towel", cap: "Buff" },
     ],
-    cta: "Buy Dry · Atomic Colored Glaze",
+    cta: "Shop D204",
     playLabel: "Play Dry application video",
     pendingLabel: "Dry application video pending approval",
   },
@@ -50,7 +50,7 @@ const PANEL = {
       { img: "application/d215-step-3.webp", alt: "Spraying Atomic Glaze Coating onto wet paint", cap: "Spray" },
       { img: "application/d215-step-4.webp", alt: "Drying the hood with a clean towel", cap: "Dry" },
     ],
-    cta: "Buy Wet · Atomic Glaze Coating",
+    cta: "Shop D215",
     playLabel: "Play Wet application video",
     pendingLabel: "Wet application video pending approval",
   },
@@ -248,7 +248,7 @@ function Panel({ sku, playing, onPlay }) {
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", paddingTop: 4 }}>
-          <AmazonCta
+          <ProductCta
             sku={sku}
             placement="product"
             style={{
@@ -267,8 +267,7 @@ function Panel({ sku, playing, onPlay }) {
             }}
           >
             {p.cta}
-          </AmazonCta>
-          <span style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet }}>Opens Amazon.com</span>
+          </ProductCta>
           <Link className="us-text-link" href={sku === "d204" ? routes.coloredGlaze : routes.glazeCoating}>Application guide <span aria-hidden="true">→</span></Link>
         </div>
       </div>

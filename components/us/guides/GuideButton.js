@@ -2,7 +2,7 @@ import { color } from "@/lib/us/tokens";
 
 // Secondary (outlined) button used inside guide cards. Rendered as a <span> because the
 // whole card is already the link; the outline style distinguishes it from the filled
-// orange primary buttons reserved for Amazon / product CTAs.
+// orange primary buttons reserved for product CTAs.
 export default function GuideButton({ children }) {
   return (
     <span

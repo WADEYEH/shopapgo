@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/site";
 
 const title = "APGO Atomic Colored Glaze & Atomic Glaze Coating · Professional finish care, made simple";
 const description =
-  "Same simple core: spray, spread, and finish with a clean towel. The only difference is timing—Dry after you've dried the paint, Wet while it's still wet. Available on Amazon.com.";
+  "Same simple core: spray, spread, and finish with a clean towel. The only difference is timing—Dry after you've dried the paint, Wet while it's still wet. Shop D204 and D215 on this site.";
 
 export const metadata = {
   title: { absolute: title },

@@ -23,7 +23,7 @@ const barlowCondensed = Barlow_Condensed({
 export const metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: "APGO Auto Care · US", template: "%s · APGO" },
-  description: "APGO Atomic Colored Glaze and Atomic Glaze Coating. Professional finish care, made simple. Available on Amazon.com.",
+  description: "APGO Atomic Colored Glaze and Atomic Glaze Coating. Professional finish care, made simple. Shop D204 and D215 on this site.",
   openGraph: { siteName: "APGO", type: "website", locale: "en_US" },
 };
 
