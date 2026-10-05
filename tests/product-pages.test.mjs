@@ -98,9 +98,17 @@ test("the pages reuse the shop header (cart badge), the policy footer and keep A
   }
 });
 
-test("design placeholders carry a [TO CONFIRM] mark; nothing is invented", () => {
-  const html = read("products/d204.html");
-  assert.ok((html.match(/data-to-confirm/g) || []).length >= 5, "pair price, shipping, returns and guarantee terms are marked");
+test("no unconfirmed promises or [TO CONFIRM] copy reach shoppers; nothing is invented", () => {
+  // The store is live (PRICING_APPROVED): unconfirmed terms are left out, not shown with a marker.
+  const unconfirmed = [/data-to-confirm/, /TO CONFIRM/i, /pair price/i, /free (us )?shipping/i, /30[- ]day/i, /30 days/i, /full refund/i, /pending brand confirmation/i, /placeholder/i, /data-placement="guarantee"/];
+  for (const file of Object.keys(PAGES)) {
+    const visible = read(file).replace(/<!--.*?-->/gs, "");
+    for (const pattern of unconfirmed) assert.doesNotMatch(visible, pattern, `${file}: ${pattern}`);
+  }
+  const js = read("js/commerce/product.js");
+  for (const pattern of [/toConfirm/, /TO CONFIRM/, /Price shown is a placeholder/, /real photo pending/]) {
+    assert.doesNotMatch(js, pattern, `product.js: ${pattern}`);
+  }
   for (const sku of SKUS) {
     assert.ok(REVIEWS[sku].every((review) => review.verified === true), "only verified reviews may ever be listed");
     if (BEFORE_AFTER[sku]) {
@@ -108,7 +116,6 @@ test("design placeholders carry a [TO CONFIRM] mark; nothing is invented", () =>
     }
   }
   assert.equal(MIN_VERIFIED_REVIEWS, 3);
-  const js = read("js/commerce/product.js");
   assert.match(js, /MIN_VERIFIED_REVIEWS/);
   assert.match(js, /verified === true/);
 });
@@ -122,7 +129,7 @@ test("design copy is kept: routine-first names, quiz, steps", () => {
   assert.deepEqual(PRODUCTS.d204.steps.map((s) => s[1]), ["Spray", "Spread", "Buff"]);
   assert.deepEqual(PRODUCTS.d215.steps.map((s) => s[1]), ["Wash", "Keep wet", "Spray", "Dry"]);
   const html = read("products/d215.html");
-  for (const section of ["Under 15 minutes. No machine.", "Three questions. Your routine.", "Same finish. Pick your moment.", "30 days to change your mind.", "Straight answers.", "Keep reading"]) {
+  for (const section of ["Under 15 minutes. No machine.", "Three questions. Your routine.", "Same finish. Pick your moment.", "Straight answers.", "Keep reading"]) {
     assert.ok(html.includes(section), section);
   }
 });

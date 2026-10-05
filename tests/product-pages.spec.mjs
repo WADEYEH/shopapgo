@@ -110,7 +110,8 @@ for (const sku of SKUS) {
       await open(page, `/products/${sku}.html`);
       const other = sku === "d204" ? "d215" : "d204";
       await expect(page.locator(".pdp-pair")).toContainText(`Add ${WORD[other][0] + WORD[other].slice(1).toLowerCase()} too`);
-      await expect(page.locator(".pdp-pair mark[data-to-confirm]")).toBeVisible();
+      await expect(page.locator(".pdp-pair")).toContainText("Both routines in one order");
+      await expect(page.locator(".pdp-pair")).not.toContainText(/pair price|TO CONFIRM|save|discount/i);
       await page.locator("[data-pair]").check({ force: true });
       await expect(page.locator("[data-price]")).toHaveText("$89.98");
       await expect(page.locator("[data-size]")).toHaveText("Dry + Wet");
@@ -291,11 +292,10 @@ test.describe("reviews and before/after follow the hide/slot rules", () => {
     await expect(page.locator("[data-reviews]")).toBeHidden();
   });
 
-  test("before/after: labelled placeholders while pricing is unapproved, hidden once approved", async ({ page }) => {
+  test("before/after: no real photo pair -> the section stays hidden, approved or not (no placeholder slots)", async ({ page }) => {
     await open(page, "/products/d204.html");
-    await expect(page.locator("[data-result]")).toBeVisible();
-    await expect(page.locator("[data-slot]")).toHaveCount(2);
-    await expect(page.locator("[data-slot] mark[data-to-confirm]")).toHaveCount(2);
+    await expect(page.locator("[data-result]")).toBeHidden();
+    await expect(page.locator("[data-slot]")).toHaveCount(0);
 
     const approved = await page.context().newPage();
     await open(approved, "/products/d204.html", { env: { ...PRICES, ...APPROVED } });
@@ -319,9 +319,18 @@ test.describe("structured data", () => {
     await expect(page.locator("[data-price-note]")).toBeHidden();
   });
 
-  test("the price placeholder note shows while unapproved", async ({ page }) => {
+  test("no price placeholder note, approved or not", async ({ page }) => {
     await open(page, "/products/d215.html");
-    await expect(page.locator("[data-price-note] mark[data-to-confirm]")).toBeVisible();
+    await expect(page.locator("[data-price-note]")).toBeHidden();
+    await expect(page.locator("body")).not.toContainText(/placeholder|TO CONFIRM/i);
+  });
+
+  test("approved store: no [TO CONFIRM] marker or unconfirmed shipping/returns promise anywhere on the page", async ({ page }) => {
+    await open(page, "/products/d204.html", { env: { ...PRICES, ...APPROVED } });
+    await expect(page.locator("mark[data-to-confirm]")).toHaveCount(0);
+    await page.locator(".faq details").last().locator("summary").click();
+    const text = await page.locator("body").innerText();
+    expect(text).not.toMatch(/TO CONFIRM|placeholder|pair price|free (us )?shipping|30[- ]day|30 days|full refund|pending/i);
   });
 });
 
@@ -358,7 +367,7 @@ test.describe("keyboard and touch targets", () => {
     const small = await page.evaluate(() => {
       const selectors = [
         ".shop-header a", ".breadcrumb a", ".pdp-switch__opt", ".pdp-pair", ".qty button", ".pdp-add", ".pdp-thumb",
-        ".quiz__opt", ".faq summary", ".pdp-video__play", ".pdp-compare button", ".pdp-guarantee .btn",
+        ".quiz__opt", ".faq summary", ".pdp-video__play", ".pdp-compare button",
         ".pdp-more__card", ".shop-footer__links a",
       ];
       const found = [];

@@ -2,9 +2,10 @@
 //
 // - Prices: only from /api/store/config (worker/pricing.js). Nothing here knows a price.
 // - Cart: shared.js `cart` (localStorage { sku, qty }); analytics: shared.js `track` -> apgo:analytics.
-// - Placeholders (pair price, shipping and returns terms) carry a [TO CONFIRM] mark in the HTML;
-//   reviews and before/after photos come from product-reviews.js and stay hidden/labelled until real.
-import { MAX_LINE_QTY, api, cart, el, money, renderCartCount, toConfirm, track } from "./shared.js";
+// - No customer-visible "to confirm" markers: unconfirmed terms (pair discount, shipping, returns,
+//   guarantee) are not on the page at all. Reviews and before/after photos come from
+//   product-reviews.js and stay hidden until real.
+import { MAX_LINE_QTY, api, cart, el, money, renderCartCount, track } from "./shared.js";
 import { BRAND, PRODUCTS, QUIZ, SEO, SKUS, productFile, productPath } from "./product-data.js";
 import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, REVIEWS } from "./product-reviews.js";
 
@@ -39,8 +40,6 @@ const other = (sku = state.sku) => PRODUCTS[sku].other;
 const word = (sku) => (PRODUCTS[sku].routine === "dry" ? "DRY" : "WET");
 const maxQty = () => state.config?.maxQtyPerLine ?? MAX_LINE_QTY;
 const centsOf = (sku) => state.config?.products?.[sku]?.priceCents;
-// Unknown until config arrives; a failed config load counts as "not approved" (markers stay on).
-const isEstimate = () => state.config?.estimate !== false;
 
 function unitLines() {
   const lines = [{ sku: state.sku, qty: state.qty }];
@@ -218,10 +217,9 @@ function renderPrice() {
   $("[data-qty-inc]").disabled = state.qty >= maxQty();
   const note = $("[data-price-note]");
   note.replaceChildren();
+  // Never a "placeholder" price note: shoppers only see a note when the price could not be loaded.
   if (!state.config) {
     note.append("Price unavailable right now. You can still add to your cart.");
-  } else if (isEstimate()) {
-    note.append("Price shown is a placeholder ", toConfirm());
   }
   note.hidden = note.childNodes.length === 0;
   // Sticky bar
@@ -261,22 +259,8 @@ function renderResult() {
       el("figure", { class: "pdp-photo pdp-photo--after" }, el("img", { src: photos.after.src, alt: photos.after.alt || "Paint after", loading: "lazy" }), el("figcaption", {}, "After")),
     );
     section.hidden = false;
-  } else if (isEstimate()) {
-    // Pre-launch placeholders, clearly labelled. Hidden once pricing is approved (production).
-    const slot = (label, text, extra = "") =>
-      el(
-        "div",
-        { class: `pdp-slot ${extra}`, "data-slot": label.toLowerCase() },
-        el("span", { class: "pdp-slot__label" }, label),
-        el("span", { class: "pdp-slot__text" }, text),
-        el("span", {}, toConfirm("TO CONFIRM: real photo pending")),
-      );
-    grid.replaceChildren(
-      slot("Before photo", "Real customer or in-house photo, same angle"),
-      slot("After photo", "Same panel after one application", "pdp-slot--after"),
-    );
-    section.hidden = false;
   } else {
+    // No real photo pair yet: hide the whole section (no empty placeholder slots for shoppers).
     grid.replaceChildren();
     section.hidden = true;
   }

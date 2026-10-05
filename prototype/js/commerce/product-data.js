@@ -3,8 +3,8 @@
 // Source: Claude Design "product-v2" UI kit (export of 2026-10-05, see docs/product-pages.md). Copy is the design's FTC-reviewed text, kept verbatim.
 //
 // NO PRICES HERE. Every price on the page comes from /api/store/config (worker/pricing.js).
-// Terms the design marks as placeholders (shipping, returns, pair price) are rendered with a
-// [TO CONFIRM] marker by product.js. Pure data, no DOM: scripts/build-product-pages.mjs imports it too.
+// Terms the design marks as placeholders (shipping, returns, pair price) are not shown to shoppers
+// until confirmed. Pure data, no DOM: scripts/build-product-pages.mjs imports it too.
 
 export const PRODUCTS = {
   d204: {
