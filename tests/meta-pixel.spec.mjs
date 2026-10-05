@@ -1,6 +1,7 @@
-// Meta Pixel (browser side), end to end. The page is served as https://store.shopapgo.com by
-// intercepting that origin with Playwright routes (files come from prototype/, /api/* from the
-// store mock) and Meta's fbevents.js is replaced by a stub, so nothing reaches Meta.
+// Meta Pixel (browser side), end to end. The page is served as an allowed store host
+// (store.shopapgo.com / shopapgo.com / www.shopapgo.com) by intercepting that origin with
+// Playwright routes (files come from prototype/, /api/* from the store mock) and Meta's
+// fbevents.js is replaced by a stub, so nothing reaches Meta.
 // Because the stub never drains fbq's queue, window.fbq.queue is the list of calls the store made.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -13,6 +14,7 @@ import { ORDER_ID, fillCard, fillToPayment, mockStore, seedCart } from "./helper
 
 const PIXEL_ID = "2606879866471418";
 const STORE = "store.shopapgo.com";
+const STORE_HOSTS = ["store.shopapgo.com", "shopapgo.com", "www.shopapgo.com"];
 const { d204, d215 } = DEFAULT_PRICING.products;
 const PROTOTYPE = path.resolve(process.env.APGO_PROTOTYPE_DIR || "prototype");
 const TYPES = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".json": "application/json", ".woff2": "font/woff2" };
@@ -58,13 +60,15 @@ async function checkoutToPayment(page, host = STORE) {
 }
 
 test.describe("Meta Pixel loading", () => {
-  test("store.shopapgo.com loads fbevents.js once, inits the pixel and sends PageView", async ({ page }) => {
-    const meta = await serveHost(page, STORE);
-    await mockStore(page);
-    await page.goto(`https://${STORE}/privacy.html`);
-    await expect.poll(() => meta.fbeventsRequests).toBe(1);
-    expect(await queue(page)).toEqual([["init", PIXEL_ID], ["track", "PageView"]]);
-  });
+  for (const host of STORE_HOSTS) {
+    test(`${host} loads fbevents.js once, inits the pixel and sends PageView`, async ({ page }) => {
+      const meta = await serveHost(page, host);
+      await mockStore(page);
+      await page.goto(`https://${host}/privacy.html`);
+      await expect.poll(() => meta.fbeventsRequests).toBe(1);
+      expect(await queue(page)).toEqual([["init", PIXEL_ID], ["track", "PageView"]]);
+    });
+  }
 
   test("an existing window.fbq is not initialised a second time", async ({ page }) => {
     await serveHost(page, STORE);
@@ -77,7 +81,7 @@ test.describe("Meta Pixel loading", () => {
     expect(await queue(page)).toEqual([]);
   });
 
-  for (const host of ["staging.shopapgo.com", "localhost:4173", "admin.shopapgo.com"]) {
+  for (const host of ["staging.shopapgo.com", "localhost:4173", "admin.shopapgo.com", "apgo-us-store.pages.dev"]) {
     test(`${host} never loads Meta`, async ({ page }) => {
       const meta = await serveHost(page, host);
       await mockStore(page);

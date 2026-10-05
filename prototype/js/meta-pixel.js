@@ -2,8 +2,9 @@
  * APGO US store: Meta Pixel (browser side).
  *
  * Loaded with <script src="js/meta-pixel.js" defer></script> on the public store pages only
- * (never on /admin). It does nothing unless the page is served from store.shopapgo.com, so
- * staging, localhost and preview hosts never talk to Meta.
+ * (never on /admin). It does nothing unless the page is served from an allowed store host
+ * (store.shopapgo.com, shopapgo.com, www.shopapgo.com), so staging, localhost, admin and
+ * preview hosts never talk to Meta.
  *
  * It does NOT touch the cart code: the store already announces what happens through
  * window "apgo:analytics" CustomEvents (js/commerce/shared.js track()). This file only
@@ -19,13 +20,14 @@
   "use strict";
 
   var PIXEL_ID = "2606879866471418";
-  var STORE_HOSTNAME = "store.shopapgo.com";
+  // Root cart (shopapgo.com / www) and the existing store subdomain all share one pixel.
+  var STORE_HOSTNAMES = ["store.shopapgo.com", "shopapgo.com", "www.shopapgo.com"];
   var FBEVENTS_URL = "https://connect.facebook.net/en_US/fbevents.js";
   var COOKIE_DOMAIN = ".shopapgo.com";
   var FBC_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
   var PURCHASE_KEY_PREFIX = "apgo_meta_purchase_";
 
-  if (window.location.hostname !== STORE_HOSTNAME) return;
+  if (STORE_HOSTNAMES.indexOf(window.location.hostname) === -1) return;
 
   // ---------- cookies: _fbc backup from ?fbclid= ----------
 
