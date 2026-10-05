@@ -6,7 +6,7 @@ import { useSiteMenuOpen } from "@/components/us/SiteChrome";
 import OnThisPage from "@/components/us/guides/OnThisPage";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
 import { track } from "@/lib/us/analytics";
-import AmazonCta from "./AmazonCta";
+import ProductCta from "./ProductCta";
 import Hero from "./Hero";
 import BrandSection from "./BrandSection";
 import TechnologySection from "./TechnologySection";
@@ -145,7 +145,7 @@ export default function Landing() {
             <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 22, lineHeight: 1, color: sel.accent, letterSpacing: ".04em" }}>{sel.word}</span>
             <span style={{ fontSize: 12, color: color.tertiary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sel.fullName}</span>
           </div>
-          <AmazonCta
+          <ProductCta
             sku={sku}
             placement="sticky"
             style={{
@@ -165,8 +165,8 @@ export default function Landing() {
               flex: "none",
             }}
           >
-            Buy on Amazon
-          </AmazonCta>
+            Shop {sel.tag}
+          </ProductCta>
         </div>
       </div>
     </div>

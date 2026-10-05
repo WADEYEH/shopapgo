@@ -1,7 +1,7 @@
 import { asset } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
-import AmazonCta from "./AmazonCta";
+import ProductCta from "./ProductCta";
 import Eyebrow from "./Eyebrow";
 
 // Hero always shows D204 regardless of the selected routine (per handoff).
@@ -48,7 +48,7 @@ export default function Hero() {
             <strong style={{ color: color.wet, fontWeight: 600 }}>Wet</strong> while it's still wet.
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-            <AmazonCta
+            <ProductCta
               sku="d204"
               placement="hero"
               style={{
@@ -66,8 +66,8 @@ export default function Hero() {
                 whiteSpace: "nowrap",
               }}
             >
-              Buy Dry · Atomic Colored Glaze
-            </AmazonCta>
+              Shop D204
+            </ProductCta>
             <a
               href="#compare"
               style={{
