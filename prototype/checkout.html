@@ -118,10 +118,13 @@
           <form class="stack" data-step="payment" novalidate hidden>
             <div class="shop-intro">
               <h2 class="heading-guide-h2" tabindex="-1">Payment</h2>
-              <p class="body body--sm">Card details are encrypted by Airwallex and never stored by APGO.</p>
+              <p class="body body--sm" data-payment-intro>Card details are encrypted by Airwallex and never stored by APGO.</p>
             </div>
-            <!-- Apple Pay / Google Pay: stay collapsed and invisible unless the device and Airwallex report the wallet is ready. -->
+            <!-- PayPal: shown only when /api/store/config.paypal.enabled and storeReady. Apple/Google Pay stay collapsed unless ready. -->
             <div class="wallets" data-wallets role="group" aria-label="Express payment">
+              <div class="paypal" data-paypal hidden>
+                <div id="paypal-button"></div>
+              </div>
               <div class="wallet-slot" data-wallet-slot="applePay"><div id="wallet-applepay"></div></div>
               <div class="wallet-slot" data-wallet-slot="googlePay"><div id="wallet-googlepay"></div></div>
               <p class="wallets__divider label label--xs" data-wallet-divider hidden><span>Or pay by card</span></p>
@@ -161,7 +164,7 @@
           <h2 class="label label--xs" id="summary-title">Order summary</h2>
           <ul class="summary-lines" data-summary-lines></ul>
           <div data-summary-rows></div>
-          <p class="label summary__note">Secure checkout · Payments by Airwallex</p>
+          <p class="label summary__note" data-summary-note>Secure checkout · Payments by Airwallex</p>
         </aside>
       </div>
     </main>

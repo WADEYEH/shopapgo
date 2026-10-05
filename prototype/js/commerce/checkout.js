@@ -13,6 +13,7 @@ import {
   isEstimate,
   withEstimate,
 } from "./shared.js";
+import { paypalEnabled, paypalOrderPayload, paypalSdkUrl, readPaypalOrder, storePaypalOrder } from "./paypal.js";
 import { WALLETS, candidateWallets, walletOptions, walletUpdate } from "./wallets.js";
 
 const AIRWALLEX_SDK_URL = "https://static.airwallex.com/components/sdk/v1/index.js";
@@ -40,6 +41,7 @@ const state = {
   card: null,
   sdk: null,
   wallets: { started: false, elements: {}, ready: new Set(), visible: new Set() },
+  paypal: { sdk: null, mounted: false },
   cardStatus: { cardNumber: false, expiry: false, cvc: false },
   placing: false,
 };
@@ -117,6 +119,7 @@ function goTo(step, { focus = true } = {}) {
   if (step === "payment") {
     mountCardElements();
     syncWallets();
+    mountPaypalButtons();
   }
 }
 
@@ -292,15 +295,31 @@ async function mountCardElements() {
 // card form untouched. `wallets.eagerSession` (WALLET_EAGER_SESSION) switches to
 // creating the session first, as a fallback if a wallet needs an intent up front.
 
+function paypalSlotVisible() {
+  const slot = $("[data-paypal]");
+  return Boolean(slot && !slot.hidden);
+}
+
+function syncExpressDivider() {
+  const any = state.wallets.visible.size > 0 || paypalSlotVisible();
+  $("[data-wallets]")?.classList.toggle("is-active", any);
+  const divider = $("[data-wallet-divider]");
+  if (divider) divider.hidden = !any;
+}
+
+function setPaypalVisible(visible) {
+  const slot = $("[data-paypal]");
+  if (slot) slot.hidden = !visible;
+  syncExpressDivider();
+}
+
 function setWalletVisible(id, visible) {
   const slot = $(`[data-wallet-slot="${id}"]`);
   if (!slot) return;
   slot.classList.toggle("is-ready", visible);
   if (visible) state.wallets.visible.add(id);
   else state.wallets.visible.delete(id);
-  const any = state.wallets.visible.size > 0;
-  $("[data-wallets]").classList.toggle("is-active", any);
-  $("[data-wallet-divider]").hidden = !any;
+  syncExpressDivider();
 }
 
 async function onWalletSuccess() {
@@ -382,6 +401,178 @@ async function syncWallets() {
     // No wallet buttons; the card form is unaffected.
     state.wallets.started = false;
   }
+}
+
+// ---------- PayPal ----------
+//
+// Shown on the payment step when GET /api/store/config.paypal.enabled and storeReady.
+// createOrder / onApprove follow docs/paypal.md. Apple/Google Pay stay off unless
+// their own flags turn them on. Card checkout is unchanged.
+
+function loadPaypalSdk() {
+  if (window.paypal?.Buttons) return Promise.resolve(window.paypal);
+  state.paypal.sdk ??= new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = paypalSdkUrl(state.config.paypal.clientId);
+    script.async = true;
+    script.onload = () => (window.paypal?.Buttons ? resolve(window.paypal) : reject(new Error("sdk_missing")));
+    script.onerror = () => reject(new Error("sdk_load_failed"));
+    document.head.append(script);
+  });
+  state.paypal.sdk.catch(() => { state.paypal.sdk = null; });
+  return state.paypal.sdk;
+}
+
+function applyPaypalCopy() {
+  if (!paypalEnabled(state.config)) return;
+  const intro = $("[data-payment-intro]");
+  const note = $("[data-summary-note]");
+  if (intro) intro.textContent = "Pay with PayPal, or enter a card. Card details are encrypted by Airwallex and never stored by APGO.";
+  if (note) note.textContent = "Secure checkout · Payments by Airwallex and PayPal";
+}
+
+async function createPaypalOrder() {
+  if (!state.contact?.email) throw new Error("Enter a valid email address.");
+  const data = await api("/api/checkout/paypal/order", {
+    method: "POST",
+    body: paypalOrderPayload({
+      items: cart.items(),
+      contact: state.contact,
+      shipping: state.shipping,
+      method: state.method,
+      attribution: readAttribution(),
+    }),
+  });
+  storePaypalOrder(data);
+  state.paypal.order = data;
+  if (data.quote) {
+    state.quote = data.quote;
+    renderSummary(data.quote);
+  }
+  // Same InitiateCheckout moment as the card session: eventID is ic_<orderId>
+  // (data.eventIds.initiateCheckout). Do not invent a new id.
+  track("checkout_session_created", {
+    order_id: data.orderId,
+    value: data.quote.totalCents / 100,
+    currency: data.quote.currency,
+    items: analyticsItems(data.quote.lines),
+  });
+  return data.paypal.id;
+}
+
+function firePaidPurchase(orderId, quote) {
+  if (!quote) return false;
+  try {
+    sessionStorage.setItem(`apgo_us_purchase_tracked_${orderId}`, "1");
+  } catch {
+    // Confirmation page may send a second dataLayer event; Meta still dedupes on eventID.
+  }
+  track("purchase", {
+    transaction_id: orderId,
+    value: quote.totalCents / 100,
+    currency: quote.currency,
+    items: analyticsItems(quote.lines),
+  });
+  return true;
+}
+
+async function onPaypalApprove(data) {
+  const result = await api("/api/checkout/paypal/capture", {
+    method: "POST",
+    body: { paypalOrderId: data.orderID },
+  });
+  // Only `paid` is a Pixel Purchase. `review` is a captured-but-unverified store
+  // order — show the existing confirmation UX, never treat it as Purchase.
+  if (result.status === "paid") {
+    const quote = state.paypal.order?.quote ?? readPaypalOrder()?.quote;
+    firePaidPurchase(result.orderId, quote);
+    state.placing = true;
+    cart.clear();
+    history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(result.orderId)}`);
+    await showConfirmation(result.orderId);
+    return;
+  }
+  if (result.status === "review" && result.orderId) {
+    history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(result.orderId)}`);
+    await showConfirmation(result.orderId);
+    return;
+  }
+  throw new Error(result.error?.message || "Payment could not be completed.");
+}
+
+function onPaypalCancel() {
+  setPlacing(false);
+  $("[data-payment-message]").replaceChildren(
+    notice("info", "PayPal checkout cancelled", "No payment was taken. You can try PayPal again or pay by card."),
+  );
+}
+
+async function mountPaypalButtons() {
+  if (!paypalEnabled(state.config) || !state.contact.email) {
+    setPaypalVisible(false);
+    return;
+  }
+  if (state.paypal.mounted) return;
+  const host = $("#paypal-button");
+  if (!host) return;
+  try {
+    const paypal = await loadPaypalSdk();
+    await paypal.Buttons({
+      style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal", height: 48 },
+      createOrder: async () => {
+        $("[data-payment-message]").replaceChildren();
+        setPlacing(true);
+        try {
+          return await createPaypalOrder();
+        } catch (error) {
+          setPlacing(false);
+          $("[data-payment-message]").replaceChildren(
+            notice("warning", "PayPal unavailable", error.message || "Could not start PayPal."),
+          );
+          throw error;
+        }
+      },
+      onApprove: async (data) => {
+        try {
+          await onPaypalApprove(data);
+        } catch (error) {
+          setPlacing(false);
+          $("[data-payment-message]").replaceChildren(
+            notice("warning", "Payment not completed", error.message || "Payment could not be completed."),
+          );
+        }
+      },
+      onCancel: () => onPaypalCancel(),
+      onError: () => {
+        setPlacing(false);
+        $("[data-payment-message]").replaceChildren(
+          notice("warning", "PayPal unavailable", "PayPal couldn't complete checkout. Try again or pay by card."),
+        );
+      },
+    }).render("#paypal-button");
+    state.paypal.mounted = true;
+    setPaypalVisible(true);
+  } catch {
+    state.paypal.mounted = false;
+    setPaypalVisible(false);
+  }
+}
+
+async function handlePaypalReturn(orderId) {
+  // Redirect fallback: Worker registered {origin}/checkout.html?order=<id>&paypal=return.
+  // Capture if the popup's onApprove did not run; GET /api/orders/:id also auto-captures
+  // an APPROVED PayPal order with a usable US address.
+  try {
+    const result = await api("/api/checkout/paypal/capture", { method: "POST", body: { orderId } });
+    if (result.status === "paid") {
+      const quote = readPaypalOrder()?.quote;
+      firePaidPurchase(result.orderId, quote);
+    }
+  } catch {
+    // Poll below still settles when the order is already captured or still APPROVED.
+  }
+  history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(orderId)}`);
+  await showConfirmation(orderId);
 }
 
 // ---------- Place order ----------
@@ -556,8 +747,15 @@ async function showConfirmation(orderId) {
 
 async function init() {
   renderCartCount();
-  const orderId = new URLSearchParams(window.location.search).get("order");
-  if (orderId) return showConfirmation(orderId);
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get("order");
+  const paypalFlag = params.get("paypal");
+
+  if (paypalFlag === "return" && orderId) return handlePaypalReturn(orderId);
+  if (orderId && paypalFlag !== "cancel") return showConfirmation(orderId);
+
+  const paypalCancelled = paypalFlag === "cancel";
+  if (paypalCancelled) history.replaceState(null, "", "checkout.html");
 
   if (cart.items().length === 0) {
     $("[data-checkout-title]").textContent = "Your cart is empty.";
@@ -572,12 +770,17 @@ async function init() {
     return;
   }
 
+  applyPaypalCopy();
   renderShippingOptions();
   $("[data-checkout-flow]").hidden = false;
   $('[data-step="contact"]').addEventListener("submit", submitContact);
   $('[data-step="shipping"]').addEventListener("submit", submitShipping);
   $('[data-step="payment"]').addEventListener("submit", placeOrder);
   for (const back of document.querySelectorAll("[data-back]")) back.addEventListener("click", () => goTo(back.dataset.back));
+
+  if (paypalCancelled) {
+    showMessage("info", "PayPal checkout cancelled", "No payment was taken. Continue below or pay by card.");
+  }
 
   const quote = await refreshQuote();
   if (quote) track("begin_checkout", { value: quote.subtotalCents / 100, currency: quote.currency, items: quote.lines.length });

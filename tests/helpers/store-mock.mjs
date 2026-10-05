@@ -9,6 +9,8 @@ import { resolvePricing } from "../../worker/pricing.js";
 // card fields are plain inputs.
 
 export const ORDER_ID = "APGO-US-0123456789AB";
+export const PAYPAL_ID = "5O190127TN364715T";
+export const ENABLED_PAYPAL = { enabled: true, clientId: "test-paypal-client", env: "sandbox" };
 
 const AIRWALLEX_STUB = `
 window.AirwallexComponentsSDK = {
@@ -59,10 +61,45 @@ window.AirwallexComponentsSDK = {
   },
 };`;
 
-export async function mockStore(page, { env = {} } = {}) {
-  const calls = { session: [] };
+const PAYPAL_SDK_STUB = `
+window.paypal = {
+  Buttons(options) {
+    window.__paypalButtonOptions = options;
+    return {
+      render(selector) {
+        const root = typeof selector === "string" ? document.querySelector(selector) : selector;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.stubPaypal = "buttons";
+        button.textContent = "PayPal";
+        button.style.cssText = "width:100%;height:48px";
+        button.addEventListener("click", async () => {
+          try {
+            const id = await options.createOrder();
+            window.__paypalOrderId = id;
+            if (window.__paypalCancel) {
+              options.onCancel?.({ orderID: id });
+              return;
+            }
+            await options.onApprove({ orderID: id });
+          } catch (error) {
+            options.onError?.(error);
+          }
+        });
+        root.replaceChildren(button);
+        return Promise.resolve();
+      },
+    };
+  },
+};
+`;
+
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus } = {}) {
+  const calls = { session: [], paypalOrder: [], paypalCapture: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
     route.fulfill({ contentType: "application/javascript", body: AIRWALLEX_STUB }));
+  await page.route("https://www.paypal.com/sdk/js**", (route) =>
+    route.fulfill({ contentType: "application/javascript", body: PAYPAL_SDK_STUB }));
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -70,7 +107,11 @@ export async function mockStore(page, { env = {} } = {}) {
     const body = request.postDataJSON?.() ?? null;
     const reply = (status, data) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
     try {
-      if (pathname === "/api/store/config") return reply(200, publicConfig(env));
+      if (pathname === "/api/store/config") {
+        const config = publicConfig(env);
+        if (paypal !== undefined) config.paypal = paypal;
+        return reply(200, config);
+      }
       if (pathname === "/api/cart/quote") return reply(200, quote(body.items, { state: body.state, method: body.method }, resolvePricing(env)));
       if (pathname === "/api/checkout/session") {
         calls.session.push(body);
@@ -78,12 +119,39 @@ export async function mockStore(page, { env = {} } = {}) {
         const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, resolvePricing(env));
         return reply(200, { orderId: ORDER_ID, quote: priced, intent: { id: "int_test", clientSecret: "secret_test", currency: "USD" } });
       }
+      if (pathname === "/api/checkout/paypal/order") {
+        calls.paypalOrder.push(body);
+        const priced = quote(body.items, { state: body.shipping?.state, method: body.method }, resolvePricing(env));
+        return reply(200, {
+          orderId: ORDER_ID,
+          quote: priced,
+          paypal: { id: PAYPAL_ID, status: "CREATED", approveUrl: `https://www.sandbox.paypal.com/checkoutnow?token=${PAYPAL_ID}` },
+          eventIds: { initiateCheckout: `ic_${ORDER_ID}`, purchase: `purchase_${ORDER_ID}` },
+        });
+      }
+      if (pathname === "/api/checkout/paypal/capture") {
+        calls.paypalCapture.push(body);
+        if (paypalCaptureError) {
+          return reply(paypalCaptureError.status ?? 400, {
+            error: paypalCaptureError.error ?? { code: "invalid_request", message: "Payment could not be completed." },
+          });
+        }
+        return reply(200, {
+          orderId: ORDER_ID,
+          status: paypalCaptureStatus,
+          paypal: { id: body.paypalOrderId || PAYPAL_ID, status: "COMPLETED" },
+          eventIds: { initiateCheckout: `ic_${ORDER_ID}`, purchase: `purchase_${ORDER_ID}` },
+        });
+      }
       if (pathname === `/api/orders/${ORDER_ID}`) {
-        const last = calls.session.at(-1);
-        const priced = quote(last.items, { state: last.shipping.state, method: last.method }, resolvePricing(env));
+        const last = calls.session.at(-1) || calls.paypalOrder.at(-1);
+        const items = last?.items || [{ sku: "d204", qty: 1 }];
+        const priced = quote(items, { state: last?.shipping?.state, method: last?.method }, resolvePricing(env));
         // Same public shape as worker/orders.js publicOrder(): lines carry lineCents but no unitCents.
         const lines = priced.lines.map(({ id, sku, name, routine, size, qty, lineCents }) => ({ id, sku, name, routine, size, qty, lineCents }));
-        return reply(200, { id: ORDER_ID, status: "paid", email: "t••••@example.com", ...priced, lines, paymentStatus: "SUCCEEDED" });
+        const status = orderStatus ?? (calls.paypalCapture.length ? paypalCaptureStatus : "paid");
+        const paymentStatus = status === "pending" ? "PENDING" : "COMPLETED";
+        return reply(200, { id: ORDER_ID, status, email: "t••••@example.com", ...priced, lines, paymentStatus });
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {
@@ -121,4 +189,3 @@ export async function fillCard(page) {
   await page.locator('[data-stub-card="expiry"]').fill("12/30");
   await page.locator('[data-stub-card="cvc"]').fill("123");
 }
-

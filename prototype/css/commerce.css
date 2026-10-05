@@ -596,6 +596,9 @@ legend { padding: 0; }
 /* ---------- Apple Pay / Google Pay (express) ---------- */
 
 .wallets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.paypal { min-width: 0; }
+.paypal[hidden] { display: none; }
+#paypal-button { width: 100%; min-height: 48px; }
 /* Collapsed but still laid out so Airwallex can mount and report `ready`. */
 .wallet-slot { min-width: 0; height: 0; overflow: hidden; visibility: hidden; }
 .wallet-slot.is-ready { height: auto; min-height: 48px; overflow: visible; visibility: visible; }

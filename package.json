@@ -10,7 +10,7 @@
     "db:migrate:local": "wrangler d1 execute apgo-us-store --local --file worker/schema.sql",
     "db:migrate:remote": "wrangler d1 execute apgo-us-store --remote --file worker/schema.sql",
     "test": "npm run test:static && npm run test:e2e",
-    "test:static": "node --test tests/static-contract.test.mjs tests/commerce-unit.test.mjs tests/commerce-backend.test.mjs tests/commerce-pricing.test.mjs tests/commerce-wallets.test.mjs tests/commerce-express.test.mjs tests/commerce-mcf.test.mjs tests/commerce-meta-capi.test.mjs tests/commerce-paypal.test.mjs tests/product-pages.test.mjs tests/policy-pages.test.mjs tests/staging.test.mjs tests/hosts.test.mjs tests/meta-pixel.test.mjs",
+    "test:static": "node --test tests/static-contract.test.mjs tests/commerce-unit.test.mjs tests/commerce-backend.test.mjs tests/commerce-pricing.test.mjs tests/commerce-wallets.test.mjs tests/commerce-express.test.mjs tests/commerce-mcf.test.mjs tests/commerce-meta-capi.test.mjs tests/commerce-paypal.test.mjs tests/product-pages.test.mjs tests/policy-pages.test.mjs tests/staging.test.mjs tests/hosts.test.mjs tests/meta-pixel.test.mjs tests/paypal-checkout.test.mjs",
     "db:migrate:staging": "wrangler d1 execute apgo-us-store-staging --env staging --remote --file worker/schema.sql",
     "deploy:staging": "npm run db:migrate:staging && wrangler deploy --env staging",
     "smoke:airwallex": "node scripts/airwallex-sandbox-smoke.mjs",
