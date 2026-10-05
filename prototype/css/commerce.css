@@ -599,6 +599,17 @@ legend { padding: 0; }
 .paypal { min-width: 0; }
 .paypal[hidden] { display: none; }
 #paypal-button { width: 100%; min-height: 48px; }
+.pay-choice { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pay-choice[hidden] { display: none; }
+.pay-choice__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 2px;
+  background: var(--border-hairline);
+  border: 1px solid var(--border-hairline);
+}
+.card-panel { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.card-panel[hidden] { display: none; }
 /* Collapsed but still laid out so Airwallex can mount and report `ready`. */
 .wallet-slot { min-width: 0; height: 0; overflow: hidden; visibility: hidden; }
 .wallet-slot.is-ready { height: auto; min-height: 48px; overflow: visible; visibility: visible; }

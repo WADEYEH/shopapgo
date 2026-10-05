@@ -6,6 +6,10 @@ same admin back office, and the same Meta Pixel + CAPI `event_id`s. Apple Pay
 and Google Pay stay as they are (currently off). MCF is not turned on by this
 work.
 
+The payment step is choose-one: the shopper picks **PayPal or card**. Selecting
+one hides the other; they can switch. Wallet buttons are unchanged and stay
+outside that choice. Endpoints, payloads, and Meta event ids below do not change.
+
 Code: `worker/paypal.js`, handlers in `worker/index.js`. Tests:
 `tests/commerce-paypal.test.mjs`.
 

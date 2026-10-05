@@ -189,3 +189,7 @@ export async function fillCard(page) {
   await page.locator('[data-stub-card="expiry"]').fill("12/30");
   await page.locator('[data-stub-card="cvc"]').fill("123");
 }
+
+export async function choosePayWith(page, method) {
+  await page.locator(`label:has(input[name="payWith"][value="${method}"])`).click();
+}
