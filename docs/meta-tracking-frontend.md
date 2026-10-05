@@ -16,11 +16,13 @@ Browser half of APGO US Meta tracking. The server half (Conversions API) lives i
 
 ## When it runs
 
-Only when `location.hostname === "store.shopapgo.com"`. Staging, `localhost`, preview hosts and
-the back-office host load nothing, write no cookie and call no Meta URL. If `window.fbq` already
-exists it is reused (no second `init`, no second `PageView`).
+Only when `location.hostname` is one of `store.shopapgo.com`, `shopapgo.com`, or
+`www.shopapgo.com` (root cart + existing store subdomain). Staging, `localhost`, `*.pages.dev`,
+preview/`workers.dev` hosts and the back-office host (`admin.shopapgo.com`) load nothing, write no
+cookie and call no Meta URL. If `window.fbq` already exists it is reused (no second `init`, no
+second `PageView`).
 
-On the store host the script:
+On an allowed store host the script:
 
 1. writes the `_fbc` backup cookie (below),
 2. installs Meta's standard base code (`https://connect.facebook.net/en_US/fbevents.js`),
@@ -111,12 +113,13 @@ blockers/late loads so checkout can still send `fbc`.)
 ## How to verify
 
 Automated (`npm run test:static`, `npm run test:e2e`): `tests/meta-pixel.test.mjs` (static contract + fake-DOM
-behaviour) and `tests/meta-pixel.spec.mjs` (browser flows on a faked `https://store.shopapgo.com`, fbevents stubbed).
+behaviour) and `tests/meta-pixel.spec.mjs` (browser flows on faked allowed store hosts
+`https://store.shopapgo.com` / `https://shopapgo.com` / `https://www.shopapgo.com`, fbevents stubbed).
 
 Manually on production after deploy:
 
 1. Meta Events Manager -> dataset `2606879866471418` -> Test events, or the *Meta Pixel Helper* extension: open
-   `https://store.shopapgo.com/?fbclid=test123` and see `PageView`, `ViewContent`; the `_fbc` cookie appears.
+   `https://shopapgo.com/?fbclid=test123` (or `www` / `store`) and see `PageView`, `ViewContent`; the `_fbc` cookie appears.
 2. Add to cart -> `AddToCart` (value = price x qty). Go through checkout and press Place order -> `InitiateCheckout`
    with Event ID `ic_APGO-US-...`. After payment -> `Purchase` with Event ID `purchase_APGO-US-...`.
 3. In Events Manager the browser and server copies of the same event (same Event ID) show as one deduplicated event.

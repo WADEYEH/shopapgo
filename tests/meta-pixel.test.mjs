@@ -57,6 +57,9 @@ test("meta-pixel.js: fixed ids, hostname gate, event ids, and no hard-coded pric
   assert.ok(source.includes(`"${PIXEL_ID}"`));
   assert.ok(source.includes("https://connect.facebook.net/en_US/fbevents.js"));
   assert.ok(source.includes('"store.shopapgo.com"'));
+  assert.ok(source.includes('"shopapgo.com"'));
+  assert.ok(source.includes('"www.shopapgo.com"'));
+  assert.ok(source.includes("STORE_HOSTNAMES"));
   assert.ok(source.includes('"ic_" + orderId'));
   assert.ok(source.includes('"purchase_" + orderId'));
   assert.ok(source.includes("apgo_meta_purchase_"));
@@ -140,8 +143,17 @@ const CONFIG = {
   products: Object.fromEntries(Object.entries(DEFAULT_PRICING.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents }])),
 };
 
-test("only store.shopapgo.com initialises Meta; staging, localhost, admin and look-alike hosts stay silent", async () => {
-  for (const hostname of ["staging.shopapgo.com", "localhost", "127.0.0.1", "admin.shopapgo.com", "shopapgo.com", "store.shopapgo.com.evil.example", "apgo-us-store-staging.workers.dev"]) {
+test("store.shopapgo.com, shopapgo.com and www.shopapgo.com initialise Meta; staging, localhost, admin, pages.dev and look-alikes stay silent", async () => {
+  for (const hostname of [
+    "staging.shopapgo.com",
+    "localhost",
+    "127.0.0.1",
+    "admin.shopapgo.com",
+    "store.shopapgo.com.evil.example",
+    "apgo-us-store-staging.workers.dev",
+    "apgo-us-store.pages.dev",
+    "something.pages.dev",
+  ]) {
     const h = run({ hostname, search: "?fbclid=abc" });
     await h.load();
     assert.equal(h.sandbox.fbq, undefined, hostname);
@@ -149,10 +161,12 @@ test("only store.shopapgo.com initialises Meta; staging, localhost, admin and lo
     assert.deepEqual(h.writes, [], `${hostname}: no cookie writes`);
     assert.equal(h.sandbox.fetchCalls.length, 0, hostname);
   }
-  const live = run();
-  await live.load();
-  assert.equal(typeof live.sandbox.fbq, "function");
-  assert.deepEqual(live.calls(), [["init", PIXEL_ID], ["track", "PageView"]]);
+  for (const hostname of ["store.shopapgo.com", "shopapgo.com", "www.shopapgo.com"]) {
+    const live = run({ hostname });
+    await live.load();
+    assert.equal(typeof live.sandbox.fbq, "function", hostname);
+    assert.deepEqual(live.calls(), [["init", PIXEL_ID], ["track", "PageView"]], hostname);
+  }
 });
 
 test("an existing window.fbq is reused: no second init or PageView", async () => {
