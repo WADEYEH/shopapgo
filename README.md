@@ -28,7 +28,7 @@ through Shopify or this prototype.
 
 `prototype/cart.html` and `prototype/checkout.html` are a separate,
 `noindex` direct-to-consumer store backed by a Cloudflare Worker (`worker/`)
-and Airwallex. Prices, shipping and tax all live in one file, `worker/pricing.js` (placeholders;
+and Airwallex card checkout, plus PayPal Orders v2 (`docs/paypal.md`). Prices, shipping and tax all live in one file, `worker/pricing.js` (placeholders;
 optional `PRICING_JSON` override; tax defaults to 0/undecided; prod stays closed until
 `PRICING_APPROVED=true`). The Payment step offers Apple Pay / Google Pay (Airwallex.js
 elements) when the device supports them.
@@ -51,14 +51,15 @@ go-live checklist (prices, shipping and tax are still undecided placeholders)
 are in `docs/commerce.md`.
 
 **Environments.** `wrangler.toml` has local dev (top level), `[env.staging]` (deployed: Worker `apgo-us-store-staging` on workers.dev,
-own D1, Airwallex sandbox, `SITE_ENV=staging` → noindex header, `robots.txt` Disallow, whole-site Basic auth; the Airwallex webhook keeps its signature check).
+own D1, Airwallex sandbox, `SITE_ENV=staging` → noindex header, `robots.txt` Disallow, whole-site Basic auth; the Airwallex and PayPal webhooks keep their own signature checks).
 Custom domains: storefront **https://staging.shopapgo.com** (Cloudflare Custom Domain; the workers.dev URL keeps working) and the order back office on its
 own host **https://admin-staging.shopapgo.com/admin/** (`ADMIN_HOST`, `worker/hosts.js`: only `/admin*` + its css/js there, login = `ADMIN_TOKEN` or (staging only, `ADMIN_ACCEPT_SITE_BASIC="true"`) the same Basic user/password as the website, noindex;
 the store hosts answer 404 for `/admin*`; planned prod: `admin.shopapgo.com`). The `[env.staging]` `routes` bind both; `shopapgo` Pages (`www`) is untouched and `[env.production]` (planned only, `store.shopapgo.com`, not deployed,
 `PRICING_APPROVED` unset = payments closed). Deploy staging with `npm run deploy:staging`; verify with `scripts/staging-check.mjs` and
 `scripts/airwallex-browser-smoke.mjs --base <url> [--admin-base <admin url>] --credentials ~/.apgo-staging-credentials`. Secrets are per environment
 (`wrangler secret put <NAME> --env staging`); staging secrets: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (sandbox), `ADMIN_TOKEN`,
-`STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` (+ `AIRWALLEX_WEBHOOK_SECRET` once a sandbox webhook exists). Go-live
+`STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` (+ `AIRWALLEX_WEBHOOK_SECRET` once a sandbox webhook exists;
+PayPal: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV`, and `PAYPAL_WEBHOOK_ID` after the Dashboard URL is registered). Go-live
 to-do (prod D1, domain, prod secrets, webhook registration, `PRICING_APPROVED`): `docs/commerce.md` "Environments".
 
 ## Run locally

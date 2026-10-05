@@ -73,9 +73,11 @@ test("staging: missing Basic secrets fail closed (503), never open", async () =>
 
 test("staging: webhook and /admin skip the Basic gate and keep their own checks", async () => {
   assert.equal(isBasicExempt("/api/webhooks/airwallex"), true);
+  assert.equal(isBasicExempt("/api/webhooks/paypal"), true);
   assert.equal(isBasicExempt("/admin"), true);
   assert.equal(isBasicExempt("/admin/api/orders"), true);
   assert.equal(isBasicExempt("/api/webhooks/airwallex/extra"), false);
+  assert.equal(isBasicExempt("/api/webhooks/paypal/extra"), false);
   assert.equal(isBasicExempt("/administrator"), false);
   assert.equal(isBasicExempt("/api/orders/x"), false);
 
@@ -83,6 +85,9 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
   const hook = await call("/api/webhooks/airwallex", { method: "POST", e: env({ AIRWALLEX_WEBHOOK_SECRET: "whsec_x", DB: {} }) });
   assert.equal(hook.status, 400);
   assert.equal(hook.headers.get("x-robots-tag"), NOINDEX);
+  const paypalHook = await call("/api/webhooks/paypal", { method: "POST", e: env({ PAYPAL_WEBHOOK_ID: "wh", DB: {} }) });
+  assert.equal(paypalHook.status, 400);
+  assert.equal(paypalHook.headers.get("x-robots-tag"), NOINDEX);
 
   // /admin still needs ADMIN_TOKEN.
   const noTok = await call("/admin/api/orders");

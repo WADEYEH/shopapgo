@@ -46,10 +46,13 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | `RESEND_API_KEY` | team notification + customer emails | not set (no email is sent) |
 | `ORDER_NOTIFY_WEBHOOK_URL`, `ORDER_NOTIFY_WEBHOOK_SECRET` | team notification webhook (optional) | not set |
 | `AMAZON_OUTBOUND_BASE_URL`, `OUTBOUND_INTERNAL_TOKEN` | Amazon MCF through amazon-spapi-mcp | set |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` | PayPal Orders v2 (sandbox on staging, live on prod) | set |
+| `PAYPAL_WEBHOOK_ID` | PayPal webhook verify | **not set** until the Dashboard URL is registered (capture + order poll still settle) |
 
 Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `EXPRESS_CHECKOUT`, `PRICING_APPROVED`, `PRICING_JSON`,
 `PAYMENT_AUTO_CAPTURE`, `APPLE_PAY_ENABLED`, `GOOGLE_PAY_ENABLED`, `WALLET_MERCHANT_NAME`, `CUSTOMER_EMAIL_FROM`, `CUSTOMER_EMAIL_REPLY_TO`, `CUSTOMER_EMAIL_POLICY_NOTE`,
-`CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`.
+`CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`, `PAYPAL_ENV`.
+PayPal secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
 Each is explained in the section named after its feature below.
 
 ### Where the credentials are
@@ -91,7 +94,7 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
 - **Cart-page express checkout** (wallet block on the cart page) exists as front end only and is **off by default**: clicking the wallet button does **not** complete a payment yet. `EXPRESS_CHECKOUT`
   is set to `"true"` on staging only and **must not be set in production** until the express payment flow is built.
 - Apple Pay and Google Pay have **not been verified on real devices** (needs Safari with a card in Wallet, a registered Apple Pay domain, and Chrome with a Google account); automated tests mock feature detection.
-- Staging has no Airwallex webhook registered; production needs one.
+- Staging has no Airwallex webhook registered; production needs one. PayPal capture + `GET /api/orders/:id` settle without a webhook; register `PAYMENT.CAPTURE.COMPLETED` and set `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
 
 ## How it fits together
 
@@ -102,6 +105,7 @@ prototype/cart.html ─┐                    ┌─ worker/pricing.js   THE pri
 prototype/checkout.html ─ /api/* ─ worker/index.js ─ worker/checkout.js  input validation · order ids
   js/commerce/*.js   │                    ├─ worker/orders.js    D1 orders + webhook idempotency
   css/commerce.css   │                    ├─ worker/airwallex.js token · PaymentIntent · webhook HMAC
+                     │                    ├─ worker/paypal.js    Orders v2 create · capture · webhook verify
                      │                    ├─ worker/notify.js    new paid-order notification (opt-in)
 prototype/admin/ ────┘                    ├─ worker/admin.js     ADMIN_TOKEN gate + /admin/api/*
                                           ├─ worker/fulfillment.js  mark shipped · validation · audit log
@@ -128,16 +132,24 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     A
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/store/config` | prices, shipping methods, tax status, wallet flags, US states, Airwallex env, `storeReady` |
+| `GET /api/store/config` | prices, shipping methods, tax status, wallet flags, US states, Airwallex env, PayPal `{ enabled, clientId, env }`, `storeReady` |
 | `POST /api/cart/quote` | `{ items, state?, method? }` → priced lines and totals |
 | `POST /api/checkout/session` | `{ items, contact, shipping, method }` → `{ orderId, quote, intent }` |
+| `POST /api/checkout/paypal/order` | `{ items, contact, shipping?, method? }` → `{ orderId, quote, paypal, eventIds }` (PayPal Orders v2; see [paypal.md](paypal.md)) |
+| `POST /api/checkout/paypal/capture` | `{ paypalOrderId }` or `{ orderId }` → settle the same D1 order |
 | `GET /api/orders/:id` | status, lines, totals, masked email (no address) |
 | `GET /.well-known/apple-developer-merchantid-domain-association` | Apple Pay domain file (served from `prototype/apple-pay/`, `application/octet-stream`; 404 until you add it) |
 | `POST /api/webhooks/airwallex` | HMAC-verified (`x-timestamp` + raw body), idempotent by event id; a genuine delivery older than 5 minutes is settled from the Retrieve API, not from its stale body |
+| `POST /api/webhooks/paypal` | PayPal-verified (`PAYPAL_WEBHOOK_ID` + transmission headers), idempotent by event id; settles `PAYMENT.CAPTURE.COMPLETED` from a Retrieve of the PayPal order |
 | `GET /admin/` · `GET /admin/api/orders[?status&fulfillment&q&before]` · `GET /admin/api/orders/:id` | order back office, `ADMIN_TOKEN` required (below) |
 | `POST /admin/api/orders/:id/ship` | `{ carrier, trackingNumber, trackingUrl? }` → marks a **paid** order shipped, emails the customer; `ADMIN_TOKEN` + JSON + same-origin (see "Fulfilment") |
 
 | `POST /admin/api/orders/:id/mcf/submit` · `POST /admin/api/orders/:id/mcf/sync` · `POST /admin/api/mcf/sync` | Amazon MCF: (re)send a paid order · sync one order's status · sync every order waiting on Amazon; `ADMIN_TOKEN` + JSON + same-origin (see "Amazon MCF") |
+
+PayPal Checkout (Orders v2) is a second payment path on the same orders table.
+The checkout engineer contract (create / capture / webhook, address mapping, Meta
+`event_id`s, Dashboard webhook URL) is in [paypal.md](paypal.md). Apple/Google Pay
+are not re-enabled by that work; MCF stays off.
 
 Adding to the cart from any page: link to `cart.html?add=d204`, or use
 `<button data-add-to-cart="d215" data-placement="hero">` (add `data-go-to-cart`
@@ -678,7 +690,7 @@ Tests: `tests/commerce-mcf.test.mjs` (node:test, fake outbound endpoints in `tes
 
 ## Meta Conversions API (server-side events)
 
-Production only. The Worker sends `InitiateCheckout` (when the Airwallex PaymentIntent is created) and `Purchase` (when the order turns paid, via the webhook or
+Production only. The Worker sends `InitiateCheckout` (when the Airwallex PaymentIntent **or** the PayPal order is created) and `Purchase` (when the order turns paid, via the webhook or
 the confirmation-page poll, exactly once) to Meta's Conversions API, deduplicated against the browser Pixel by `event_id` (`ic_<orderId>`, `purchase_<orderId>`).
 `Purchase.value` is the D1 `total_cents / 100` in USD (Airwallex itself is sent dollars; D1 stores cents). Code: `worker/meta-capi.js`, `worker/meta-attribution.js`.
 
@@ -856,6 +868,7 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 - [ ] Production secrets with `--env production`: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (production keys), `AIRWALLEX_WEBHOOK_SECRET`, `ADMIN_TOKEN`,
       plus optional notification / email / MCF secrets.
 - [ ] Register the Airwallex production webhook `https://store.shopapgo.com/api/webhooks/airwallex` (`payment_intent.succeeded`, `payment_intent.cancelled`).
+- [ ] PayPal (credentials already set): register `https://store.shopapgo.com/api/webhooks/paypal` for `PAYMENT.CAPTURE.COMPLETED` in the live Dashboard and `wrangler secret put PAYPAL_WEBHOOK_ID --env production`. Same for staging sandbox. Details: [paypal.md](paypal.md).
 - [ ] Meta CAPI (production only; see `docs/meta-tracking.md`): the owner sets `META_CAPI_ACCESS_TOKEN` (and `META_TEST_EVENT_CODE` while testing) with `--env production`; run `worker/schema.sql` on the production D1 first (adds `order_attribution`, `order_meta_events`).
 - [ ] Approve prices / shipping / tax (see "Before switching `AIRWALLEX_ENV` to `prod`"), then set `PRICING_APPROVED = "true"` (until then prod takes no payments).
 - [ ] Decide MCF, emails, Apple Pay domain verification for `store.shopapgo.com`.

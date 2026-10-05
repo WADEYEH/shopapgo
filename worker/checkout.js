@@ -37,6 +37,29 @@ export function validateCheckout(body) {
   };
 }
 
+// PayPal create: email + items are required. Shipping is optional because PayPal
+// collects the US address; if the browser sent any address field we validate it
+// the same way as card checkout. `requireShipping` is set when tax is configured
+// so the PayPal amount includes destination tax.
+export function validatePaypalCheckout(body, { requireShipping = false } = {}) {
+  const email = text(body?.contact?.email, 254).toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) throw new QuoteError("invalid_email", "Enter a valid email address.");
+
+  const s = body?.shipping ?? {};
+  const hasShipping = ["firstName", "lastName", "street", "city", "state", "zip"].some((key) => text(s[key], 120));
+  if (hasShipping || requireShipping) {
+    return { ...validateCheckout(body), shippingSource: "checkout" };
+  }
+
+  return {
+    email,
+    marketingOptIn: body?.contact?.marketingOptIn === true,
+    shipping: { firstName: "", lastName: "", street: "", street2: "", city: "", state: "", zip: "" },
+    method: text(body?.method, 20) || undefined,
+    shippingSource: "paypal",
+  };
+}
+
 export function newOrderId() {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   let id = "";

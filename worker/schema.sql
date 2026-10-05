@@ -149,3 +149,17 @@ CREATE TABLE IF NOT EXISTS order_meta_events (
   PRIMARY KEY (order_id, event_name)
 );
 CREATE INDEX IF NOT EXISTS order_meta_events_status ON order_meta_events (status, updated_at);
+
+-- ---------------------------------------------------------------------------------
+-- Payment provider refs (PayPal Orders v2). New table only — orders.payment_intent_id
+-- is still written (Airwallex intent id or PayPal order id) so existing admin views
+-- keep working. Airwallex rows do not need a row here; lookup falls back to
+-- payment_intent_id.
+-- ---------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS order_payments (
+  order_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,               -- paypal (airwallex stays on payment_intent_id only)
+  provider_ref TEXT NOT NULL,           -- PayPal order id
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS order_payments_provider_ref ON order_payments (provider, provider_ref);

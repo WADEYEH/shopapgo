@@ -66,6 +66,10 @@ right after `POST /api/checkout/session` succeeds, and `meta-pixel.js` sends
 `fbq('track','InitiateCheckout', params, { eventID: 'ic_' + order_id })`. A card shopper triggers it
 when pressing "Place order" (or earlier if a wallet button reports ready, which creates the
 session); a reused session (same cart/contact/shipping/method within 50 minutes) does not fire it again.
+PayPal uses the **same** ids: fire `InitiateCheckout` with `eventID = eventIds.initiateCheckout`
+(`ic_<orderId>`) when `POST /api/checkout/paypal/order` succeeds, and `Purchase` with
+`eventID = eventIds.purchase` (`purchase_<orderId>`) only after capture returns `status: "paid"`.
+See [paypal.md](paypal.md).
 `value` = the session quote's `totalCents / 100` (same basis as `Purchase`).
 The existing dataLayer events and their parameters are unchanged; `checkout_session_created` is an
 additional event (and `purchase` gained an `items` array). It is not mapped in GTM/GA4.

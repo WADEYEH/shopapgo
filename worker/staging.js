@@ -5,8 +5,9 @@
 //   * GET /robots.txt answers "Disallow: /" (no credentials needed, so crawlers can read it)
 //   * the whole site sits behind HTTP Basic auth (secrets STAGING_BASIC_AUTH_USER / STAGING_BASIC_AUTH_PASSWORD);
 //     if either secret is missing the gate fails closed with 503; a valid ADMIN_TOKEN password also passes (see basicGate)
-//   * NOT behind the Basic gate: /api/webhooks/airwallex (Airwallex cannot send our credentials; the handler verifies
-//     its own signature), /admin, /admin/* (their own ADMIN_TOKEN check also uses the Authorization header, so a second
+//   * NOT behind the Basic gate: /api/webhooks/airwallex and /api/webhooks/paypal (providers cannot send our
+//     credentials; each handler verifies its own signature), /admin, /admin/* (their own ADMIN_TOKEN check also uses
+//     the Authorization header, so a second
 //     gate in front would make the back office unusable) and the whole ADMIN_HOST hostname (worker/hosts.js: only the
 //     back office + its css/js are reachable there; one login: ADMIN_TOKEN, or (ADMIN_ACCEPT_SITE_BASIC="true") the same
 //     Basic user/password as the website - never two prompts).
@@ -18,7 +19,7 @@ export const STAGING_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
 export const isStaging = (env = {}) => env.SITE_ENV === "staging";
 
-const BASIC_EXEMPT_EXACT = new Set(["/api/webhooks/airwallex", "/admin"]);
+const BASIC_EXEMPT_EXACT = new Set(["/api/webhooks/airwallex", "/api/webhooks/paypal", "/admin"]);
 export const isBasicExempt = (pathname) => BASIC_EXEMPT_EXACT.has(pathname) || pathname.startsWith("/admin/");
 
 // Comparing SHA-256 digests keeps the comparison constant-time regardless of length.

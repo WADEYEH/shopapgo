@@ -1,6 +1,7 @@
 import { toMajor } from "./catalog.js";
 import { maskEmail } from "./checkout.js";
 import { getFulfillment, listAudit } from "./fulfillment.js";
+import { amountsMatch, isUsableUsShipping } from "./paypal.js";
 
 const now = () => new Date().toISOString();
 
@@ -35,6 +36,35 @@ export async function attachPaymentIntent(db, orderId, intentId) {
     .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ?")
     .bind(intentId, now(), orderId)
     .run();
+}
+
+export async function attachPaypalOrder(db, orderId, paypalOrderId) {
+  const timestamp = now();
+  await db
+    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ?")
+    .bind(paypalOrderId, timestamp, orderId)
+    .run();
+  await db
+    .prepare("INSERT OR IGNORE INTO order_payments (order_id, provider, provider_ref, created_at) VALUES (?, 'paypal', ?, ?)")
+    .bind(orderId, paypalOrderId, timestamp)
+    .run();
+}
+
+export function getOrderPayment(db, orderId) {
+  return db.prepare("SELECT provider, provider_ref, created_at FROM order_payments WHERE order_id = ?").bind(orderId).first();
+}
+
+export async function getOrderByPaypalOrderId(db, paypalOrderId) {
+  const viaTable = await db
+    .prepare(
+      `SELECT o.* FROM orders o
+         JOIN order_payments p ON p.order_id = o.id
+        WHERE p.provider = 'paypal' AND p.provider_ref = ?`,
+    )
+    .bind(paypalOrderId)
+    .first();
+  if (viaTable) return viaTable;
+  return getOrderByIntent(db, paypalOrderId);
 }
 
 export function getOrder(db, orderId) {
@@ -84,6 +114,37 @@ export async function settleIntent(db, intent) {
 
 export async function applyIntentStatus(db, intent) {
   return (await settleIntent(db, intent)).status;
+}
+
+// PayPal settle: a COMPLETED capture whose amount/currency matches and whose
+// shipping is a usable US address becomes paid. A completed capture that is
+// missing an address or whose amount disagrees is parked in review — never paid.
+export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, amountValue, currency, shipping }) {
+  const order = orderId ? await getOrder(db, orderId) : await getOrderByPaypalOrderId(db, paypalOrderId);
+  if (!order || order.payment_intent_id !== paypalOrderId) return { status: null, changed: false, order: null };
+  if (order.status !== "pending") return { status: order.status, changed: false, order };
+  if (status !== "COMPLETED") return { status: order.status, changed: false, order };
+
+  const matches = currency === order.currency && amountsMatch(amountValue, order.total_cents);
+  const addressOk = isUsableUsShipping(shipping);
+  const nextStatus = matches && addressOk ? "paid" : "review";
+  const timestamp = now();
+  const shippingJson = shipping ? JSON.stringify({
+    firstName: shipping.firstName,
+    lastName: shipping.lastName,
+    street: shipping.street,
+    street2: shipping.street2 || "",
+    city: shipping.city,
+    state: shipping.state,
+    zip: shipping.zip,
+  }) : order.shipping_json;
+
+  const result = await db
+    .prepare("UPDATE orders SET status = ?, paid_at = ?, shipping_json = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+    .bind(nextStatus, nextStatus === "paid" ? timestamp : null, shippingJson, timestamp, order.id)
+    .run();
+  const changed = (result?.meta?.changes ?? 1) > 0;
+  return { status: changed ? nextStatus : (await getOrder(db, order.id)).status, changed, order: changed ? await getOrder(db, order.id) : order };
 }
 
 // ---------- New-order notification bookkeeping ----------

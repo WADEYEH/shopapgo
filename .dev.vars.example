@@ -50,6 +50,17 @@ CUSTOMER_EMAIL_POLICY_NOTE=
 # "false" = authorize only instead of capturing immediately (default capture).
 # PAYMENT_AUTO_CAPTURE=
 
+# --- PayPal Checkout (Orders v2; Client Secret stays on the Worker) -----------------
+# Developer Dashboard → Apps → the US store app. PAYPAL_ENV is "sandbox" locally / on
+# staging and "live" in production. Never commit real values. PAYPAL_CLIENT_ID is also
+# returned (publicly) by GET /api/store/config for the JS SDK.
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+# PAYPAL_ENV=sandbox
+# Webhook id from the Dashboard after you register /api/webhooks/paypal (required for
+# signed webhook deliveries; capture + GET /api/orders/:id still settle without it).
+PAYPAL_WEBHOOK_ID=
+
 # --- Meta Conversions API (production only; see docs/meta-tracking.md) -------------------------
 # Leave META_DATASET_ID empty locally and on staging: with no dataset id every Meta CAPI step is skipped.
 # In production the dataset id is a plain var in wrangler.toml [env.production.vars]; the token is a secret

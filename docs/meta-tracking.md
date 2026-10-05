@@ -10,8 +10,8 @@ no Graph request, no attribution rows, Airwallex metadata unchanged. (The Pixel 
 
 | Event | When (Worker) | `event_id` | `event_time` | `value` |
 |---|---|---|---|---|
-| `InitiateCheckout` | `POST /api/checkout/session`, right after the Airwallex PaymentIntent is created | `ic_<merchant_order_id>` | order `created_at` (seconds) | D1 `total_cents / 100` |
-| `Purchase` | `afterSettle`: the one call that moves the order pending → paid (webhook `payment_intent.succeeded` **or** the `GET /api/orders/:id` Retrieve poll) | `purchase_<merchant_order_id>` | `paid_at` (seconds) | D1 `total_cents / 100` |
+| `InitiateCheckout` | `POST /api/checkout/session` (Airwallex) **or** `POST /api/checkout/paypal/order` (PayPal), right after the provider order is created | `ic_<merchant_order_id>` | order `created_at` (seconds) | D1 `total_cents / 100` |
+| `Purchase` | `afterSettle`: the one call that moves the order pending → paid (Airwallex webhook / Retrieve poll **or** PayPal capture / `PAYMENT.CAPTURE.COMPLETED` / order poll) | `purchase_<merchant_order_id>` | `paid_at` (seconds) | D1 `total_cents / 100` |
 
 `merchant_order_id` is the `APGO-US-…` order id. Both events: `action_source = website`, `event_source_url` = the attributed `sourceUrl` (falls back to
 `<origin>/checkout.html?order=<id>`), `custom_data = { value, currency: "USD", content_type: "product", content_ids: [SKU…], contents: [{id, quantity, item_price}], order_id }`.

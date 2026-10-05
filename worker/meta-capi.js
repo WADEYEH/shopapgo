@@ -2,7 +2,7 @@
 // (it is set only in wrangler.toml [env.production.vars]), so staging and local runs are untouched.
 //
 //   Event            When                                                   event_id
-//   InitiateCheckout the Airwallex PaymentIntent was created                ic_<merchant_order_id>
+//   InitiateCheckout Airwallex PaymentIntent or PayPal order was created    ic_<merchant_order_id>
 //   Purchase         the order moved pending -> paid (afterSettle, once)    purchase_<merchant_order_id>
 //
 // merchant_order_id is our order id (APGO-US-XXXXXXXXXXXX). The browser Pixel uses the same ids as eventID, so Meta
