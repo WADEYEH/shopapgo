@@ -4,15 +4,16 @@
 //   * every response carries  X-Robots-Tag: noindex, nofollow, noarchive
 //   * GET /robots.txt answers "Disallow: /" (no credentials needed, so crawlers can read it)
 //   * the whole site sits behind HTTP Basic auth (secrets STAGING_BASIC_AUTH_USER / STAGING_BASIC_AUTH_PASSWORD);
-//     if either secret is missing the gate fails closed with 503; a valid ADMIN_TOKEN password also passes (see basicGate)
+//     if either secret is missing the gate fails closed with 503; a valid owner email/password or ADMIN_TOKEN also passes (see basicGate)
 //   * NOT behind the Basic gate: /api/webhooks/airwallex and /api/webhooks/paypal (providers cannot send our
-//     credentials; each handler verifies its own signature), /admin, /admin/* (their own ADMIN_TOKEN check also uses
+//     credentials; each handler verifies its own signature), /admin, /admin/* (their own admin-auth check also uses
 //     the Authorization header, so a second
 //     gate in front would make the back office unusable) and the whole ADMIN_HOST hostname (worker/hosts.js: only the
-//     back office + its css/js are reachable there; one login: ADMIN_TOKEN, or (ADMIN_ACCEPT_SITE_BASIC="true") the same
-//     Basic user/password as the website - never two prompts).
+//     back office + its css/js are reachable there; one login: ADMIN_LOGIN_EMAIL/PASSWORD, ADMIN_TOKEN, or
+//     (ADMIN_ACCEPT_SITE_BASIC="true") the same Basic user/password as the website - never two prompts).
 
 import { isAdminHost } from "./hosts.js";
+import { matchesAdminLogin, matchesAdminToken, presentedBasic, sameSecret } from "./admin-auth.js";
 
 export const STAGING_ROBOTS_TAG = "noindex, nofollow, noarchive";
 export const STAGING_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
@@ -22,32 +23,10 @@ export const isStaging = (env = {}) => env.SITE_ENV === "staging";
 const BASIC_EXEMPT_EXACT = new Set(["/api/webhooks/airwallex", "/api/webhooks/paypal", "/admin"]);
 export const isBasicExempt = (pathname) => BASIC_EXEMPT_EXACT.has(pathname) || pathname.startsWith("/admin/");
 
-// Comparing SHA-256 digests keeps the comparison constant-time regardless of length.
-async function sameSecret(a, b) {
-  const [x, y] = await Promise.all(
-    [a, b].map(async (value) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))),
-  );
-  let diff = 0;
-  for (let i = 0; i < x.length; i += 1) diff |= x[i] ^ y[i];
-  return diff === 0;
-}
-
-function presentedBasic(request) {
-  const header = request.headers.get("Authorization") || "";
-  const [scheme, value = ""] = header.split(/\s+/, 2);
-  if (!/^basic$/i.test(scheme)) return null;
-  try {
-    const decoded = new TextDecoder().decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
-    const colon = decoded.indexOf(":");
-    return colon < 0 ? null : { user: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
-  } catch {
-    return null;
-  }
-}
-
 // Back-office host only, and only where ADMIN_ACCEPT_SITE_BASIC="true" (plain var, staging): the website's own Basic credentials
-// (secrets STAGING_BASIC_AUTH_USER / STAGING_BASIC_AUTH_PASSWORD, compared in constant time) also open /admin, next to ADMIN_TOKEN.
-// Default everywhere else (production, local dev): false, so only ADMIN_TOKEN works.
+// (secrets STAGING_BASIC_AUTH_USER / STAGING_BASIC_AUTH_PASSWORD, compared in constant time) also open /admin, next to
+// ADMIN_LOGIN_EMAIL/PASSWORD and ADMIN_TOKEN. Default elsewhere: the flag is unset, so this extra path is off
+// (production uses the same ADMIN_LOGIN_* secrets without needing SITE_ENV=staging).
 export async function siteBasicOpensAdmin(request, env) {
   if (!isStaging(env) || env.ADMIN_ACCEPT_SITE_BASIC !== "true" || !isAdminHost(request, env)) return false;
   const user = env.STAGING_BASIC_AUTH_USER;
@@ -75,10 +54,10 @@ async function basicGate(request, env) {
     ? await Promise.all([sameSecret(given.user, user), sameSecret(given.password, password)])
     : [false, false];
   if (userOk && passwordOk) return null;
-  // The /admin/ page loads its CSS/JS from gated paths, and the browser only holds the ADMIN_TOKEN credentials at that point:
-  // a valid ADMIN_TOKEN (any username, >= 16 chars) therefore also passes this gate.
-  const adminToken = env.ADMIN_TOKEN;
-  if (given && adminToken && adminToken.length >= 16 && (await sameSecret(given.password, adminToken))) return null;
+  // The /admin/ page loads its CSS/JS from gated paths when ADMIN_HOST is unset; the same owner
+  // email/password or ADMIN_TOKEN the back office accepts therefore also pass this gate.
+  if (await matchesAdminLogin(request, env)) return null;
+  if (given && (await matchesAdminToken(request, env))) return null;
   return textResponse("Authentication required.", 401, { "WWW-Authenticate": 'Basic realm="APGO staging", charset="UTF-8"' });
 }
 

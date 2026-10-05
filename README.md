@@ -34,7 +34,7 @@ optional `PRICING_JSON` override; tax defaults to 0/undecided; prod stays closed
 elements) when the device supports them.
 `prototype/v3.html` has the landing entry: header cart badge and **Add to cart**
 (primary) with the Amazon link kept as the secondary option. A protected
-order back office lives at `/admin/` (on staging/prod only on its own `admin-*` hostname, see Environments) (`ADMIN_TOKEN` secret; its writes are mark-as-shipped and the Amazon MCF buttons), paid
+order back office lives at `/admin/` (on staging/prod only on its own `admin-*` hostname, see Environments) (`ADMIN_LOGIN_EMAIL`/`ADMIN_LOGIN_PASSWORD` Basic, with `ADMIN_TOKEN` as fallback; its writes are mark-as-shipped and the Amazon MCF buttons), paid
 orders can trigger an opt-in team notification and opt-in customer emails, and
 `npm run smoke:airwallex` runs the full sandbox payment flow once keys are in
 `.dev.vars` (see `.dev.vars.example`; never commit real values).
@@ -53,11 +53,11 @@ are in `docs/commerce.md`.
 **Environments.** `wrangler.toml` has local dev (top level), `[env.staging]` (deployed: Worker `apgo-us-store-staging` on workers.dev,
 own D1, Airwallex sandbox, `SITE_ENV=staging` → noindex header, `robots.txt` Disallow, whole-site Basic auth; the Airwallex and PayPal webhooks keep their own signature checks).
 Custom domains: storefront **https://staging.shopapgo.com** (Cloudflare Custom Domain; the workers.dev URL keeps working) and the order back office on its
-own host **https://admin-staging.shopapgo.com/admin/** (`ADMIN_HOST`, `worker/hosts.js`: only `/admin*` + its css/js there, login = `ADMIN_TOKEN` or (staging only, `ADMIN_ACCEPT_SITE_BASIC="true"`) the same Basic user/password as the website, noindex;
+own host **https://admin-staging.shopapgo.com/admin/** (`ADMIN_HOST`, `worker/hosts.js`: only `/admin*` + its css/js there, login = `ADMIN_LOGIN_EMAIL`/`ADMIN_LOGIN_PASSWORD` or `ADMIN_TOKEN` or (optional, `ADMIN_ACCEPT_SITE_BASIC="true"`) the same Basic user/password as the website, noindex;
 the store hosts answer 404 for `/admin*`; planned prod: `admin.shopapgo.com`). The `[env.staging]` `routes` bind both; `shopapgo` Pages (`www`) is untouched and `[env.production]` (planned only, `store.shopapgo.com`, not deployed,
 `PRICING_APPROVED` unset = payments closed). Deploy staging with `npm run deploy:staging`; verify with `scripts/staging-check.mjs` and
 `scripts/airwallex-browser-smoke.mjs --base <url> [--admin-base <admin url>] --credentials ~/.apgo-staging-credentials`. Secrets are per environment
-(`wrangler secret put <NAME> --env staging`); staging secrets: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (sandbox), `ADMIN_TOKEN`,
+(`wrangler secret put <NAME> --env staging`); staging secrets: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (sandbox), `ADMIN_LOGIN_EMAIL`, `ADMIN_LOGIN_PASSWORD`, `ADMIN_TOKEN`,
 `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` (+ `AIRWALLEX_WEBHOOK_SECRET` once a sandbox webhook exists;
 PayPal: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV`, and `PAYPAL_WEBHOOK_ID` after the Dashboard URL is registered). Go-live
 to-do (prod D1, domain, prod secrets, webhook registration, `PRICING_APPROVED`): `docs/commerce.md` "Environments".

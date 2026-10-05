@@ -55,7 +55,7 @@ workers_dev = true
 preview_urls = false
 # Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy; workers.dev stays on.
 #   staging.shopapgo.com        the storefront (Basic-auth gate); /admin* answers 404 here
-#   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); ADMIN_TOKEN only
+#   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); email/password or ADMIN_TOKEN
 routes = [
   { pattern = "staging.shopapgo.com", custom_domain = true },
   { pattern = "admin-staging.shopapgo.com", custom_domain = true },
@@ -79,17 +79,18 @@ AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but 
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
 ROOT_PAGE = "/v3"         # worker/root-page.js: "/" serves the v3 store entry (cart badge + Add to cart), not the old Amazon landing
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
-ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
+ADMIN_ACCEPT_SITE_BASIC = "true"            # optional: the website Basic login (STAGING_BASIC_AUTH_*) also opens /admin on ADMIN_HOST
 EXPRESS_CHECKOUT = "true"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block on (UI only, staging). Do NOT set in production yet.
 # Secrets (wrangler secret put <NAME> --env staging): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (sandbox keys only),
-# ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD; AIRWALLEX_WEBHOOK_SECRET once the sandbox webhook exists.
+# ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD;
+# AIRWALLEX_WEBHOOK_SECRET once the sandbox webhook exists.
 # PayPal sandbox: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV=sandbox; PAYPAL_WEBHOOK_ID after registering
 # https://staging.shopapgo.com/api/webhooks/paypal in the PayPal sandbox Dashboard.
 
 [env.staging.observability]
 enabled = true
 
-# Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office, ADMIN_TOKEN only). Checkout answers 503 until PRICING_APPROVED="true".
+# Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office: ADMIN_LOGIN_EMAIL/PASSWORD or ADMIN_TOKEN). Checkout answers 503 until PRICING_APPROVED="true".
 [env.production]
 name = "apgo-us-store"
 workers_dev = false
@@ -117,11 +118,13 @@ ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
 META_DATASET_ID = "2606879866471418"
-# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set either: production admin accepts ADMIN_TOKEN only (owner's decision if that should change).
+# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Admin login is
+# ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
 # prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
 # Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
-# AIRWALLEX_WEBHOOK_SECRET, ADMIN_TOKEN, META_CAPI_ACCESS_TOKEN, plus the optional notification / email / MCF secrets.
+# AIRWALLEX_WEBHOOK_SECRET, ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, META_CAPI_ACCESS_TOKEN,
+# plus the optional notification / email / MCF secrets.
 # PayPal live: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV=live; PAYPAL_WEBHOOK_ID after registering
 # https://store.shopapgo.com/api/webhooks/paypal (and www path-route equivalent) in the PayPal live Dashboard.
 

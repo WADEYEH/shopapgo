@@ -254,7 +254,7 @@ test("GET /api/orders/:id settles through Retrieve and notifies once across conc
 
 // ---------- admin ----------
 
-test("admin: closed when ADMIN_TOKEN is missing or short; 401 with a Basic challenge otherwise", { skip }, async () => {
+test("admin: closed when neither login nor ADMIN_TOKEN is configured; 401 with a Basic challenge otherwise", { skip }, async () => {
   const db = await createD1();
   for (const token of [undefined, "", "short"]) {
     const response = await call(baseEnv(db, { ADMIN_TOKEN: token }), "/admin/api/orders", { headers: { Authorization: `Bearer ${token}` } });
@@ -268,6 +268,20 @@ test("admin: closed when ADMIN_TOKEN is missing or short; 401 with a Basic chall
   assert.equal((await call(env, "/admin/api/orders", { headers: { Authorization: "Bearer wrong-wrong-wrong-wrong" } })).status, 401);
   assert.equal((await call(env, "/admin/", {})).status, 401, "the page itself is gated too");
   assert.equal((await call(env, "/admin", {})).status, 401);
+});
+
+test("admin: email/password Basic opens the office without ADMIN_TOKEN; token fallback still works", { skip }, async () => {
+  const db = await createD1();
+  const login = { ADMIN_LOGIN_EMAIL: "owner@example.com", ADMIN_LOGIN_PASSWORD: "owner-login-password-test" };
+  const loginOnly = baseEnv(db, { ...login, ADMIN_TOKEN: "" });
+  const emailBasic = { Authorization: `Basic ${Buffer.from(`${login.ADMIN_LOGIN_EMAIL}:${login.ADMIN_LOGIN_PASSWORD}`).toString("base64")}` };
+  assert.equal((await call(loginOnly, "/admin/api/orders", { headers: emailBasic })).status, 200);
+  assert.equal((await call(loginOnly, "/admin/", { headers: emailBasic })).status, 200);
+  assert.equal((await call(loginOnly, "/admin/api/orders", { headers: { Authorization: `Bearer ${login.ADMIN_LOGIN_PASSWORD}` } })).status, 401);
+  const both = baseEnv(db, login);
+  assert.equal((await call(both, "/admin/api/orders", { headers: emailBasic })).status, 200);
+  assert.equal((await call(both, "/admin/api/orders", { headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } })).status, 200);
+  assert.equal((await call(baseEnv(db, { ADMIN_TOKEN: "short", ...login }), "/admin/api/orders", { headers: emailBasic })).status, 200);
 });
 
 test("admin: Bearer and Basic auth list orders with address, items, totals and payment state", { skip }, async () => {

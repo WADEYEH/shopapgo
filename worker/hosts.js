@@ -1,7 +1,7 @@
 // Host split between the storefront and the order back office.
 //
 // With the plain var ADMIN_HOST set (e.g. "admin-staging.shopapgo.com"; prod plan: "admin.shopapgo.com"):
-//   * requests whose Host is ADMIN_HOST only get /admin, /admin/* (ADMIN_TOKEN, see admin.js), /robots.txt and the few
+//   * requests whose Host is ADMIN_HOST only get /admin, /admin/* (admin-auth, see admin.js), /robots.txt and the few
 //     static files the back office page loads; everything else is 404. Every response there carries X-Robots-Tag noindex.
 //   * every other host (the store domain, workers.dev) answers 404 for /admin and /admin/* - the back office is not
 //     served there any more.
@@ -27,7 +27,7 @@ export function isAdminHost(request, env) {
 
 export const isAdminPathname = (pathname) => pathname === "/admin" || pathname.startsWith("/admin/");
 
-// Paths the back-office hostname may serve at all (before ADMIN_TOKEN is checked).
+// Paths the back-office hostname may serve at all (before admin auth is checked).
 export const adminHostAllows = (pathname) => isAdminPathname(pathname) || ADMIN_HOST_ASSETS.has(pathname) || pathname === "/robots.txt";
 
 export function notFound(headers = {}) {

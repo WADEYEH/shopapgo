@@ -9,10 +9,10 @@
 //   GET  /api/orders/:id           public order status (syncs pending intents / PayPal)
 //   POST /api/webhooks/airwallex   signed Airwallex events
 //   POST /api/webhooks/paypal      verified PayPal events (PAYMENT.CAPTURE.COMPLETED)
-//   GET  /admin/api/orders[/:id]   order back office data (ADMIN_TOKEN)
-//   POST /admin/api/orders/:id/ship  mark a paid order shipped + email the customer (ADMIN_TOKEN)
-//   POST /admin/api/orders/:id/mcf/submit | /mcf/sync, POST /admin/api/mcf/sync   Amazon MCF retry / status sync (ADMIN_TOKEN)
-//   GET  /admin/                   order back office page (ADMIN_TOKEN)
+//   GET  /admin/api/orders[/:id]   order back office data (admin auth)
+//   POST /admin/api/orders/:id/ship  mark a paid order shipped + email the customer (admin auth)
+//   POST /admin/api/orders/:id/mcf/submit | /mcf/sync, POST /admin/api/mcf/sync   Amazon MCF retry / status sync (admin auth)
+//   GET  /admin/                   order back office page (admin auth)
 //
 // Meta Conversions API (production only, worker/meta-capi.js): InitiateCheckout when the PaymentIntent is created and Purchase
 // when an order turns paid; a cron re-sends failures. All of it is skipped unless META_DATASET_ID is set.

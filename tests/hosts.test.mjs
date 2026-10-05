@@ -107,7 +107,7 @@ test("ADMIN_HOST unset (local dev / tests): one host serves store and back offic
   assert.equal((await call(ADMIN, "/v3.html", { e })).status, 200);
 });
 
-test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; production binds store + admin hosts, admin token only", async () => {
+test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; production binds store + admin hosts without site-Basic", async () => {
   const { readFile } = await import("node:fs/promises");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
   const staging = toml.slice(toml.indexOf("[env.staging]"), toml.indexOf("[env.production]"));
@@ -120,7 +120,7 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /^ADMIN_HOST = "admin\.shopapgo\.com"/m);
   assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|ROOT_PAGE|MCF_AUTO_SUBMIT|SITE_ENV)\s*=/m.test(production), "no flag that would open payments or the staging gate in production");
-  assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production), "prod admin accepts ADMIN_TOKEN only unless the owner decides otherwise");
+  assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production), "production has no website Basic login; admin uses ADMIN_LOGIN_* + ADMIN_TOKEN");
 });
 
 const basicOf = (user, pass) => ({ Authorization: "Basic " + Buffer.from(`${user}:${pass}`).toString("base64") });
@@ -155,12 +155,37 @@ test("site Basic login only works on the admin host; the store host still 404s /
   assert.equal((await call("apgo-us-store-staging.acct.workers.dev", "/admin/", { headers: { Authorization: BASIC } })).status, 404);
 });
 
-test("ADMIN_ACCEPT_SITE_BASIC unset or not exactly \"true\" (production default): only ADMIN_TOKEN opens the back office", async () => {
+test("ADMIN_ACCEPT_SITE_BASIC unset or not exactly \"true\" (production default): site Basic is off; ADMIN_TOKEN still works", async () => {
   for (const extra of [{ ADMIN_ACCEPT_SITE_BASIC: undefined }, { ADMIN_ACCEPT_SITE_BASIC: "false" }, { ADMIN_ACCEPT_SITE_BASIC: "1" }, { ADMIN_ACCEPT_SITE_BASIC: "" }, { SITE_ENV: undefined }, { SITE_ENV: "production" }]) {
     const e = env(extra);
     assert.equal((await call(ADMIN, "/admin/api/orders", { headers: { Authorization: BASIC }, e })).status, 401, JSON.stringify(extra));
     assert.equal((await call(ADMIN, "/admin/api/orders", { headers: bearer, e })).status, 200, JSON.stringify(extra));
   }
+});
+
+const LOGIN_EMAIL = "owner@example.com";
+const LOGIN_PASSWORD = "owner-login-password-test";
+
+test("admin host: owner email/password Basic works without SITE_ENV=staging or ADMIN_ACCEPT_SITE_BASIC", async () => {
+  const e = env({
+    SITE_ENV: undefined,
+    ADMIN_ACCEPT_SITE_BASIC: undefined,
+    ADMIN_LOGIN_EMAIL: LOGIN_EMAIL,
+    ADMIN_LOGIN_PASSWORD: LOGIN_PASSWORD,
+    ADMIN_TOKEN: "",
+  });
+  assert.equal((await call(ADMIN, "/admin/", { headers: basicOf(LOGIN_EMAIL, LOGIN_PASSWORD), e })).status, 200);
+  assert.equal((await call(ADMIN, "/admin/", { headers: basicOf("Owner@Example.com", LOGIN_PASSWORD), e })).status, 200);
+  assert.equal((await call(ADMIN, "/admin/", { headers: basicOf("anyone", LOGIN_PASSWORD), e })).status, 401);
+  assert.equal((await call(ADMIN, "/admin/", { headers: basicOf(LOGIN_EMAIL, "nope"), e })).status, 401);
+  assert.equal((await call(ADMIN, "/admin/", { headers: { Authorization: `Bearer ${LOGIN_PASSWORD}` }, e })).status, 401);
+});
+
+test("admin host: email/password and ADMIN_TOKEN both work when both are configured", async () => {
+  const e = env({ ADMIN_LOGIN_EMAIL: LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD: LOGIN_PASSWORD });
+  assert.equal((await call(ADMIN, "/admin/api/orders", { headers: basicOf(LOGIN_EMAIL, LOGIN_PASSWORD), e })).status, 200);
+  assert.equal((await call(ADMIN, "/admin/api/orders", { headers: bearer, e })).status, 200);
+  assert.equal((await call(ADMIN, "/admin/api/orders", { headers: basicOf("ops", TOKEN), e })).status, 200);
 });
 
 test("missing website Basic secrets never open the back office with empty credentials", async () => {

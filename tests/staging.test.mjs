@@ -102,6 +102,11 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
   assert.equal((await call("/css/commerce.css", { e: env({ ADMIN_TOKEN: "short" }), headers: { Authorization: basic("admin", "short") } })).status, 401);
   // The staging Basic credentials are NOT an admin token.
   assert.equal((await call("/admin/", { headers: { Authorization: basic() } })).status, 401);
+  // Owner email/password is an admin login and also passes the site gate (CSS/JS when ADMIN_HOST is unset).
+  const login = env({ ADMIN_LOGIN_EMAIL: "owner@example.com", ADMIN_LOGIN_PASSWORD: "owner-login-password-test", ADMIN_TOKEN: "" });
+  assert.equal((await call("/admin/", { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
+  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
+  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("other@example.com", "owner-login-password-test") }, e: login })).status, 401);
 });
 
 test("non-staging (prod / local dev): pass-through, no gate, no robots override, no forced header", async () => {

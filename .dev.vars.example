@@ -10,9 +10,15 @@ AIRWALLEX_WEBHOOK_SECRET=
 # AIRWALLEX_LOGIN_AS=
 
 # --- Order back office (/admin/) ---------------------------------------------------
-# Long random string (>= 16 chars); the password for /admin/ (any username) or a
+# Owner email + password (HTTP Basic username / password). Set remotely with
+#   npx wrangler secret put ADMIN_LOGIN_EMAIL --env production
+#   npx wrangler secret put ADMIN_LOGIN_PASSWORD --env production
+# and the same pair for --env staging. Never commit real values.
+ADMIN_LOGIN_EMAIL=
+ADMIN_LOGIN_PASSWORD=
+# Fallback: long random string (>= 16 chars); Basic password (any username) or
 # Bearer token. Generate one with:  openssl rand -base64 32
-# Left empty, /admin/ and /admin/api/* answer 503 (closed).
+# If neither the login pair nor a long-enough token is set, /admin* answers 503.
 ADMIN_TOKEN=
 
 # --- New paid-order notification (all optional; nothing is sent when unset) --------

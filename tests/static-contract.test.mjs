@@ -158,7 +158,7 @@ test(".dev.vars.example documents every secret with no real values", async () =>
     source.split("\n").filter((line) => /^[A-Z0-9_]+=/.test(line)).map((line) => line.split(/=(.*)/s).slice(0, 2)),
   );
   for (const name of [
-    "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "ADMIN_TOKEN",
+    "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "ADMIN_LOGIN_EMAIL", "ADMIN_LOGIN_PASSWORD", "ADMIN_TOKEN",
     "ORDER_NOTIFY_WEBHOOK_URL", "ORDER_NOTIFY_WEBHOOK_SECRET", "RESEND_API_KEY", "ORDER_NOTIFY_EMAIL_TO", "ORDER_NOTIFY_EMAIL_FROM",
   ]) {
     assert.ok(name in assigned, `${name} missing from .dev.vars.example`);
@@ -172,7 +172,7 @@ test(".dev.vars.example documents every secret with no real values", async () =>
 test("wrangler serves /admin through the Worker first and commits no secret values", async () => {
   const toml = await read("wrangler.toml");
   assert.match(toml, /run_worker_first\s*=\s*\[[^\]]*"\/admin\/\*"/);
-  for (const name of ["ADMIN_TOKEN", "AIRWALLEX_API_KEY", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_WEBHOOK_SECRET", "RESEND_API_KEY", "META_CAPI_ACCESS_TOKEN", "META_TEST_EVENT_CODE"]) {
+  for (const name of ["ADMIN_TOKEN", "ADMIN_LOGIN_EMAIL", "ADMIN_LOGIN_PASSWORD", "AIRWALLEX_API_KEY", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_WEBHOOK_SECRET", "RESEND_API_KEY", "META_CAPI_ACCESS_TOKEN", "META_TEST_EVENT_CODE"]) {
     assert.ok(!new RegExp(`^\\s*${name}\\s*=\\s*"[^"]+"`, "m").test(toml), `${name} must be a secret, not a wrangler var`);
   }
 });

@@ -202,7 +202,7 @@ export function publicOrder(order) {
   };
 }
 
-// ---------- Admin views (only ever returned behind ADMIN_TOKEN) ----------
+// ---------- Admin views (only ever returned behind admin auth) ----------
 
 export const ORDER_STATUSES = ["pending", "paid", "review", "cancelled"];
 

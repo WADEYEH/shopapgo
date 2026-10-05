@@ -1,10 +1,11 @@
 // Protected order back office: /admin/ (static page) and /admin/api/* (JSON). The API
 // lives under /admin/ so the browser's Basic-auth credentials cover both.
 //
-// Auth: the ADMIN_TOKEN Worker secret. Browsers get the native Basic-auth prompt
-// (any username, password = ADMIN_TOKEN); scripts may send `Authorization: Bearer
-// <ADMIN_TOKEN>`. With no token configured (or one shorter than 16 characters)
-// everything answers 503, so a missing secret never opens the back office.
+// Auth (see worker/admin-auth.js): browsers get the native Basic-auth prompt.
+// Primary: username = ADMIN_LOGIN_EMAIL, password = ADMIN_LOGIN_PASSWORD.
+// Fallback: ADMIN_TOKEN (>= 16 chars) as Bearer, or as the Basic password (any username).
+// Staging may also accept the website Basic login (ADMIN_ACCEPT_SITE_BASIC). If neither
+// the login pair nor a long-enough ADMIN_TOKEN is configured, everything answers 503.
 //
 // Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
@@ -18,46 +19,21 @@ import { FULFILLMENT_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, get
 import { FulfillmentError, markShipped, validateShipment } from "./fulfillment.js";
 import { sendCustomerEmail } from "./customer-email.js";
 import { siteBasicOpensAdmin } from "./staging.js";
+import { adminConfigured, matchesAdminLogin, matchesAdminToken, MIN_ADMIN_TOKEN_LENGTH } from "./admin-auth.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 
-export const MIN_ADMIN_TOKEN_LENGTH = 16;
+export { MIN_ADMIN_TOKEN_LENGTH };
 
 const NO_INDEX = { "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "no-store" };
 const CHALLENGE = { "WWW-Authenticate": 'Basic realm="APGO orders", charset="UTF-8"' };
 
-// Comparing SHA-256 digests keeps the comparison constant-time regardless of length.
-async function sameSecret(a, b) {
-  const [x, y] = await Promise.all(
-    [a, b].map(async (value) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))),
-  );
-  let diff = 0;
-  for (let i = 0; i < x.length; i += 1) diff |= x[i] ^ y[i];
-  return diff === 0;
-}
-
-function presentedToken(request) {
-  const header = request.headers.get("Authorization") || "";
-  const [scheme, value = ""] = header.split(/\s+/, 2);
-  if (/^bearer$/i.test(scheme)) return value;
-  if (/^basic$/i.test(scheme)) {
-    try {
-      const decoded = new TextDecoder().decode(Uint8Array.from(atob(value), (c) => c.charCodeAt(0)));
-      return decoded.slice(decoded.indexOf(":") + 1);
-    } catch {
-      return "";
-    }
-  }
-  return "";
-}
-
 // Returns null when the request may proceed, otherwise the response to send.
 export async function requireAdmin(request, env) {
-  const token = env.ADMIN_TOKEN;
-  if (!token || token.length < MIN_ADMIN_TOKEN_LENGTH) {
+  if (!adminConfigured(env)) {
     return fail(503, "admin_not_configured", "The order back office is not configured.", NO_INDEX);
   }
-  const presented = presentedToken(request);
-  if (presented && (await sameSecret(presented, token))) return null;
+  if (await matchesAdminLogin(request, env)) return null;
+  if (await matchesAdminToken(request, env)) return null;
   // Staging only (ADMIN_ACCEPT_SITE_BASIC): the website's Basic user + password is accepted on the admin host too.
   if (await siteBasicOpensAdmin(request, env)) return null;
   return fail(401, "unauthorized", "Authentication required.", { ...NO_INDEX, ...CHALLENGE });
