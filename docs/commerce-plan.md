@@ -81,6 +81,7 @@
 | D30 | 10/6 | 瑕疵、寄错、损坏的退货邮资由我们负担；顾客先自付时凭收据退还，上限 $15 | 同上 |
 | D31 | 10/6 | 运费确认为每单 $7.99 | 解决 O3 |
 | D32 | 10/6 | 地址验证用 Google Address Validation（每月前 5,000 次免费） | 见 `docs/design/modules/M3-cart-checkout.md` |
+| D33 | 10/6 | 后台一开始只有一个拥有者帐号；之后要加人，由拥有者在后台「成员」页面加入名单 | 修改 D15；见 `docs/design/modules/M9-admin.md` |
 
 ---
 
