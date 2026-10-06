@@ -24,7 +24,7 @@
 | 寄件服务 | Resend |
 | 寄件人 | 目前核准的是 `APGO <orders@apgo.tw>`；要不要改成 shopapgo.com 网域，见企划 O8 |
 | 回复地址 | services@apgo.com.tw |
-| 团队信收件人 | wadeyeh@apgo.com.tw（D7），之后可以加同事 |
+| 团队信收件人 | 每个后台成员自己选要不要收（D34）；至少要有一个人收，预设是拥有者 wadeyeh@apgo.com.tw（D7） |
 | 语言 | 顾客信用英文 |
 | staging | 只寄到核准的测试信箱 |
 | 营销信 | 不寄。营销同意只记录，不使用 |
