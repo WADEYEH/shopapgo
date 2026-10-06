@@ -95,7 +95,7 @@
 
 | 网址 | 用途 | 代码来源 | 部署方式 |
 |---|---|---|---|
-| www.shopapgo.com/us | 品牌站：首页加 22 篇指南 | shopapgo `main` | Cloudflare Pages（Next.js 静态汇出），`/` 301 转到 `/us` |
+| www.shopapgo.com | 品牌站：首页加 22 篇指南。10/6 更正：首页已改成 `/`（`/us` 转到 `/`，#26），购买按钮连到 www 上的 `/products/*`（#25） | shopapgo `main` | Cloudflare Pages（Next.js 静态汇出）；www 上的商店路径（`/products/*`、`/cart`、`/checkout`、`/api/*`、政策页）由线上店 Worker 提供，路由只设定在 Cloudflare（`docs/ops/production-config.md`） |
 | store.shopapgo.com | landing 线上店（目前唯一能真实付款）：首页、产品总览、两个产品页、购物车、结账、政策页 | landing `codex/v2-content-blueprint`（含 #5、#6） | Worker `apgo-us-store`，从本机部署 |
 | admin.shopapgo.com | 正式后台（共用一组 `ADMIN_TOKEN`） | 同上 | 同上 |
 | staging.shopapgo.com、admin-staging.shopapgo.com | 测试店（Basic auth、Airwallex sandbox） | **两个 repo 的设定都指向同一个 Worker 和数据库**，后部署的会盖掉先部署的 | Worker `apgo-us-store-staging` |
@@ -425,6 +425,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/6 | M3 审核通过（D31 运费 $7.99、D32 地址验证用 Google）。另外七份规格（M1、M2、M8–M12）完成，待审核；对照表完成（102 个情境、142 条验收测试、没有缺口）；第 4 章改成模块总览 |
 | 10/6 | 后台改为单一拥有者加人（D33）；依标准电商后台补上第一版功能（D34），情境清单新增 I6–I13；对照表更新为 110 个情境、155 条验收测试 |
 | 10/6 | 阶段 0 盘点完成（`docs/ops/production-config.md`）。法务与税务草稿完成（`docs/legal/`：销售税分析、隐私选项分析、四份英文政策页），待你和同事过目，再请律师、会计师确认（O1、O6、O7） |
+| 10/6 | 阶段 1 代码合并完成（分支 `claude/phase1-merge`）：landing 同步点 1（`cbdf77e`）保留历史合进 `commerce/`，最新 `main`（#25、#26）也合进来；静态测试 278 项、浏览器测试 213 项、品牌站测试 26 项通过。新版已部署到测试站 `next.shopapgo.com`（D35），等你设定测试用密钥后做付款测试。另外发现 www 上的商店路径已经由线上店的 Worker 提供（D9 已部分上线），路由只存在 Cloudflare，已记进 `docs/ops/production-config.md` |
 
 ---
 
