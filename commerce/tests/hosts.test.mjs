@@ -140,7 +140,12 @@ test("wrangler.toml binds each test site's custom domains and sets ADMIN_HOST; p
   assert.match(production, /pattern = "store\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /^ADMIN_HOST = "admin\.shopapgo\.com"/m);
-  assert.match(production, /^ROOT_PAGE = "\/v3"/m,"this repo has no legacy index.html, so / must serve the v3 store entry");
+  // The live www/apex store routes (Cloudflare Workers Routes, 2026-10-06). Wrangler replaces dashboard routes with the
+  // configured list on deploy, so dropping one here would take that store path off the live site.
+  const storePaths = ["/products*", "/cart*", "/checkout*", "/api/*", "/terms*", "/privacy*", "/returns*", "/contact*", "/css/*", "/js/*", "/assets/*", "/.well-known/*"];
+  const zoneRoutes = [...production.matchAll(/\{ pattern = "([^"]+)", zone_name = "shopapgo\.com" \}/g)].map((match) => match[1]);
+  assert.deepEqual(zoneRoutes.sort(), ["www.shopapgo.com", "shopapgo.com"].flatMap((host) => storePaths.map((path) => host + path)).sort());
+  assert.match(production, /^ROOT_PAGE = "\/v3"/m, "this repo has no legacy index.html, so / must serve the v3 store entry");
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, next, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");
   }

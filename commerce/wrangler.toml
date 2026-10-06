@@ -170,6 +170,33 @@ workers_dev = false
 routes = [
   { pattern = "store.shopapgo.com", custom_domain = true },
   { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host (ADMIN_HOST below); the store host answers 404 for /admin*
+  # www.shopapgo.com and the apex: the brand pages stay on Pages, these store paths come to this Worker. They were added in
+  # the dashboard (copied from Workers Routes on 2026-10-06). Wrangler replaces dashboard routes with this list on deploy,
+  # so every one of them must stay here or a production deploy takes the store off www.
+  { pattern = "www.shopapgo.com/products*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/cart*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/checkout*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/api/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/terms*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/privacy*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/returns*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/contact*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/css/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/js/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/assets/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/products*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/cart*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/checkout*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/api/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/terms*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/privacy*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/returns*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/contact*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/css/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/js/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/assets/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
 ]
 
 [env.production.assets]
