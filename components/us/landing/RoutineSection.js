@@ -6,7 +6,7 @@ import { asset, routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
 import { track } from "@/lib/us/analytics";
-import AmazonCta from "./AmazonCta";
+import PurchaseCta from "./PurchaseCta";
 import RoutineSelector from "./RoutineSelector";
 
 // Per-product content for the routine section. Copy is FTC-reviewed; do not edit.
@@ -248,7 +248,7 @@ function Panel({ sku, playing, onPlay }) {
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", paddingTop: 4 }}>
-          <AmazonCta
+          <PurchaseCta
             sku={sku}
             placement="product"
             style={{
@@ -267,7 +267,7 @@ function Panel({ sku, playing, onPlay }) {
             }}
           >
             {p.cta}
-          </AmazonCta>
+          </PurchaseCta>
           <span style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet }}>Opens Amazon.com</span>
           <Link className="us-text-link" href={sku === "d204" ? routes.coloredGlaze : routes.glazeCoating}>Application guide <span aria-hidden="true">→</span></Link>
         </div>

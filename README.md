@@ -172,3 +172,11 @@ GTM 後台再把它們對應成 GA4 事件：`us_referral_landing_view`、`scrol
 - 施作影片 MP4 與英文字幕 VTT。
 - 耐洗次數數值。
 - 文案對齊：首頁 WET 段寫「No extra step」，指南寫毛巾擦乾後仍需 buff。
+
+## Direct store integration (October 1)
+
+The imported V3 storefront, Airwallex Worker and order back office live in
+`commerce/` as a separate application. Existing Pages export and guide routes
+remain intact. Setup, provenance, preview switches and go-live limitations:
+[commerce/README.md](commerce/README.md). No commerce deploy is triggered by
+`npm run build`; production checkout remains closed until its release gates pass.

@@ -160,3 +160,9 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   *, *::before, *::after { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto; }
 }
+
+/* The store owns its cart; the brand site only links into it. */
+.us-purchase-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; }
+.us-store-amazon-option { color: var(--text-secondary, #D8DCE1); font-size: 13px; text-align: center; text-decoration: underline; text-underline-offset: 3px; }
+.us-store-cart { white-space: nowrap; }
+.us-purchase-actions a:focus-visible { outline: 2px solid #F08417; outline-offset: 4px; }
