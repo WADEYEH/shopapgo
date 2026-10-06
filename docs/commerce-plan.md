@@ -71,6 +71,7 @@
 | D20 | 10/5 | 模块改为 12 个（见情境清单第 3 节） | 各模块规格写完后改写第 4 章 |
 | D21 | 10/6 | 付款方式加入 PayPal，沿用 landing 已上线的实作；退款、拒付、背景通知、对帐由我们补齐 | 修改 D14；缺口见 `docs/design/landing-audit.md` 第 5 节 |
 | D22 | 10/6 | landing 继续开发，用同步点分批合并：每次只检查上一个同步点之后的改动；第一次合并保留 landing 的 git 历史 | 取代阶段 0 原本的「冻结 landing」 |
+| D23 | 10/6 | 付款后有 1 小时冷静期，期间顾客可以取消或改地址，之后才自动送 Amazon；订单核心规格的格式与深度作为其他规格的范本 | 见 `docs/design/modules/M4-order-core.md` |
 
 ---
 
@@ -636,6 +637,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/6 | M4 订单核心规格 v0.1 完成（`docs/design/modules/M4-order-core.md`），待审核格式、深度和冷静期长度 |
 | 10/6 | landing 同步点 1 检查完成（`docs/design/landing-audit.md`）；加入 PayPal（D21）；landing 继续开发、分批合并（D22）；情境清单新增 D13–D20 |
 | 10/6 | 最终保留哪个网站（D9），正在跟同事讨论。决定前先做不受影响的工作：设计规格、后端合并、补付款漏洞；前台搬家（阶段 2）和网址切换（阶段 4）等决定后再动 |
+| 10/6 | M4 订单核心规格审核通过（冷静期 1 小时，D23）。M5 付款规格 v0.1 完成，待审核 |
 
 ---
 
