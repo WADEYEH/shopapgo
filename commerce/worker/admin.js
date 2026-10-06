@@ -24,6 +24,7 @@ import { adminConfigured, matchesAdminLogin, matchesAdminToken, MIN_ADMIN_TOKEN_
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
+import { AIRWALLEX_INTENT_LOOKUP, PAYPAL_ORDER_LOOKUP, lookupAirwallexIntent, lookupPaypalOrder } from "./payment-lookup.js";
 
 export { MIN_ADMIN_TOKEN_LENGTH };
 
@@ -211,6 +212,12 @@ export async function handleAdminApi(request, env, pathname) {
 
   // Read-only: list + preview against the Amazon outbound service. Creates and cancels nothing.
   if (pathname === "/admin/api/mcf/check") return json(await checkMcfConnection(env), 200, NO_INDEX);
+
+  // Read-only: ask Airwallex or PayPal about one payment (worker/payment-lookup.js).
+  const intentLookup = pathname.match(AIRWALLEX_INTENT_LOOKUP);
+  if (intentLookup) return lookupAirwallexIntent(env, intentLookup[1], NO_INDEX);
+  const paypalLookup = pathname.match(PAYPAL_ORDER_LOOKUP);
+  if (paypalLookup) return lookupPaypalOrder(env, paypalLookup[1], NO_INDEX);
 
   if (pathname === "/admin/api/orders") {
     const status = url.searchParams.get("status") || undefined;
