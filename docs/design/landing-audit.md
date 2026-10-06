@@ -118,7 +118,8 @@
 | 旧的 Amazon 导购页（`index.html`、`v2.html`） | 不收进来（10/1 导入时就没收；landing 这段期间只在上面加了 Meta Pixel）。新版的首页 `/` 是 v3 商店首页。**跟正式店不同**：正式店 `store.shopapgo.com/` 现在显示的是旧导购页，上线前要确认广告有没有指向这一页（阶段 4） |
 | 施作步骤图片 7 张 | 10/1 导入时没收，但 landing 新的产品页要用，这次补回来（档案跟 landing 完全相同） |
 | 所有网址都先经过 Worker | 沿用 shopapgo 的做法，网域分流、后台登录、测试站密码保护才能套用到每一页。正式店现在只有 API 和后台经过 Worker；新版上线后 Worker 的请求次数会变多（费用影响很小，阶段 4 再确认） |
-| staging 测试站 | 设定保留，但这个 repo 不再部署它（landing 还在用）。新版改用 `next.shopapgo.com`，有自己的 Worker 和数据库（D35） |
+| staging 测试站 | landing 冻结后（D37），测试站改回 staging，由这个 repo 部署（D38）。中途短暂用过 `next.shopapgo.com`（D35，已停用） |
+| 部署版本核对 | 正式环境与 staging 上的程式 = `cbdf77e` 加上两个没提交的后台付款查询工具；10/6 已移植（`commerce/worker/payment-lookup.js`） |
 | 顾客看到的付款失败讯息 | 沿用 shopapgo 的一般化讯息，不显示银行或风控的原因（M5 第 3.3 节）；landing 一个测试原本预期显示银行原因，已改成一致 |
 | 测试 | 静态测试 278 项全部通过；浏览器测试 213 项通过，另外 6 项要同时开品牌站和商店才能跑，跟 CI 一样略过 |
 

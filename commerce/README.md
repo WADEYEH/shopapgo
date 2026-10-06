@@ -85,17 +85,17 @@ payment or shipment.
 - All asset requests run through the Worker in every environment. Host split,
   admin authentication, root-page override and staging protection consequently
   apply to static pages as well as API requests.
-- Test site: `next.shopapgo.com` + `admin-next.shopapgo.com` (`[env.next]`: own Worker and D1,
-  Airwallex/PayPal sandbox, Basic-auth gate, emails only to the approved test address, no
-  Amazon MCF, no Meta). Deploy with `npm --prefix commerce run deploy:next`, which first runs
-  `worker/schema.sql` on its D1. `staging.shopapgo.com` is still deployed from the landing repo
-  until it is archived, so this repo has no script for it.
+- Test site: `staging.shopapgo.com` + `admin-staging.shopapgo.com` (`[env.staging]`: own Worker
+  and D1, Airwallex/PayPal sandbox, Basic-auth gate, emails only to the approved test address,
+  Amazon connection read-only because `MCF_AUTO_SUBMIT` stays off, no Meta). Deploy with
+  `npm --prefix commerce run deploy:staging`, which first runs `worker/schema.sql` on its D1.
+  The landing repo is frozen (plan D37) and no longer deploys anywhere.
 - Production settings mirror the live store (`store.shopapgo.com`, `admin.shopapgo.com`, the
   production D1). This repo does not deploy production yet; `PRICING_APPROVED` stays unset here.
 - D1 changes follow one rule: `worker/schema.sql` only creates missing tables and indexes and is
   re-run on every deploy. `tests/schema.test.mjs` applies it to the production structure
   (`tests/fixtures/production-schema-2026-10-06.sql`) and checks that only new tables appear.
-- Cart-page express wallets remain **off on the test sites and production** because
+- Cart-page express wallets remain **off on staging and production** because
   the imported cart express flow is UI only. Checkout-step wallets are retained.
 - Policy generator output is explicitly LF to remain deterministic on Windows.
 - Original handoff documents in `docs/` describe the upstream staging state;

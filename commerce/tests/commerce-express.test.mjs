@@ -51,7 +51,7 @@ test("wrangler.toml: staging keeps incomplete express checkout off, production a
     return next === -1 ? rest : rest.slice(0, next);
   };
   const setting = (text) => text.split("\n").filter((line) => /^\s*EXPRESS_CHECKOUT\s*=/.test(line));
-  for (const testSite of ["env.staging.vars", "env.next.vars"]) {
+  for (const testSite of ["env.staging.vars"]) {
     const value = setting(section(testSite));
     assert.equal(value.length, 1, testSite);
     assert.match(value[0], /^EXPRESS_CHECKOUT\s*=\s*"false"/, testSite);
@@ -59,7 +59,7 @@ test("wrangler.toml: staging keeps incomplete express checkout off, production a
   assert.deepEqual(setting(section("env.production.vars")), []);
   assert.deepEqual(setting(section("vars")), []);
   // The approval gate must stay unset in every section (owner-only switch).
-  for (const name of ["vars", "env.staging.vars", "env.next.vars", "env.production.vars"]) {
+  for (const name of ["vars", "env.staging.vars", "env.production.vars"]) {
     assert.equal(/^\s*PRICING_APPROVED\s*=/m.test(section(name)), false, `${name} must not set PRICING_APPROVED`);
   }
 });

@@ -6,7 +6,7 @@ pages and a Cloudflare Worker.
 
 > Current status, environments and decisions live in the plan at the repository root
 > (`docs/commerce-plan.md`, `docs/ops/production-config.md`). Environment notes below describe the
-> state when each part was written; the test site of this repo is `next.shopapgo.com`.
+> state when each part was written; the test site of this repo is `staging.shopapgo.com`.
 
 > Scope note: `IMPLEMENTATION_CONTRACT.md` forbids cart UI and unverified prices
 > on the **landing pages** (it governs `index.html`; it has not been amended).
@@ -927,20 +927,19 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 
 Never put production keys (`AIRWALLEX_PROD_*` or the prod API key) into staging.
 
-### Deploy and verify the test site
+### Deploy and verify staging
 
-`staging.shopapgo.com` is still deployed from the landing repo until it is archived, so this repo deploys its own test site,
-`next.shopapgo.com` (`[env.next]`, same sandbox setup with its own Worker and D1):
+`staging.shopapgo.com` is this repo's test site; the landing repo is frozen and no longer deploys there.
 
 ```bash
 npm run test:static && npm run test:e2e        # must be green first
-npm run deploy:next                             # = db:migrate:next (schema.sql, idempotent) + wrangler deploy --env next
-node scripts/staging-check.mjs --base https://next.shopapgo.com --admin-base https://admin-next.shopapgo.com --credentials ~/.apgo-next-credentials
-node scripts/airwallex-browser-smoke.mjs --base https://next.shopapgo.com --admin-base https://admin-next.shopapgo.com --credentials ~/.apgo-next-credentials
+npm run deploy:staging                          # = db:migrate:staging (schema.sql, idempotent) + wrangler deploy --env staging
+node scripts/staging-check.mjs --base https://staging.shopapgo.com --admin-base https://admin-staging.shopapgo.com --credentials ~/.apgo-staging-credentials
+node scripts/airwallex-browser-smoke.mjs --base https://staging.shopapgo.com --admin-base https://admin-staging.shopapgo.com --credentials ~/.apgo-staging-credentials
 ```
 
 The browser smoke runs a full sandbox card payment and checks `/admin/` shows the order as paid (screenshots: `review/airwallex-browser-staging-*.png`,
-`review/staging-*.png`). It leaves a paid **sandbox** order in the test site's D1.
+`review/staging-*.png`). It leaves a paid **sandbox** order in the staging D1.
 
 ### Custom domains (done on staging)
 

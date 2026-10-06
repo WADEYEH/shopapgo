@@ -626,10 +626,10 @@ test("secrets: no token in code, toml or tests; the example env documents empty 
   assert.match(production, /^\[env\.production\.vars\][^[]*\nMETA_DATASET_ID = "2606879866471418"/m);
   assert.match(production, /^\[env\.production\.triggers\]\s*\ncrons = \["\*\/15 \* \* \* \*"\]/m);
   assert.ok(!/^\s*(META_CAPI_ACCESS_TOKEN|META_TEST_EVENT_CODE)\s*=/m.test(toml), "token and test code are secrets");
-  // The test sites run a cron for customer email retries only: the Meta re-send job is a no-op there without META_DATASET_ID.
+  // Staging runs a cron for customer email retries only: the Meta re-send job is a no-op there without META_DATASET_ID.
   const testSiteCrons = [...beforeProduction.matchAll(/^\[([^\]]+)\]\s*\ncrons\s*=/gm)].map((match) => match[1]);
   assert.equal([...beforeProduction.matchAll(/^\s*crons\s*=/gm)].length, testSiteCrons.length, "every cron sits under its [*.triggers] header");
-  assert.deepEqual(testSiteCrons.sort(), ["env.next.triggers", "env.staging.triggers"]);
+  assert.deepEqual(testSiteCrons.sort(), ["env.staging.triggers"]);
 });
 
 test("migrations: the two new tables exist after schema.sql, once, and need no ALTER", async () => {
