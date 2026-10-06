@@ -79,6 +79,7 @@ When you ask us to delete your information, we keep the order records that tax a
 
 - Order and payment records: as long as required for tax and accounting purposes, generally up to [7] years
 - Customer service messages and return photos: up to [2] years after your last order or message
+- Checkouts you started but did not pay for: deleted after 30 days
 - Analytics data: according to our analytics settings, for a limited period
 
 ## Security
