@@ -131,7 +131,7 @@ test("wrangler.toml binds each test site's custom domains and sets ADMIN_HOST; p
   assert.match(next, /^SITE_ENV = "staging"/m, "the test site keeps the Basic-auth gate and noindex");
   assert.match(next, /^AIRWALLEX_ENV = "demo"/m);
   assert.match(next, /^PAYPAL_ENV = "sandbox"/m);
-  assert.match(next, /database_name = "apgo-us-store-next"/);
+  assert.match(next, /database_name = "apgo-us-store-next"\ndatabase_id = "(?!00000000-)[0-9a-f-]{36}"/, "next has its own real D1, not the placeholder");
   assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID|MCF_AUTO_SUBMIT|AMAZON_OUTBOUND_BASE_URL)\s*=/m.test(next),"the test site never takes live payments, sends Meta events or ships through Amazon");
   for (const other of [staging, envSection(toml, "production")]) {
     assert.ok(!other.includes("apgo-us-store-next"), "next has its own Worker and D1");

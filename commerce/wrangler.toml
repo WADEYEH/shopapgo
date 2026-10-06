@@ -132,7 +132,7 @@ run_worker_first = true
 [[env.next.d1_databases]]
 binding = "DB"
 database_name = "apgo-us-store-next"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "2c7f214a-917d-44e1-a18b-6c97785ad6e0"
 
 [env.next.vars]
 AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX
