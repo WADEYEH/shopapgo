@@ -33,7 +33,7 @@
 
 **要做的事**（约 3.5 周工作量，见第 6 章）：
 
-- 阶段 0：冻结 landing，把正式环境的现况完整记下来
+- 阶段 0：建立 landing 的同步点，把正式环境的现况完整记下来
 - 设计阶段：列出所有情境（含取消、退款、退货、出错等例外），确定模块划分，每个模块写设计规格。你审核后才开始写新代码
 - 阶段 1：把 landing 的东西并进 shopapgo，只留一个 repo
 - 阶段 2：产品页、购物车、结账、政策页搬进品牌站，变成同一个网站，并套用新的运费、配送范围和退货规则
@@ -62,17 +62,21 @@
 | D11 | 10/5 | 合并期间 landing 线上店的结账继续开着。landing #5（拿掉产品页未确认的承诺）已上线 | 过渡期风险见第 7 章 |
 | D12 | 10/5 | 运费：每张订单都收，不设免运门槛 | 金额建议每单 $7.99，待确认（O3） |
 | D13 | 10/5 | 退货：收到 30 天内、未开封可退。改变心意由顾客付退货运费；瑕疵或寄错由我们付 | |
-| D14 | 10/5 | 付款方式先只用 Airwallex：信用卡、Apple Pay、Google Pay。PayPal 以后再说 | |
+| D14 | 10/5 | 付款方式先只用 Airwallex：信用卡、Apple Pay、Google Pay。PayPal 以后再说 | 已由 D21 修改 |
 | D15 | 10/5 | 后台使用者：你加 1–3 位同事 | 每人用 Google 帐号登录，见 4.6 |
 | D16 | 10/5 | 未来会加几款商品或组合包 | 商品资料化；组合包出货时拆成 Amazon 单品，见 4.1 |
 | D17 | 10/5 | 写新代码前先做设计阶段：情境清单、模块划分、各模块设计规格 | 见第 6 章「设计阶段」 |
 | D18 | 10/5 | 情境清单的 18 个业务决定已确认：结账时接地址验证服务（没有人会看地址）；出货延迟不另外通知顾客；其余照建议 | 细节见 `docs/design/scenarios.md` 第 1 节 |
 | D19 | 10/5 | 付款后自动送 Amazon 出货，失败时通知团队；上线前用公司在美国的地址做一次真实出货测试 | 取代 D6；见 4.7 |
 | D20 | 10/5 | 模块改为 12 个（见情境清单第 3 节） | 各模块规格写完后改写第 4 章 |
+| D21 | 10/6 | 付款方式加入 PayPal，沿用 landing 已上线的实作；退款、拒付、背景通知、对帐由我们补齐 | 修改 D14；缺口见 `docs/design/landing-audit.md` 第 5 节 |
+| D22 | 10/6 | landing 继续开发，用同步点分批合并：每次只检查上一个同步点之后的改动；第一次合并保留 landing 的 git 历史 | 取代阶段 0 原本的「冻结 landing」 |
 
 ---
 
 ## 2. 现况盘点（2026-10-05 19:30）
+
+> 10/6 更新：landing 之后又加了 PayPal、Airwallex Pay、后台 email＋密码登录等，并已上线。最新的差异以 `docs/design/landing-audit.md` 为准。
 
 ### 2.1 网站与环境
 
@@ -282,7 +286,7 @@ wrangler.toml            Worker 设定（staging / production）
 - webhook 一律验证签章（HMAC）；同一个事件只处理一次（`webhook_events` 表）。
 - 付款失败（`payment_attempt.*`）会记录原因，顾客可以用同一张订单重试。
 - Apple Pay / Google Pay 也走 Airwallex。www.shopapgo.com 要在 Airwallex 重新登记网域，Apple Pay 的网域验证文件由 Worker 提供。上线初期可以先关，等卡片流程稳定再开。
-- PayPal 不做（D14）。确认没人要用之后，删掉正式环境里的 PayPal 密钥。
+- PayPal（D21）：沿用 landing 已上线的 Orders v2 实作。要补上背景通知设定、PayPal 地址检查、退款、拒付和对帐（情境 D15–D19）。
 
 **验收标准**：
 
@@ -444,7 +448,7 @@ wrangler.toml            Worker 设定（staging / production）
 - 结账 API 加速率限制（Cloudflare 规则），防止被刷单。
 - 日志不记个人资料（地址、email、卡号）。卡号只经过 Airwallex，不经过我们的服务器。
 - 密钥只放在 Worker secrets，不进代码和文件。
-- 不用的密钥（PayPal 等）移除。
+- 不用的密钥（例如测试事件代码）移除。
 
 ---
 
@@ -460,7 +464,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 待付款订单 | 24 小时后自动取消 | D18 |
 | 出货延迟 | 不另外通知顾客；缺货时先通知延迟，3 天补不到货就全额退款 | D18 |
 | 税 | 等会计师意见；目前 $0 | D5、O1 |
-| 付款 | Airwallex：信用卡、Apple Pay、Google Pay | D14 |
+| 付款 | Airwallex（信用卡、Apple Pay、Google Pay、Airwallex Pay）与 PayPal | D14、D21 |
 | 出货 | Amazon MCF，初期手动送单 | D1、4.7 |
 | 退货 | 30 天内、未开封；改变心意由顾客付退货运费，原运费不退；瑕疵需附照片；已开封的退货不退款也不寄回 | D13、D18 |
 | 客服 | 回复信箱 services@apgo.com.tw | 已核准 |
@@ -473,12 +477,12 @@ wrangler.toml            Worker 设定（staging / production）
 
 ### 阶段 0：冻结与盘点（约 1 天）
 
-- landing 停止开发与部署（由你通知那边的 agent）。staging 也暂停部署，直到阶段 1 完成。
+- landing 继续开发（D22）。建立同步点 1（`cbdf77e`），检查结果写在 `docs/design/landing-audit.md`；之后每次合并前，只检查上一个同步点之后的改动。
 - 记录正式环境：目前版本、全部设定与密钥名称、网域与路由、Airwallex 和 Resend 的 webhook 网址、Meta 设定、Pages 专案的环境变数。汇出正式数据库备份。
 - 找出正式环境上没进版本控制的改动（例如 `GOOGLE_PAY_ENABLED`），决定保留或丢弃。
 - 过渡期安全网：指定每天看后台的人；视你的决定开启新订单通知。
 
-**完成条件**：`docs/ops/production-config.md` 写完；landing 不再有新的部署。
+**完成条件**：`docs/ops/production-config.md` 写完；同步点 1 的检查完成。
 
 ### 设计阶段（约 2–3 天，另加你审核的时间）
 
@@ -564,7 +568,8 @@ wrangler.toml            Worker 设定（staging / production）
 | 全部免运、加急只收 $9、可以寄 AK/HI | 每单我们要付 $9–18 运费 | 订单量小，先接受；切换后改用新规则 |
 | 税是 $0 | 如果有纳税义务，会一直累积 | 会计师意见出来前持续累积，切换前处理 |
 | 退货页还是旧草稿 | 承诺不一致 | 过渡期客诉按新政策处理；切换后换成新政策页 |
-| 线上设定没进版本控制，landing 还在部署 | 设定随时可能被改 | 阶段 0 冻结 |
+| 线上设定没进版本控制，landing 还在部署 | 设定随时可能被改 | 每次同步时比对线上设定（D22） |
+| PayPal 已正式收款，但背景通知没设定、退款不会被系统记录 | 可能漏单，或退款后照样出货 | 现在就补 PayPal 通知设定；过渡期退款后人工检查订单（见 `docs/design/landing-audit.md` 第 6 节） |
 | 真实出货从没测过 | 第一笔订单可能出错 | 过渡期的订单人工处理、全程追踪；新版上线前做一次真实出货测试（D19） |
 
 ---
@@ -582,7 +587,7 @@ wrangler.toml            Worker 设定（staging / production）
 | O7 | CCPA「不出售或分享」选项与 cookie 同意 | 你和法务 | 4.10、4.11 | 阶段 4 前 |
 | O8 | 寄件网域：沿用 apgo.tw，还是改用 shopapgo.com | 你 | 4.9 | 阶段 3 |
 | O9 | 第一批组合包的内容与价格 | 你 | 4.1 | 有需要时 |
-| O10 | 正式环境里没在用的 PayPal 等密钥是否删除 | 你 | 4.13 | 阶段 5 |
+| O10 | 正式环境里没在用的密钥（例如 `META_TEST_EVENT_CODE`）是否删除 | 你 | 4.13 | 阶段 5 |
 
 ---
 
@@ -611,6 +616,7 @@ wrangler.toml            Worker 设定（staging / production）
 ## 10. 工作方式（避免再各做各的）
 
 - shopapgo 是唯一的 repo；landing 合并后封存。
+- 合并完成前，landing 会继续开发（D22）：请 Cursor 开工前读本企划和设计规格，PR 描述写上对应的情境编号，不做跟决定冲突的东西。
 - 开始任何工作前，先读这份企划。只做企划里的项目；要做企划外的事，先更新企划。
 - 新功能先有设计规格（含对应的情境和验收测试），再写代码。
 - 一次由一个 agent 负责一个阶段。交接时更新本文件第 11 章的进度，不另外写交接文件。
@@ -628,6 +634,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/5 | 18 个决定已确认（D18）。待决：第 19 条（是否自动送单）、12 个模块划分 |
 | 10/5 | 第 19 条与 12 个模块已确认（D19、D20）。下一步：写订单核心、付款、出货、售后、购物车与结账的设计规格 |
 | 10/6 | M4 订单核心规格 v0.1 完成（`docs/design/modules/M4-order-core.md`），待审核格式、深度和冷静期长度 |
+| 10/6 | landing 同步点 1 检查完成（`docs/design/landing-audit.md`）；加入 PayPal（D21）；landing 继续开发、分批合并（D22）；情境清单新增 D13–D20 |
 
 ---
 
