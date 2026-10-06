@@ -73,6 +73,7 @@
 | D22 | 10/6 | landing 继续开发，用同步点分批合并：每次只检查上一个同步点之后的改动；第一次合并保留 landing 的 git 历史 | 取代阶段 0 原本的「冻结 landing」 |
 | D23 | 10/6 | 付款后有 1 小时冷静期，期间顾客可以取消或改地址，之后才自动送 Amazon；订单核心规格的格式与深度作为其他规格的范本 | 见 `docs/design/modules/M4-order-core.md` |
 | D24 | 10/6 | 第一版在 Airwallex、PayPal 各自的后台退款，系统自动记录，后台退款按钮放第二阶段；拒付由负责客服与退货的人回应 | 见 `docs/design/modules/M5-payments.md` |
+| D25 | 10/6 | Amazon 可售库存低于 5 件时，网站显示缺货、不能结账 | 见 `docs/design/modules/M6-fulfillment.md` |
 
 ---
 
