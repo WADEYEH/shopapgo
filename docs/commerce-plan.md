@@ -75,6 +75,7 @@
 | D24 | 10/6 | 第一版在 Airwallex、PayPal 各自的后台退款，系统自动记录，后台退款按钮放第二阶段；拒付由负责客服与退货的人回应 | 见 `docs/design/modules/M5-payments.md` |
 | D25 | 10/6 | Amazon 可售库存低于 5 件时，网站显示缺货、不能结账 | 见 `docs/design/modules/M6-fulfillment.md` |
 | D26 | 10/6 | 不做真实出货测试。改为：上线前在正式环境建一张暂缓出货（Hold）的测试单，Amazon 接受后马上取消；每次送单后自动读回 Amazon 的出货单，比对商品、数量、地址，不一致就通知团队 | 取代 D19 的真实出货测试 |
+| D27 | 10/6 | 瑕疵、寄错、损坏的商品要寄回，退货邮资由我们负担；客服在 2 个工作日内回复 | 见 `docs/design/modules/M7-after-sales.md` |
 
 ---
 
