@@ -7,11 +7,7 @@ const nextConfig = {
   // Using unoptimized keeps existing <Image> components working without changes.
   images: { unoptimized: true },
 
-  // The root redirect (/ → /us) is now handled by public/_redirects for
-  // Cloudflare Pages. Remove this redirects() block entirely once the static
-  // export is confirmed working; until then it is commented out for reference.
-  // async redirects() {
-  //   return [{ source: "/", destination: "/us", permanent: true }];
-  // },
+  // Exact /us → / is handled by public/_redirects (Cloudflare Pages) and vercel.json.
+  // Guides remain at /us/guides/*; do not add a /us/* splat redirect.
 };
 export default nextConfig;

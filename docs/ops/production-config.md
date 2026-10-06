@@ -12,9 +12,12 @@
 
 | 网址 | 用途 | Cloudflare 资源 | 部署方式 | 代码来源 |
 |---|---|---|---|---|
-| www.shopapgo.com（另有 shopapgo.pages.dev） | 品牌站 | Pages 专案 `shopapgo` | **手动上传**：这个 Pages 专案没有接 GitHub，是在某个人的电脑上建置后直接上传 | shopapgo `main` |
+| www.shopapgo.com（另有 shopapgo.pages.dev） | 品牌站（首页 `/`、指南 `/us/guides`） | Pages 专案 `shopapgo` | **手动上传**：这个 Pages 专案没有接 GitHub，是在某个人的电脑上建置后直接上传 | shopapgo `main` |
+| www.shopapgo.com 上的商店路径：`/products/*`、`/cart`、`/checkout`、`/api/*`、政策页及其 css/js/图片 | 商品页、购物车、结账（品牌站的购买按钮连到这里） | Worker `apgo-us-store`（跟 store.shopapgo.com 同一个） | 网域路由直接在 Cloudflare 设定，**不在任何 repo 里** | landing（同上） |
 | store.shopapgo.com、admin.shopapgo.com | landing 线上店与后台 | Worker `apgo-us-store` | 从本机用 wrangler 部署 | landing `codex/v2-content-blueprint`（同步点 1：`cbdf77e`） |
 | staging.shopapgo.com、admin-staging.shopapgo.com | 测试店 | Worker `apgo-us-store-staging` | 从本机部署；两个 repo 都会部署到这里 | 目前是 landing（10/5 21:00 最后一次部署） |
+
+**10/6 下午更正**：上午盘点时漏了上面第二列。实测 www 的 `/products/d204`、`/cart`、`/api/store/config`、`/privacy` 都由线上店的 Worker 回应（没有 Pages 的回应标头），首页和指南仍是 Pages。品牌站 `main` 的 #25（购买按钮改连 `/products/*`）、#26（首页改成 `/`，`/us` 转到 `/`）已经上线。也就是说，D9「所有顾客页面都在 www」已经由 landing 那边部分上线。确切的路由清单要到 Cloudflare 后台「Workers 路由」查看。
 
 **品牌站的注意事项**：品牌站的 GTM、Meta Pixel 等设定是「建置时」写进网页的。因为是在个人电脑上建置，线上用哪一套设定，取决于部署者电脑上的环境变数。目前线上载入的是 `GTM-56WK5G8T` 和 Pixel `2606879866471418`。之后改由 CI 建置部署（M12）。
 
@@ -89,6 +92,7 @@
 |---|---|
 | 品牌站在个人电脑建置后手动上传，线上设定取决于部署者的电脑 | 改由 CI 建置部署（M12） |
 | 线上店从本机部署，设定散在 Cloudflare 上 | 每次同步时比对本文件（D22）；切换后只从 CI 部署 |
+| www 上的商店路由只存在 Cloudflare，不在任何 repo 的设定里 | 先把确切的路由清单抄进本文件；从任何 repo 部署正式环境之前，都要先把这些路由写进该 repo 的设定，避免部署时被移除 |
 | 两个 repo 部署到同一个 staging | 合并后的新版改用独立测试站 next.shopapgo.com（10/6 同意，D35） |
 | 正式环境没有寄信、通知、Amazon 出货连线 | 过渡期人工处理（企划第 7 章）；新版上线前补齐 |
 | PayPal 付款通知没有设定 | 现在就补 |

@@ -28,17 +28,14 @@ Vercel 帳號的 GitHub 連結是 `WADEYEH`；本機 git 以 `anpuuuuu`（collab
 | Output directory | `out` |
 | Framework | Next.js (Static HTML Export) |
 
-### 根路徑重導（雙主機期間）
+### 首頁與 /us 重導
 
-原本 `next.config.mjs` 的 `redirects()` 函數（`/ → /us` 301）在靜態匯出模式不支援。
-遷移期間需要兩套重導向機制，分別給 Vercel 和 Cloudflare Pages 使用：
+美國站首頁已掛在網域根路徑 `/`。精確路徑 `/us` 與 `/us/` 301 到 `https://www.shopapgo.com/`；`/us/guides` 與 `/us/assets` 維持原 URL、不重導。
 
 | 檔案 | 平台 | 說明 |
 |------|------|------|
-| `vercel.json` | Vercel | DNS 切換前，Vercel production 使用此設定 |
-| `public/_redirects` | Cloudflare Pages | DNS 切換後，Cloudflare Pages 使用此設定 |
-
-兩者都設定 `/ → /us` 301 永久重導向。**DNS 切換到 Cloudflare Pages 後**，可選擇移除 `vercel.json` 中的 redirects 區塊（若不再需要 Vercel 部署）。
+| `vercel.json` | Vercel（若仍部署） | `/us`、`/us/` → `/` 301 |
+| `public/_redirects` | Cloudflare Pages | 同上（絕對 URL 目標） |
 
 ### 遷移階段
 
@@ -72,14 +69,13 @@ push 到 `main` 後 Vercel 會自動建置並部署到 shopapgo.com。
 
 ```
 app/
-  (tw)/                 # 台灣站 root layout（lang=zh-Hant）
+  (tw)/                 # 預留給台灣站（目前無 page；勿與 US 根路徑衝突）
     layout.js
-    page.js             # / 首頁（目前為建置中佔位頁）
   (us)/                 # 美國站 root layout（lang=en、Barlow 字體、us.css）
     layout.js
     us.css
+    page.js             # / 美國落地頁（CTA 連同域商品頁）
     us/
-      page.js           # /us Amazon 導購首頁
       guides/
         page.js         # /us/guides 指南總覽
         after-washing-your-car/page.js
@@ -94,44 +90,37 @@ components/us/
   guides/               # 指南共用 article、麵包屑、響應式目錄元件
 app/
   robots.js             # /robots.txt（必須在 app 根目錄，放進 route group 會失效）
-  sitemap.js            # /sitemap.xml，六個可索引頁面，刻意不含 308 轉走的 /
+  sitemap.js            # /sitemap.xml：首頁為 /，指南仍為 /us/guides/*；不含會 301 的 /us
 lib/
   site.js               # SITE_URL：正式網域的唯一來源，metadataBase、JSON-LD、sitemap 共用
 lib/us/
-  routes.js             # 所有站內連結與素材路徑的唯一來源（US_BASE = "/us"）
+  routes.js             # 站內連結唯一來源（home="/"；guides/assets 仍用 US_BASE="/us"）
   navigation.js         # 主選單、頁尾共用的分組與短標題；首頁段落目錄
   company.js            # apgo.tw 公開公司資料、電話、地址、營業時間與預設客服信箱
   tokens.js             # 設計 tokens：色票、字體、產品基本資料
-  config.js             # 讀取 NEXT_PUBLIC_APGO_US_* 環境變數（Amazon 網址、開關）
+  config.js             # 讀取 NEXT_PUBLIC_APGO_US_* 環境變數（影片、分析、耐洗次數）
   faq.js                # 首頁 FAQ 文案（FAQ 區與 JSON-LD 共用）
   analytics.js          # dataLayer 事件
 public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 .env.example            # 美國站所需環境變數清單
 ```
 
-## 美國站（/us）
+## 美國站（/ 首頁；指南 /us/guides）
 
-`/us` 是 APGO 美國 Amazon 導購站，依 `APGO 美國亞馬遜登陸頁` 設計交付包高保真重建。文案經 FTC 審核，**不得改寫**。
+`/` 是 APGO 美國落地頁（原 `/us`），依設計交付包高保真重建。精確 `/us` 會 301 到 `/`。主要購買 CTA 連到同域商店商品頁（`/products/d204`、`/products/d215`）；結帳由同一主機的 Worker 處理。產品與指南正文仍維持原核准文案。
 
 ### 環境變數
 
-所有 Amazon CTA 預設停用（無 href、`aria-disabled`），要在 Vercel 專案設定中設好以下變數才會啟用：
-
 | 變數 | 說明 |
 |---|---|
-| `NEXT_PUBLIC_APGO_US_LINKS_READY` | 總開關，`true` 才啟用任何 CTA |
-| `NEXT_PUBLIC_APGO_US_D204_AMAZON_URL` / `..._D215_AMAZON_URL` | 商品頁網址，必須是 `https://*.amazon.com/` |
-| `NEXT_PUBLIC_APGO_US_D204_LINK_READY` / `..._D215_LINK_READY` | 單品開關 |
 | `NEXT_PUBLIC_APGO_US_VIDEO_READY` | 施作影片核准後設 `true`（影片檔放 `public/us/assets/video/{sku}-application.mp4` 與 `{sku}-captions-en.vtt`） |
 | `NEXT_PUBLIC_APGO_US_SUPPORT_EMAIL` | 六頁共用客服信箱；未設定或空白時預設 services@apgo.com.tw |
 | `NEXT_PUBLIC_APGO_US_D204_WASH_RESISTANCE` / `..._D215_...` | 耐洗次數文字，空白顯示「—」 |
 | `NEXT_PUBLIC_APGO_US_RANK_SOURCE` | No.1 排名來源註記 |
 | `NEXT_PUBLIC_APGO_US_SHOW_ORIGIN` | `false` 則 hero eyebrow 不顯示「Made in Taiwan」 |
-| `NEXT_PUBLIC_APGO_US_ANALYTICS_READY` | 分析總開關，只在 Vercel Production 設 `true`，預覽與本機留空才不會汙染 GA4 |
+| `NEXT_PUBLIC_APGO_US_ANALYTICS_READY` | 分析總開關，只在 Production 設 `true`，預覽與本機留空才不會汙染 GA4 |
 | `NEXT_PUBLIC_APGO_US_GTM_ID` | GTM 容器 ID，格式 `GTM-XXXXXXX`；GA4 評估 ID 設在 GTM 後台，不進程式碼 |
 | `NEXT_PUBLIC_APGO_US_META_PIXEL_ID` | Meta Pixel（資料集）ID，純數字 8–20 碼；與 `ANALYTICS_READY=true` 同時成立才載入（官網 /us 僅送 PageView 與 `AmazonClick`）；正式站為公開值 `2606879866471418`，其他環境留空 |
-| `NEXT_PUBLIC_APGO_US_AMAZON_ATTRIBUTION` | 附加到商品網址的歸因查詢字串，無前置 `?`；支援 `{sku}` / `{placement}` |
-| `NEXT_PUBLIC_APGO_US_D204_AMAZON_ATTRIBUTION` / `..._D215_...` | 單品歸因，會覆寫上面那一項 |
 
 完整清單見 `.env.example`。
 
@@ -143,7 +132,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 - DRY / WET 選擇器位於產品比較區；`#d204` / `#d215` 保留深連結及瀏覽器歷史切換。
 - 首頁手機購買列在 Hero、最後產品區或 Footer 可見，以及 Menu 開啟時隱藏；指南頁不顯示購買列。
 - 尚為 `#` 的法律／聯絡連結不顯示。Footer 使用 `company.js` 的公開公司資料及預設信箱，並區分 APGO 產品支援與 Amazon 訂單支援。導覽入口文字可調整，產品與文章正文仍維持原核准文案。
-- `npm test` 檢查 Amazon CTA 開關、網址驗證與點擊事件；`npm run build` 檢查正式建置。
+- `npm test` 檢查同域商品 CTA 與點擊事件；`npm run build` 檢查正式建置。
 - 瀏覽器驗證：六頁 × 360 / 390 / 768 / 1024 / 1440px；確認菜單鍵盤操作、跨頁／段落跳轉、產品切換與 Footer 避讓。
 
 ### 分析與搜尋
@@ -167,7 +156,6 @@ GTM 後台再把它們對應成 GA4 事件：`us_referral_landing_view`、`scrol
 
 ### 上線前待補（設計交付包列出的空缺）
 
-- 兩個 Amazon 商品網址。
 - Privacy / Terms / Contact 連結（`lib/us/routes.js` 目前是 `#`）。
 - 施作影片 MP4 與英文字幕 VTT。
 - 耐洗次數數值。

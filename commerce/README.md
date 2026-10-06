@@ -29,16 +29,17 @@ drafts, email/password admin login and the live production settings. The legacy 
 
 ## Two applications, one repository
 
-- Root: existing Next.js brand site and 20 guides, still exported for Pages.
-- `commerce/`: standalone package, Worker and storefront on the store origin.
-- Existing brand-site CTAs gain Add to cart and an Amazon alternative only
-  when `NEXT_PUBLIC_APGO_US_STORE_READY=true` and
-  `NEXT_PUBLIC_APGO_US_STORE_URL` is a valid HTTPS origin (HTTP loopback for dev).
-- The brand site links to `cart.html?add=d204|d215`. The store consumes and removes
-  the parameter; only the store origin owns `apgo_us_cart_v1`. No cross-origin
-  cart-count badge is invented on the brand site.
+- Root: existing Next.js brand site and its guides, still exported for Pages.
+- `commerce/`: standalone package, Worker and storefront.
+- Brand-site product CTAs link to the same-host store pages `/products/d204` and
+  `/products/d215` (main #25). On the live site, `www.shopapgo.com` serves those
+  store paths (`/products/*`, `/cart`, `/checkout`, `/api/*`, the policy pages and
+  their assets) from the production store Worker; those routes were set up directly
+  in Cloudflare and are not in any repository yet (`docs/ops/production-config.md`).
+- The header/footer Cart link stays off unless `NEXT_PUBLIC_APGO_US_STORE_READY=true`
+  and `NEXT_PUBLIC_APGO_US_STORE_URL` is a valid HTTPS origin (`lib/us/store.js`).
 - Store footers link back to the brand site and guides. `SITE_HOME_URL` selects
-  the destination, defaulting to `https://www.shopapgo.com/us`.
+  the destination, defaulting to `https://www.shopapgo.com/us` (which now redirects to `/`).
 
 ## Local review
 
