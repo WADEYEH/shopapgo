@@ -76,6 +76,7 @@
 | D25 | 10/6 | Amazon 可售库存低于 5 件时，网站显示缺货、不能结账 | 见 `docs/design/modules/M6-fulfillment.md` |
 | D26 | 10/6 | 不做真实出货测试。改为：上线前在正式环境建一张暂缓出货（Hold）的测试单，Amazon 接受后马上取消；每次送单后自动读回 Amazon 的出货单，比对商品、数量、地址，不一致就通知团队 | 取代 D19 的真实出货测试 |
 | D27 | 10/6 | 瑕疵、寄错、损坏的商品要寄回，退货邮资由我们负担；客服在 2 个工作日内回复 | 见 `docs/design/modules/M7-after-sales.md` |
+| D28 | 10/6 | 顾客联络管道：客服信箱，加上网站「联络我们」表单（姓名、email、讯息，不要求订单编号），表单内容寄到客服信箱 | 同上 |
 
 ---
 
@@ -155,7 +156,7 @@
 | `/us/checkout` | 结账 | 不收录 |
 | `/us/order` | 订单完成与查询（`?id=订单编号`） | 不收录 |
 | `/us/policies/privacy`、`terms`、`returns`、`shipping` | 政策页 | 新增运费政策页 |
-| `/us/contact` | 联络我们 | |
+| `/us/contact` | 联络我们 | 联络资讯，加上联络表单（D28） |
 | `/api/*` | 后端 API | 由 Worker 处理 |
 | `admin.shopapgo.com` | 后台 | Cloudflare Access 保护 |
 | `store.shopapgo.com/*` | 301 转到对应的 www 网址 | 切换后至少保留 6 个月；webhook 网址更新前照常处理 |
