@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { DEFAULT_PRICING } from "../worker/pricing.js";
-import { ORDER_ID, fillCard, fillToPayment, mockStore, seedCart } from "./helpers/store-mock.mjs";
+import { ORDER_ID, fillCard, fillToPayment, mockStore, seedCart, selectPayMethod } from "./helpers/store-mock.mjs";
 
 const usd = (cents) => `$${(cents / 100).toFixed(2)}`;
 const { d204, d215 } = DEFAULT_PRICING.products;
@@ -91,6 +91,7 @@ test.describe("checkout", () => {
     expect(browser.confirms).toEqual([{ intent_id: "int_test", client_secret: "secret_test" }]);
     expect(browser.cart).toBe("[]");
     expect(browser.events).toEqual(expect.arrayContaining(["begin_checkout", "add_shipping_info", "add_payment_info", "purchase"]));
+    expect(await page.evaluate(() => sessionStorage.getItem("apgo_us_checkout_draft"))).toBeNull();
   });
 
   test("a declined card shows a safe message, retains the cart and retries the same PaymentIntent", async ({ page }) => {
@@ -111,6 +112,71 @@ test.describe("checkout", () => {
     await page.locator("[data-place-order]").click();
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
     expect(calls.session).toHaveLength(1);
+  });
+
+  test("contact and shipping survive a refresh from sessionStorage", async ({ page }) => {
+    await mockStore(page);
+    await seedCart(page, [{ sku: "d204", qty: 1 }]);
+    await page.goto("/checkout.html");
+
+    await page.locator("#email").fill("ada@example.com");
+    await page.getByText("Email me when new application guides go live").click();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("apgo_us_checkout_draft"))).toContain("ada@example.com");
+
+    await page.reload();
+    await expect(page.locator("#email")).toHaveValue("ada@example.com");
+    await expect(page.locator('input[name="marketingOptIn"]')).toBeChecked();
+    await expect(page.locator('[data-step="contact"]')).toBeVisible();
+
+    await page.getByRole("button", { name: /Continue to shipping/ }).click();
+    await page.getByLabel("First name").fill("Ada");
+    await page.getByLabel("Last name").fill("Lee");
+    await page.getByLabel("Street address").fill("100 Example Ave");
+    await page.getByLabel("City").fill("Austin");
+    await page.getByLabel("State").selectOption("TX");
+    await page.getByLabel("ZIP code").fill("78701");
+    await page.getByRole("button", { name: /Continue to payment/ }).click();
+    await expect(page.locator('[data-step="payment"]')).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator('[data-step="payment"]')).toBeVisible();
+    await expect(page.locator("#email")).toHaveValue("ada@example.com");
+    await expect(page.getByLabel("First name")).toHaveValue("Ada");
+    await expect(page.getByLabel("ZIP code")).toHaveValue("78701");
+    const draft = await page.evaluate(() => JSON.parse(sessionStorage.getItem("apgo_us_checkout_draft")));
+    expect(draft.step).toBe("payment");
+    expect(draft.contact).toEqual({ email: "ada@example.com", marketingOptIn: true });
+    expect(draft.shipping).toMatchObject({ firstName: "Ada", state: "TX", zip: "78701" });
+  });
+
+  test("Airwallex Pay is a choose-one option and confirms through the same session", async ({ page }) => {
+    const calls = await mockStore(page);
+    await seedCart(page, [{ sku: "d204", qty: 1 }]);
+    await page.goto("/checkout.html");
+    await fillToPayment(page);
+
+    await expect(page.locator('input[name="payMethod"][value="airwallex_pay"]')).toBeVisible();
+    await expect(page.locator('input[name="payMethod"][value="card"]')).toBeChecked();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeVisible();
+    await expect(page.locator("#card-number")).toBeVisible();
+
+    await selectPayMethod(page, "airwallex_pay");
+    await expect(page.locator("[data-pay-panel=\"airwallex_pay\"]")).toBeVisible();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeHidden();
+    await expect(page.locator("[data-place-order]")).toBeHidden();
+    await expect(page.locator('[data-stub-drop-in="airwallex_pay"]')).toBeVisible();
+
+    await page.locator('[data-stub-drop-in="airwallex_pay"]').click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
+    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    expect(calls.session).toHaveLength(1);
+    const created = await page.evaluate(() => window.__awxDropInCreates);
+    expect(created).toHaveLength(1);
+    expect(created[0].options.methods).toEqual(["airwallex_pay"]);
+    expect(created[0].options.intent_id).toBe("int_test");
+    expect(created[0].options.client_secret).toBe("secret_test");
+    expect(created[0].options.currency).toBe("USD");
+    expect(created[0].options.country_code).toBe("US");
   });
 
   test("an empty cart does not start checkout", async ({ page }) => {

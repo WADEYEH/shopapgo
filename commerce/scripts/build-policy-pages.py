@@ -38,7 +38,9 @@ PAGE = """<!doctype html>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="css/commerce.css">
+    <script src="js/meta-pixel.js" defer></script>
     <script type="module" src="js/commerce/shared.js"></script>
+    <noscript><img height="1" width="1" style="display:none" alt="" src="https://www.facebook.com/tr?id=2606879866471418&ev=PageView&noscript=1"></noscript>
   </head>
   <body data-page="{slug}">
     <header class="shop-header">
@@ -105,7 +107,19 @@ pages["privacy"] = ("Privacy Policy", "Legal", "p", "".join([
     sec("What stays in your browser",
         "Your cart (product codes and quantities, no prices) is saved in your browser’s local storage so it survives a page reload. You can clear it in your browser settings at any time. Where analytics is enabled on this site, it is used to understand how pages perform, not to sell your data."),
     sec("Who we share it with",
-        "We share data only with service providers that help us run the store: Airwallex (payments), Cloudflare (hosting, security and our order database), and the carrier or fulfillment partner that delivers your order ("+tc("which fulfillment partner(s) will be used")+"). We do not sell your personal information."),
+        "We share data with service providers that help us run the store: Airwallex (payments), Cloudflare (hosting, security and our order database), and the carrier or fulfillment partner that delivers your order ("+tc("which fulfillment partner(s) will be used")+"). For advertising measurement we also share data with Meta Platforms, as described under “Advertising and Meta Pixel” below. " + tc("TO CONFIRM with counsel: how this sharing is described, including the statement below about not selling personal information") + " We do not sell your personal information."),
+    sec("Advertising and Meta Pixel " + tc("TO CONFIRM with counsel"),
+        "This store uses the Meta Pixel (a script that runs in your browser) and Meta’s Conversions API (a connection from our servers to Meta). We use them to measure how our ads perform and to improve how they are delivered.",
+        "We send Meta these events: viewing a product, adding to cart, starting checkout, and completing a purchase.",
+        "With those events we may send Meta:",
+        items=["Your email address, name, and address details (city, state, ZIP code), each hashed before it is sent. Hashing turns a value into a scrambled code; it is not the same as removing it, and Meta may be able to match it to its own accounts.",
+               "Your IP address and your browser’s user agent (the browser and device type it reports).",
+               "Meta’s browser cookies, <code>_fbp</code> and <code>_fbc</code>, when they are present.",
+               "Order value and product identifiers for the items involved."]),
+    sec("Advertising data we store on our side " + tc("TO CONFIRM with counsel"),
+        "To send those events from our own systems, we store your IP address, your browser’s user agent, and advertising attribution parameters from the link you arrived on (for example <code>fbclid</code>) with your order in our order database, which is hosted on Cloudflare. We keep this with the order record for the period described in “How long we keep it” " + tc("TO CONFIRM with counsel: whether this advertising data needs its own retention period") + "."),
+    sec("Opting out of Meta advertising measurement " + tc("TO CONFIRM with counsel"),
+        f"You can choose not to take part in several ways: use the ad preferences in your Facebook or Instagram account settings to control how Meta uses your activity for ads; block or delete cookies in your browser settings (this stops <code>_fbp</code> and <code>_fbc</code> from being set or read, though order data we keep for the order itself is unaffected); or email {mail} and tell us you want to opt out, and we will act on your request as described in “Your choices”. Meta’s own privacy policy explains what Meta does with the data it receives."),
     sec("How long we keep it",
         "We keep order records for " + tc("retention period") + " so we can fulfil the order, handle returns and meet tax and accounting rules, then delete or anonymize them."),
     sec("Your choices",

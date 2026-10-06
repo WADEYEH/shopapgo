@@ -10,7 +10,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="css/commerce.css">
+    <script src="js/meta-pixel.js" defer></script>
     <script type="module" src="js/commerce/checkout.js"></script>
+    <noscript><img height="1" width="1" style="display:none" alt="" src="https://www.facebook.com/tr?id=2606879866471418&ev=PageView&noscript=1"></noscript>
   </head>
   <body data-page="checkout">
     <header class="shop-header">
@@ -117,29 +119,43 @@
           <form class="stack" data-step="payment" novalidate hidden>
             <div class="shop-intro">
               <h2 class="heading-guide-h2" tabindex="-1">Payment</h2>
-              <p class="body body--sm">Card details are encrypted by Airwallex and never stored by APGO.</p>
+              <p class="body body--sm" data-payment-intro>Card details are encrypted by Airwallex and never stored by APGO.</p>
             </div>
-            <!-- Apple Pay / Google Pay: stay collapsed and invisible unless the device and Airwallex report the wallet is ready. -->
+            <!-- Apple/Google Pay stay collapsed unless ready. Card / Airwallex Pay / PayPal are choose-one. -->
             <div class="wallets" data-wallets role="group" aria-label="Express payment">
               <div class="wallet-slot" data-wallet-slot="applePay"><div id="wallet-applepay"></div></div>
               <div class="wallet-slot" data-wallet-slot="googlePay"><div id="wallet-googlepay"></div></div>
-              <p class="wallets__divider label label--xs" data-wallet-divider hidden><span>Or pay by card</span></p>
+              <p class="wallets__divider label label--xs" data-wallet-divider hidden><span>Or pay another way</span></p>
             </div>
-            <div class="field" data-field="cardNumber">
-              <span class="field__label" id="card-number-label">Card number<span class="req" aria-hidden="true"> *</span></span>
-              <div class="card-input" id="card-number" role="group" aria-labelledby="card-number-label"></div>
-              <span class="field__error" data-error hidden></span>
+            <fieldset data-pay-methods hidden>
+              <legend class="label label--xs">Payment method</legend>
+              <div class="ship-options pay-options" data-pay-options></div>
+            </fieldset>
+            <div data-pay-panel="airwallex_pay" hidden>
+              <div class="airwallex-pay" id="airwallex-pay"></div>
             </div>
-            <div class="row-2">
-              <div class="field" data-field="expiry">
-                <span class="field__label" id="card-expiry-label">Expiry<span class="req" aria-hidden="true"> *</span></span>
-                <div class="card-input" id="card-expiry" role="group" aria-labelledby="card-expiry-label"></div>
+            <div data-pay-panel="paypal" hidden>
+              <div class="paypal" data-paypal hidden>
+                <div id="paypal-button"></div>
+              </div>
+            </div>
+            <div data-pay-panel="card">
+              <div class="field" data-field="cardNumber">
+                <span class="field__label" id="card-number-label">Card number<span class="req" aria-hidden="true"> *</span></span>
+                <div class="card-input" id="card-number" role="group" aria-labelledby="card-number-label"></div>
                 <span class="field__error" data-error hidden></span>
               </div>
-              <div class="field" data-field="cvc">
-                <span class="field__label" id="card-cvc-label">Security code<span class="req" aria-hidden="true"> *</span></span>
-                <div class="card-input" id="card-cvc" role="group" aria-labelledby="card-cvc-label"></div>
-                <span class="field__error" data-error hidden></span>
+              <div class="row-2">
+                <div class="field" data-field="expiry">
+                  <span class="field__label" id="card-expiry-label">Expiry<span class="req" aria-hidden="true"> *</span></span>
+                  <div class="card-input" id="card-expiry" role="group" aria-labelledby="card-expiry-label"></div>
+                  <span class="field__error" data-error hidden></span>
+                </div>
+                <div class="field" data-field="cvc">
+                  <span class="field__label" id="card-cvc-label">Security code<span class="req" aria-hidden="true"> *</span></span>
+                  <div class="card-input" id="card-cvc" role="group" aria-labelledby="card-cvc-label"></div>
+                  <span class="field__error" data-error hidden></span>
+                </div>
               </div>
             </div>
             <div data-payment-message aria-live="assertive"></div>
@@ -160,7 +176,7 @@
           <h2 class="label label--xs" id="summary-title">Order summary</h2>
           <ul class="summary-lines" data-summary-lines></ul>
           <div data-summary-rows></div>
-          <p class="label summary__note">Secure checkout · Payments by Airwallex</p>
+          <p class="label summary__note" data-summary-note>Secure checkout · Payments by Airwallex</p>
         </aside>
       </div>
     </main>

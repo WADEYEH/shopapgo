@@ -91,7 +91,7 @@ const checkoutBody = (method = "express") => ({
   method,
 });
 
-function signedWebhook(orderId, total = 88.7) {
+function signedWebhook(orderId, total = 128.97) {
   const body = JSON.stringify({ id: `evt_${Math.random().toString(36).slice(2)}`, name: "payment_intent.succeeded", data: { object: { id: "int_123", merchant_order_id: orderId, status: "SUCCEEDED", currency: "USD", amount: total } } });
   const timestamp = String(Date.now());
   return { method: "POST", headers: { "x-timestamp": timestamp, "x-signature": createHmac("sha256", WEBHOOK_SECRET).update(`${timestamp}${body}`).digest("hex") }, body };
@@ -101,10 +101,10 @@ function signedWebhook(orderId, total = 88.7) {
 async function placeOrder(env, { pay = true, method = "express" } = {}) {
   resetAirwallexTokenCache();
   const session = await (await call(env, "/api/checkout/session", post(checkoutBody(method)))).json();
-  if (pay) await payOrder(env, session.orderId, method === "express" ? 88.7 : 79.7);
+  if (pay) await payOrder(env, session.orderId, method === "express" ? 128.97 : 119.97);
   return session.orderId;
 }
-async function payOrder(env, orderId, total = 88.7) {
+async function payOrder(env, orderId, total = 128.97) {
   const ctx = ctxStub();
   const response = await call(env, "/api/webhooks/airwallex", signedWebhook(orderId, total), ctx);
   assert.equal(response.status, 200);
@@ -774,6 +774,10 @@ test("hygiene: the MCF modules hold no credentials and the example env documents
   assert.ok(!/^SPAPI_/m.test(example), "no SP-API credential names in the example any more");
   assert.ok(!/^MCF_AUTO_SUBMIT=\S/m.test(example), "auto-submit is never on in the example");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
-  assert.ok(!/MCF_AUTO_SUBMIT\s*=\s*"true"/i.test(toml) && !/MCF_SYNC_CRON\s*=\s*"true"/i.test(toml), "MCF auto-submit and cron sync stay off; the independent email retry cron may be configured");
+  assert.ok(!/MCF_AUTO_SUBMIT\s*=\s*"true"/i.test(toml) && !/MCF_SYNC_CRON\s*=\s*"true"/i.test(toml), "MCF auto-submit and cron sync stay off");
+  // Crons exist only for production (Meta CAPI re-send) and the test sites (customer email retries); MCF sync stays off
+  // everywhere through MCF_SYNC_CRON, and local dev has none.
+  const cronOwners = [...toml.matchAll(/^\s*crons\s*=/gm)].map((m) => [...toml.slice(0, m.index).matchAll(/^\[([^\]]+)\]/gm)].at(-1)?.[1]);
+  assert.deepEqual(cronOwners.sort(), ["env.next.triggers", "env.production.triggers", "env.staging.triggers"]);
   assert.ok(!/OUTBOUND_INTERNAL_TOKEN\s*=\s*"[^"]+"/.test(toml));
 });

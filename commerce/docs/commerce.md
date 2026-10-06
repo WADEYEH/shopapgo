@@ -4,6 +4,10 @@ Direct-to-consumer cart and checkout for D204 / D215, paid through Airwallex.
 The Amazon referral landing pages are unchanged; the store lives in its own
 pages and a Cloudflare Worker.
 
+> Current status, environments and decisions live in the plan at the repository root
+> (`docs/commerce-plan.md`, `docs/ops/production-config.md`). Environment notes below describe the
+> state when each part was written; the test site of this repo is `next.shopapgo.com`.
+
 > Scope note: `IMPLEMENTATION_CONTRACT.md` forbids cart UI and unverified prices
 > on the **landing pages** (it governs `index.html`; it has not been amended).
 > The store pages below are separate, `noindex`, and keep all prices server-side.
@@ -30,7 +34,7 @@ are built and covered by tests. **Staging is deployed; production is not.** Noth
 | What | URL |
 | --- | --- |
 | Staging storefront (Basic-auth gate, noindex, Airwallex **sandbox**) | https://staging.shopapgo.com |
-| Staging back office (own host, `ADMIN_TOKEN` or the staging site login) | https://admin-staging.shopapgo.com/admin/ |
+| Staging back office (own host, email/password Basic, `ADMIN_TOKEN`, or the staging site login) | https://admin-staging.shopapgo.com/admin/ |
 | Staging fallback (same Worker, `workers_dev = true`) | `https://apgo-us-store-staging.<cloudflare-account>.workers.dev` (back office answers 404 here; use the admin host) |
 | Production (planned, **not deployed**) | `https://store.shopapgo.com`, back office `https://admin.shopapgo.com/admin/` |
 
@@ -45,27 +49,31 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | --- | --- | --- |
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex API (sandbox keys on staging, production keys on prod) | set (sandbox) |
 | `AIRWALLEX_WEBHOOK_SECRET` | webhook signature | set October 2; genuine sandbox success and authentication-failure deliveries verified, including success redelivery (see `staging-rollout-2026-10-02.md`) |
-| `ADMIN_TOKEN` | back office login (>= 16 chars) | set |
-| `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | staging site gate (and the staging back-office login) | set |
+| `ADMIN_LOGIN_EMAIL`, `ADMIN_LOGIN_PASSWORD` | back office email + password (HTTP Basic) | set after merge (operator `wrangler secret put`) |
+| `ADMIN_TOKEN` | back office fallback (>= 16 chars; Bearer or Basic password) | set |
+| `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | staging site gate (and, when `ADMIN_ACCEPT_SITE_BASIC="true"`, the staging back-office login) | set |
 | `RESEND_API_KEY` | team notification + customer emails | not set (no email is sent) |
 | `ORDER_NOTIFY_WEBHOOK_URL`, `ORDER_NOTIFY_WEBHOOK_SECRET` | team notification webhook (optional) | not set |
 | `AMAZON_OUTBOUND_BASE_URL`, `OUTBOUND_INTERNAL_TOKEN` | Amazon MCF through amazon-spapi-mcp | set |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` | PayPal Orders v2 (sandbox on staging, live on prod) | set |
+| `PAYPAL_WEBHOOK_ID` | PayPal webhook verify | **not set** until the Dashboard URL is registered (capture + order poll still settle) |
 
 Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `EXPRESS_CHECKOUT`, `PRICING_APPROVED`, `PRICING_JSON`,
 `PAYMENT_AUTO_CAPTURE`, `APPLE_PAY_ENABLED`, `GOOGLE_PAY_ENABLED`, `WALLET_MERCHANT_NAME`, `CUSTOMER_EMAIL_FROM`, `CUSTOMER_EMAIL_REPLY_TO`, `CUSTOMER_EMAIL_POLICY_NOTE`,
-`CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `MCF_NOTIFY_AMAZON_EMAIL`.
+`CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`, `PAYPAL_ENV`.
+PayPal secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
 Each is explained in the section named after its feature below.
 
 ### Where the credentials are
 
-- **The password vault is the source of truth** (ask the owner for access to the APGO entries: staging Basic login, staging `ADMIN_TOKEN`, Airwallex sandbox keys).
+- **The password vault is the source of truth** (ask the owner for access to the APGO entries: staging Basic login, admin email/password, staging `ADMIN_TOKEN`, Airwallex sandbox keys).
 - `~/.apgo-staging-credentials` on the owner's Mac is **out of date**; do not use it, and do not copy it anywhere. Scripts that take `--credentials <file>` need a current file you
   create locally (git-ignored location, `chmod 600`), never one inside the repo.
 - Never put credentials in the repo, in chat or in tickets. If one leaks, rotate it (`wrangler secret put` a new value; Airwallex web app for API keys).
 
 ### Decisions still open (owner / counsel)
 
-Prices D204 / D215 (placeholders $29.90 / $24.90) · shipping methods and fees · sales tax · how delivery time is described · return terms (window, accepted products, remedy) ·
+Prices D204 / D215 (working prices $59.99 / $29.99, still pending approval) · shipping methods and fees · sales tax · how delivery time is described · return terms (window, accepted products, remedy) ·
 governing law (準據法) in the Terms · customer-service copy (see `docs/customer-email-policy-note.md` and the `[TO CONFIRM]` marks in the policy pages) ·
 whether Amazon also sends its own shipment notice (`MCF_NOTIFY_AMAZON_EMAIL`, default off, so only our email goes out).
 
@@ -95,7 +103,7 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
 - **Cart-page express checkout** (wallet block on the cart page) exists as front end only and is **off by default**: clicking the wallet button does **not** complete a payment yet. `EXPRESS_CHECKOUT`
   is set to `"false"` on staging and production and **must not be enabled** until the express payment flow is built.
 - Apple Pay and Google Pay have **not been verified on real devices** (needs Safari with a card in Wallet, a registered Apple Pay domain, and Chrome with a Google account); automated tests mock feature detection.
-- Staging has a sandbox Airwallex webhook registered; genuine success and authentication-failure delivery and same-order retry are verified. Production still needs its own webhook.
+- Staging has a sandbox Airwallex webhook registered; genuine success and authentication-failure delivery and same-order retry are verified. Production still needs its own webhook. PayPal capture + `GET /api/orders/:id` settle without a webhook; register `PAYMENT.CAPTURE.COMPLETED` and set `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
 
 ## How it fits together
 
@@ -106,13 +114,14 @@ prototype/cart.html ─┐                    ┌─ worker/pricing.js   THE pri
 prototype/checkout.html ─ /api/* ─ worker/index.js ─ worker/checkout.js  input validation · order ids
   js/commerce/*.js   │                    ├─ worker/orders.js    D1 orders + webhook idempotency
   css/commerce.css   │                    ├─ worker/airwallex.js token · PaymentIntent · webhook HMAC
+                     │                    ├─ worker/paypal.js    Orders v2 create · capture · webhook verify
                      │                    ├─ worker/notify.js    new paid-order notification (opt-in)
-prototype/admin/ ────┘                    ├─ worker/admin.js     ADMIN_TOKEN gate + /admin/api/*
+prototype/admin/ ────┘                    ├─ worker/admin.js     admin-auth gate + /admin/api/*
                                           ├─ worker/fulfillment.js  mark shipped · validation · audit log
                                           ├─ worker/customer-email.js  order confirmation + shipment emails (Resend, opt-in)
                                           ├─ worker/amazon-mcf.js  Amazon MCF client (bearer call to the amazon-spapi-mcp outbound endpoints)
                                           └─ worker/mcf.js         MCF order flow: submit · retry · status sync (opt-in, default OFF)
-                     └─ Airwallex.js split card elements (cardNumber / expiry / cvc, iframes)
+                     └─ Airwallex.js split card elements + Drop-in restricted to airwallex_pay
 ```
 
 1. The browser keeps only `{ sku, qty }` in `localStorage` (`apgo_us_cart_v1`).
@@ -121,8 +130,12 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     A
    re-prices the cart, stores a `pending` order in D1 and creates an Airwallex
    PaymentIntent (`merchant_order_id` = order id). Only the intent's
    `client_secret` reaches the browser.
-3. The browser calls `cardNumber.confirm({ intent_id, client_secret })`. A
-   declined card can be retried; the same PaymentIntent is reused while the
+3. On the payment step the shopper chooses **Card**, **Airwallex Pay**, or
+   **PayPal** (PayPal only when enabled). Card still calls
+   `cardNumber.confirm({ intent_id, client_secret })`. Airwallex Pay mounts
+   Airwallex.js Drop-in restricted to `methods: ['airwallex_pay']` on the same
+   PaymentIntent (`intent_id`, `client_secret`, `currency`, `country_code: 'US'`).
+   A declined card can be retried; the same PaymentIntent is reused while the
    cart/address is unchanged and younger than 50 minutes.
 4. `payment_intent.succeeded` (webhook) or `GET /api/orders/:id` (retrieve
    fallback, used after 3DS redirects) marks the order `paid`. A succeeded
@@ -132,16 +145,24 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     A
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/store/config` | prices, shipping methods, tax status, wallet flags, US states, Airwallex env, `storeReady` |
+| `GET /api/store/config` | prices, shipping methods, tax status, wallet flags, US states, Airwallex env, `airwallexPay.enabled`, PayPal `{ enabled, clientId, env }`, `storeReady` |
 | `POST /api/cart/quote` | `{ items, state?, method? }` → priced lines and totals |
 | `POST /api/checkout/session` | `{ items, contact, shipping, method }` → `{ orderId, quote, intent }` |
+| `POST /api/checkout/paypal/order` | `{ items, contact, shipping?, method? }` → `{ orderId, quote, paypal, eventIds }` (PayPal Orders v2; see [paypal.md](paypal.md)) |
+| `POST /api/checkout/paypal/capture` | `{ paypalOrderId }` or `{ orderId }` → settle the same D1 order |
 | `GET /api/orders/:id` | status, lines, totals, masked email (no address) |
 | `GET /.well-known/apple-developer-merchantid-domain-association` | Apple Pay domain file (served from `prototype/apple-pay/`, `application/octet-stream`; 404 until you add it) |
 | `POST /api/webhooks/airwallex` | HMAC-verified (`x-timestamp` + raw body), idempotent by event id; a genuine delivery older than 5 minutes is settled from the Retrieve API, not from its stale body |
-| `GET /admin/` · `GET /admin/api/orders[?status&fulfillment&q&before]` · `GET /admin/api/orders/:id` | order back office, `ADMIN_TOKEN` required (below) |
-| `POST /admin/api/orders/:id/ship` | `{ carrier, trackingNumber, trackingUrl? }` → marks a **paid** order shipped, emails the customer; `ADMIN_TOKEN` + JSON + same-origin (see "Fulfilment") |
+| `POST /api/webhooks/paypal` | PayPal-verified (`PAYPAL_WEBHOOK_ID` + transmission headers), idempotent by event id; settles `PAYMENT.CAPTURE.COMPLETED` from a Retrieve of the PayPal order |
+| `GET /admin/` · `GET /admin/api/orders[?status&fulfillment&q&before]` · `GET /admin/api/orders/:id` | order back office, admin auth required (below) |
+| `POST /admin/api/orders/:id/ship` | `{ carrier, trackingNumber, trackingUrl? }` → marks a **paid** order shipped, emails the customer; admin auth + JSON + same-origin (see "Fulfilment") |
 
-| `POST /admin/api/orders/:id/mcf/submit` · `POST /admin/api/orders/:id/mcf/sync` · `POST /admin/api/mcf/sync` | Amazon MCF: (re)send a paid order · sync one order's status · sync every order waiting on Amazon; `ADMIN_TOKEN` + JSON + same-origin (see "Amazon MCF") |
+| `POST /admin/api/orders/:id/mcf/submit` · `POST /admin/api/orders/:id/mcf/sync` · `POST /admin/api/mcf/sync` | Amazon MCF: (re)send a paid order · sync one order's status · sync every order waiting on Amazon; admin auth + JSON + same-origin (see "Amazon MCF") |
+
+PayPal Checkout (Orders v2) is a second payment path on the same orders table.
+The checkout engineer contract (create / capture / webhook, address mapping, Meta
+`event_id`s, Dashboard webhook URL) is in [paypal.md](paypal.md). Apple/Google Pay
+are not re-enabled by that work; MCF stays off.
 
 Adding to the cart from any page: link to `cart.html?add=d204`, or use
 `<button data-add-to-cart="d215" data-placement="hero">` (add `data-go-to-cart`
@@ -172,6 +193,52 @@ to jump to the cart) on a page that loads `js/commerce/shared.js`.
 `index.html` / `v2.html` are intentionally not wired. To add the entry there, load
 `js/commerce/landing-cart.js` and add the same markup; first amend
 `IMPLEMENTATION_CONTRACT.md` (root integrator).
+
+## Product pages (`/products/d204`, `/products/d215`)
+
+One page design for both SKUs, built from the Claude Design **product-v2** kit
+(source and decisions: [product-pages.md](product-pages.md)).
+
+| Address | File | Notes |
+|---|---|---|
+| `/products/d204` | `prototype/products/d204.html` | DRY, Atomic Colored Glaze. Cloudflare serves `x.html` at `/x`, so the `.html` form redirects to the clean URL. |
+| `/products/d215` | `prototype/products/d215.html` | WET, Atomic Glaze Coating. |
+| `/product` | `prototype/product.html` | Default entry: `?sku=D204\|D215`, `#dry` / `#wet`, otherwise DRY. |
+
+* **No Worker change.** The pages are plain static assets; production needs no route, staging
+  (`run_worker_first = true`) just passes them on to the assets binding.
+* **Generated.** `node scripts/build-product-pages.mjs` (`npm run build:product-pages`) writes the three
+  files from one template; `test:static` fails when they are out of date. Edit the script or
+  `prototype/js/commerce/product-data.js`, never the HTML. Only `<head>` and `data-sku` differ per file.
+* **Runtime:** `js/commerce/product.js` fills the page and switches DRY/WET in place (URL, title,
+  canonical, og tags and JSON-LD follow). Styles: `css/product.css` on top of `commerce.css`.
+* **Prices come only from `/api/store/config`** (`worker/pricing.js`): the buy box, the sticky bar, the
+  compare table and the analytics `value`. The static HTML has no price. If the config cannot be loaded
+  the price reads "—" and the cart still works (it only stores SKU and quantity).
+* **Add to cart** uses `shared.js` `cart.add`. Ticking the pair upsell also adds the other product
+  (quantity 1). `add_to_cart` events (`apgo:analytics` / `dataLayer`) carry `sku`, `quantity`,
+  `placement` (`pdp-buybox` / `pdp-sticky` / `pdp-quiz` / `pdp-compare` / `pdp-guarantee`), `pair`,
+  `currency`, `value` and `items[]` (`item_id`, `item_name`, `quantity`, `price`). `view_item` fires per view.
+* **Placeholders are marked `[TO CONFIRM]`** (same `mark[data-to-confirm]` style as the policy pages): the
+  pair price, "Free US shipping", "30-day returns" and the guarantee and FAQ wording, the placeholder
+  price (while `estimate` is true), and the before/after photo slots. The pair upsell is priced as the
+  sum of the two config prices; no discount is invented.
+* **Reviews and photos are never invented.** `js/commerce/product-reviews.js` ships empty. The rating
+  line and the reviews section appear only for a product with at least 3 *verified* reviews
+  (FTC 16 CFR Part 465). Before/after shows labelled placeholders only while `estimate` is true and is
+  hidden once pricing is approved, until real photos are added.
+* **SEO:** per-page title, description, canonical (made absolute at runtime), og tags and a Product
+  JSON-LD. `offers` is injected only when `/api/store/config` says `estimate: false` (pricing approved),
+  so a placeholder price never reaches search engines. All three pages are `noindex,nofollow` like the
+  rest of the store until launch (flip the one line in the generator). Staging also sends
+  `X-Robots-Tag: noindex`.
+* **Entry points:** v3 header "Products" link, a "View full product details" link in each v3 product
+  panel and final choice, and the product name in cart lines and the checkout summary (new tab there, so
+  a shopper mid-checkout keeps the form).
+* Tests: `tests/product-pages.test.mjs` (static contract) and `tests/product-pages.spec.mjs`
+  (Playwright: both SKUs, switch, add to cart and analytics, pair, sticky bar, config prices, hide rules,
+  JSON-LD, 390 / 1440 overflow, axe, 44 px targets, keyboard). `npm run capture:product-pages` writes the
+  desktop and mobile screenshots for both products to `review/`.
 
 ## Prices, shipping and tax: one source (`worker/pricing.js`)
 
@@ -226,11 +293,12 @@ gets `origin` and `merchantInfo.merchantName`. Airwallex handles Apple's and
 Google's gateway registration (web only); we do not need our own Apple Merchant ID,
 certificates or a Google merchant id.
 
-**Where it appears.** On the checkout **Payment** step, above the card fields, with
-an "Or pay by card" divider. The order and PaymentIntent are the same ones the card
-form uses, so a shopper who tries a wallet and then pays by card does not create a
-second order. Settlement is unchanged: `payment_intent.succeeded` webhook or
-`GET /api/orders/:id` (retrieve fallback), then the same notification.
+**Where it appears.** On the checkout **Payment** step, above the payment-method
+chooser, with an "Or pay another way" divider. The order and PaymentIntent are the
+same ones the card form and Airwallex Pay Drop-in use, so a shopper who tries a
+wallet and then pays another way does not create a second order. Settlement is
+unchanged: `payment_intent.succeeded` webhook or `GET /api/orders/:id` (retrieve
+fallback), then the same notification.
 
 **Hidden unless it can really work** (`prototype/js/commerce/wallets.js`):
 
@@ -319,6 +387,48 @@ in production:
 
 Until steps 1–3 are done the buttons simply never become `ready` and stay hidden.
 
+## Airwallex Pay
+
+The production Airwallex account currently has **Airwallex Pay** enabled and Cards
+Visa/Mastercard return `card_brand_not_supported`. The card fields stay on the
+page for when Cards are turned on; Airwallex Pay is the working Airwallex method.
+
+**How it is mounted.** There is no dedicated `createElement('airwallexPay')` type
+in current Airwallex.js docs. The payment step mounts Drop-in restricted to that
+one method:
+
+```js
+createElement('dropIn', {
+  intent_id,
+  client_secret,
+  currency,              // from the PaymentIntent
+  country_code: 'US',
+  methods: ['airwallex_pay'],
+  alwaysShowMethodLabel: true,
+  shopper_email,         // checkout contact
+  shopper_name,          // shipping first + last
+})
+```
+
+The Drop-in iframe has its own confirm button (`showConfirmButton` defaults to
+`true`). On `success` the page uses the same confirmation poll as card / wallets
+(`GET /api/orders/:id` plus the Airwallex webhook).
+
+**Create PaymentIntent.** No extra fields. `/api/checkout/session` already sends
+`return_url`, `customer`, `order` (including `shipping.address.country_code`), and
+`payment_method_options.card.auto_capture`. Drop-in confirms `airwallex_pay`
+against that intent.
+
+**Choose-one UX.** Card / Airwallex Pay / PayPal (when PayPal is enabled) are
+radios. Selecting one hides the others. Apple Pay and Google Pay stay in the
+express block above the chooser.
+
+**Operator flag.** `AIRWALLEX_PAY_ENABLED=false` hides the option (default on).
+`GET /api/store/config` includes `airwallexPay: { enabled }`. Honour `storeReady`.
+
+Code: `prototype/js/commerce/airwallex-pay.js`, wiring in
+`prototype/js/commerce/checkout.js`. Tests: `tests/airwallex-pay.test.mjs`.
+
 ## Go-live decisions ("needs your decision before prod")
 
 Nothing below is decided; the store refuses production traffic until
@@ -326,8 +436,8 @@ Nothing below is decided; the store refuses production traffic until
 
 | Decision | Today (placeholder) | Where to set it |
 | --- | --- | --- |
-| D204 price | $29.90 | `products.d204.priceCents` |
-| D215 price | $24.90 | `products.d215.priceCents` |
+| D204 price | $59.99 | `products.d204.priceCents` |
+| D215 price | $29.99 | `products.d215.priceCents` |
 | Shipping methods, fees, delivery promises | Standard free (5–7 business days), Express $9.00 (2 business days) | `shippingMethods`, `defaultShippingMethod` |
 | Who fulfils DTC orders / shipping regions | Amazon MCF from FBA stock is built, **off** by default (US addresses only) | `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, see "Amazon MCF" |
 | Sales tax: collect or not, rates per state, nexus/registration, or a tax service | $0 everywhere (`tax.status = undecided`) | `tax.defaultRateBps`, `tax.stateRatesBps`; or replace `computeTax` with a tax service |
@@ -341,7 +451,7 @@ Nothing below is decided; the store refuses production traffic until
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars    # fill in Airwallex SANDBOX credentials (+ ADMIN_TOKEN)
+cp .dev.vars.example .dev.vars    # fill in Airwallex SANDBOX credentials (+ admin login / ADMIN_TOKEN)
 npm run db:migrate:local           # re-run after pulling: schema.sql is additive/idempotent
 npm run dev                        # http://127.0.0.1:8799/v3.html  ·  /cart.html?add=d204  ·  /admin/
 ```
@@ -370,26 +480,49 @@ and notification result**. Statuses: `paid`, `pending` (awaiting payment),
 `review` (succeeded but amount/currency mismatch: check Airwallex before
 shipping), `cancelled`.
 
-Protection is the **`ADMIN_TOKEN` Worker secret** (≥ 16 characters):
+Protection is HTTP Basic (browser native prompt) plus an optional token fallback.
+Comparison is constant-time (SHA-256 digests). Nothing is stored by the page code.
 
-- Browser: open `/admin/`, the native Basic-auth prompt appears; any username,
-  password = `ADMIN_TOKEN`. The page and `/admin/api/*` share the `/admin/` path
-  so the browser re-sends the credentials automatically. Nothing is stored by the
-  page code.
+**Auth matrix**
+
+| Path | How | Where |
+| --- | --- | --- |
+| Primary | Basic username = `ADMIN_LOGIN_EMAIL`, password = `ADMIN_LOGIN_PASSWORD` | production and staging (same secret names; does **not** need `SITE_ENV=staging`) |
+| Fallback | `ADMIN_TOKEN` (≥ 16 chars) as `Authorization: Bearer …`, or Basic with **any** username and password = `ADMIN_TOKEN` | production and staging (scripts / ops) |
+| Optional staging site login | Basic `STAGING_BASIC_AUTH_USER` / `STAGING_BASIC_AUTH_PASSWORD` | only when `SITE_ENV=staging`, `ADMIN_ACCEPT_SITE_BASIC="true"`, and the request is on `ADMIN_HOST` |
+
+- Browser: open `/admin/`, the native Basic-auth prompt appears. Enter the owner
+  email as the username and the login password. The page and `/admin/api/*` share
+  the `/admin/` path so the browser re-sends the credentials automatically.
 - Scripts: `curl -H "Authorization: Bearer $ADMIN_TOKEN" https://<domain>/admin/api/orders`.
-- No token (or a short one) configured → everything under `/admin/` answers
-  **503** (closed by default). Wrong/missing credentials → 401 with a Basic
-  challenge. Comparison is constant-time (SHA-256 digests). All responses send
-  `X-Robots-Tag: noindex, nofollow` and `Cache-Control: no-store`; the API is GET-only
-  except the write endpoints (`POST /admin/api/orders/:id/ship` and the three MCF POSTs).
+- If neither the login pair nor a long-enough `ADMIN_TOKEN` is configured →
+  everything under `/admin/` answers **503** `admin_not_configured` (closed by
+  default). Wrong/missing credentials → 401 with a Basic challenge. All responses
+  send `X-Robots-Tag: noindex, nofollow` and `Cache-Control: no-store`; the API is
+  GET-only except the write endpoints (`POST /admin/api/orders/:id/ship` and the
+  three MCF POSTs).
 - `wrangler.toml` routes `/admin` and `/admin/*` through the Worker first
   (`run_worker_first`), so static files cannot be fetched around the gate.
-- Generate a value with `openssl rand -base64 32`; set it with
-  `npx wrangler secret put ADMIN_TOKEN` (remote) or in `.dev.vars` (local). Rotate
-  by setting a new secret. This is a single shared secret: for named per-person
-  access or SSO, put Cloudflare Access in front of `/admin/*` later.
-- The back office shows customer addresses and emails: keep the token out of chat,
-  tickets and the repo.
+- After merge the operator sets (never commit or paste values):
+
+```
+npx wrangler secret put ADMIN_LOGIN_EMAIL --env production
+npx wrangler secret put ADMIN_LOGIN_PASSWORD --env production
+npx wrangler secret put ADMIN_LOGIN_EMAIL --env staging
+npx wrangler secret put ADMIN_LOGIN_PASSWORD --env staging
+```
+
+  Local: the same names in `.dev.vars`. Keep `ADMIN_TOKEN` as the script/ops
+  fallback (`openssl rand -base64 32`, then `npx wrangler secret put ADMIN_TOKEN`).
+  Optionally keep `ADMIN_ACCEPT_SITE_BASIC="true"` on staging so the website Basic
+  login still opens `/admin/` on the admin host; leave that var unset in production
+  (production has no website Basic login).
+- The intended Basic username is the owner email stored in `ADMIN_LOGIN_EMAIL`
+  (operator sets `wadeyeh@apgo.com.tw`; it is not hardcoded). Rotate by putting a
+  new secret. For named per-person access or SSO, put Cloudflare Access in front
+  of `/admin/*` later.
+- The back office shows customer addresses and emails: keep the login password
+  and token out of chat, tickets and the repo.
 
 ## New paid-order notification
 
@@ -441,7 +574,7 @@ Payment status and fulfilment status are separate. `orders.status` stays
   two simultaneous clicks ship once and send one email); carrier ≤ 60 and tracking number ≤ 80
   characters, no control characters (blocks header/line injection into the email); tracking link
   must be an `https` URL without credentials. There is no "un-ship" or edit yet (see decisions).
-- **Protection:** same `ADMIN_TOKEN` (Bearer or the browser's Basic prompt) as the rest of
+- **Protection:** same admin auth (email/password Basic, or `ADMIN_TOKEN` Bearer / Basic) as the rest of
   `/admin/`. The write is **POST only** (other methods → 405 with `Allow: POST`), needs
   `Content-Type: application/json` (a cross-site `<form>` cannot send it) and, when the browser
   sends `Origin` / `Sec-Fetch-Site`, must be same-origin (else 403). This matters because a
@@ -546,7 +679,7 @@ credentials and talks to SP-API Fulfillment Outbound. **It is OFF by default**: 
 
 ### The outbound endpoints (amazon-spapi-mcp v1.5.0)
 
-`GET /admin/api/mcf/check` (ADMIN_TOKEN) is a read-only connection test: it lists MCF orders and previews one unit of each store SKU (D204 and D215) to a Seattle address (fee + arrival window). Missing SKU mappings fail the check. The admin's **Check MCF connection** button displays both previews and the automatic fulfillment state. It creates and cancels nothing and works while `MCF_AUTO_SUBMIT` is off.
+`GET /admin/api/mcf/check` (admin auth) is a read-only connection test: it lists MCF orders and previews one unit of each store SKU (D204 and D215) to a Seattle address (fee + arrival window). Missing SKU mappings fail the check. The admin's **Check MCF connection** button displays both previews and the automatic fulfillment state. It creates and cancels nothing and works while `MCF_AUTO_SUBMIT` is off.
 
 Auth: `Authorization: Bearer <OUTBOUND_INTERNAL_TOKEN>` (missing/wrong → 401; secret unset on the MCP Worker → 503). Base URL: `AMAZON_OUTBOUND_BASE_URL`
 (must be `https://`, the bearer never travels over http). All JSON; top level snake_case, nested `address` / `destination_address` / `items[]` camelCase; replies are the raw
@@ -593,7 +726,7 @@ sync (admin button, or optional cron) → GET /internal/outbound/orders/:id
   `/admin/` (the MCF block just reads "not sent").
 * **Back office** (`/admin/`, order detail → *Amazon MCF*): mode (off / not ready + why / ready), the record above, **Retry send to Amazon**
   (only when there is no record, or it `failed` / was `rejected`, and MCF is ready) and **Sync MCF status**; the toolbar has **Sync MCF status** for
-  all waiting orders. All are `POST` + `Content-Type: application/json` + same-origin + `ADMIN_TOKEN` (the same guards as *Mark as shipped*), paid orders only.
+  all waiting orders. All are `POST` + `Content-Type: application/json` + same-origin + admin auth (the same guards as *Mark as shipped*), paid orders only.
   The retry endpoint cannot bypass the switch: with MCF off it answers `skipped` and calls nothing.
 
 ### No duplicate shipments (the important part)
@@ -622,8 +755,9 @@ There is no token handling in this Worker any more: the MCP Worker does the Logi
 * Amazon `COMPLETE` with no tracking yet → waits ("Amazon shipped; waiting for a tracking number"), next sync picks it up.
 * Amazon `UNFULFILLABLE` / `CANCELLED` / `INVALID` → `rejected`, error shown, retry button offered; the order stays unshipped.
 * A failed poll (Amazon unreachable) only writes a note; it never turns a submitted order into a failure.
-* **Cron (optional, not configured):** the Worker exports `scheduled()`; it does nothing unless `MCF_SYNC_CRON=true`. To use it add to `wrangler.toml`
-  `[triggers] crons = ["*/30 * * * *"]` **and** set `MCF_SYNC_CRON=true` (both are off today).
+* **Cron:** the Worker exports one `scheduled()` that runs the MCF status sync **and** the Meta CAPI re-send (see "Meta Conversions API" below). The MCF part does
+  nothing unless `MCF_SYNC_CRON=true`. Production has `[env.production.triggers] crons = ["*/15 * * * *"]` (for the Meta re-send); staging has no cron.
+  MCF stays off in production until `MCF_SYNC_CRON=true` is set deliberately.
 
 ### Environment
 
@@ -663,6 +797,21 @@ The old `SPAPI_LWA_CLIENT_ID` / `SPAPI_LWA_CLIENT_SECRET` / `SPAPI_REFRESH_TOKEN
 
 Tests: `tests/commerce-mcf.test.mjs` (node:test, fake outbound endpoints in `tests/helpers/fake-amazon-mcf.mjs`; `fetch` is replaced, neither Amazon nor the MCP Worker is ever called) and
 `tests/admin-mcf.spec.mjs` (Playwright, stubbed `/admin/api`). `npm run capture:admin-mcf` writes `review/admin-mcf-{off,failed,sent,shipped}-{desktop,mobile}.png`.
+
+## Meta Conversions API (server-side events)
+
+Production only. The Worker sends `InitiateCheckout` (when the Airwallex PaymentIntent **or** the PayPal order is created) and `Purchase` (when the order turns paid, via the webhook or
+the confirmation-page poll, exactly once) to Meta's Conversions API, deduplicated against the browser Pixel by `event_id` (`ic_<orderId>`, `purchase_<orderId>`).
+`Purchase.value` is the D1 `total_cents / 100` in USD (Airwallex itself is sent dollars; D1 stores cents). Code: `worker/meta-capi.js`, `worker/meta-attribution.js`.
+
+* **Switch:** `META_DATASET_ID` (a plain var, set only in `[env.production.vars]`). Unset (staging, local) = the whole feature is skipped: no Graph call, no attribution
+  stored, Airwallex metadata unchanged, `scheduled()` does not touch the database for it. The token is the secret `META_CAPI_ACCESS_TOKEN`; without it events are skipped.
+* **Tables (new, in `worker/schema.sql`):** `order_attribution` (fbp, fbc, fbclid, source URL, client IP and user agent) and `order_meta_events`
+  (`PK(order_id, event_name)`, status `sending|sent|failed`, attempts, a PII-free error code). No cookie banner is used (owner decision), so IP and UA are stored.
+* **Reliability:** an atomic claim on the primary key prevents double sends; 3 tries per request (network error, timeout, 429, 5xx); failures are re-sent by the cron
+  with the original `event_id` and `event_time`; Meta rejects events older than 7 days, so the cron stops at 6.
+* **Logs:** time, event name, event id, HTTP status, `events_received`, `fbtrace_id`. Never email, phone, name, IP, token or payload.
+* Full detail, secrets, Airwallex webhook registration, deploy commands and the Events Manager check: `docs/meta-tracking.md`.
 
 ## Airwallex integration review
 
@@ -754,12 +903,13 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
   `/api/checkout/session`, `/api/orders/:id`, Apple Pay association file.
 - **Not** behind the Basic gate: `/robots.txt` (crawlers must read it); `POST /api/webhooks/airwallex` (Airwallex cannot send our
   credentials; the handler verifies the Airwallex signature itself); `/admin` and `/admin/*` and the whole `ADMIN_HOST` hostname (their own
-  `ADMIN_TOKEN` check, which is also an Authorization header, so a second gate in front would break it; one password only). A valid
-  `ADMIN_TOKEN` password also passes the Basic gate, because the admin page loads its CSS/JS from gated paths.
+  admin-auth check, which is also an Authorization header, so a second gate in front would break it; one prompt only). A valid
+  owner email/password or `ADMIN_TOKEN` password also passes the Basic gate, because the admin page loads its CSS/JS from gated paths
+  when `ADMIN_HOST` is unset.
 - Why not Cloudflare Access: the Wrangler OAuth login has no Access (Zero Trust) scope, so it could not be configured from here.
   Basic auth is the fallback; Access with an email allow-list can replace it later (then unset `SITE_ENV`'s gate or keep both).
 - Credentials are kept in the password vault (see "Handoff"). The older `~/.apgo-staging-credentials` file on the owner's Mac is **out of date**: do not rely on it. Names: `STAGING_BASIC_AUTH_USER`,
-  `STAGING_BASIC_AUTH_PASSWORD`, `ADMIN_TOKEN`. Never commit or paste values.
+  `STAGING_BASIC_AUTH_PASSWORD`, `ADMIN_LOGIN_EMAIL`, `ADMIN_LOGIN_PASSWORD`, `ADMIN_TOKEN`. Never commit or paste values.
 - Card tests: use Airwallex sandbox test cards only, e.g. `4035 5010 0000 0008` (success), any future expiry, any CVC;
   `4646 4646 4646 4644` triggers a sandbox risk decline at any amount. No real charge can happen because staging only has sandbox keys.
 
@@ -768,7 +918,8 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 | Secret | Value |
 |---|---|
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex **sandbox** keys (same as `.dev.vars`) |
-| `ADMIN_TOKEN` | fresh random value, different from the local one |
+| `ADMIN_LOGIN_EMAIL`, `ADMIN_LOGIN_PASSWORD` | owner email + password (same names as production); `wrangler secret put` after merge |
+| `ADMIN_TOKEN` | fresh random value, different from the local one (script/ops fallback) |
 | `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD` | random; stored in the password vault (see "Handoff") |
 | `AIRWALLEX_WEBHOOK_SECRET` | **set October 2**: sandbox subscription registered at `https://staging.shopapgo.com/api/webhooks/airwallex`. Genuine sandbox success and authentication-failure deliveries passed; a success redelivery returned 200 without duplicating order records. The confirmation-page Retrieve fallback is retained. See `staging-rollout-2026-10-02.md`. |
 | `AMAZON_OUTBOUND_BASE_URL`, `OUTBOUND_INTERNAL_TOKEN` | set (by the amazon-spapi-mcp maintainer; values never printed). `MCF_SKU_MAP_JSON` is set too. |
@@ -776,17 +927,20 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 
 Never put production keys (`AIRWALLEX_PROD_*` or the prod API key) into staging.
 
-### Deploy and verify staging
+### Deploy and verify the test site
+
+`staging.shopapgo.com` is still deployed from the landing repo until it is archived, so this repo deploys its own test site,
+`next.shopapgo.com` (`[env.next]`, same sandbox setup with its own Worker and D1):
 
 ```bash
 npm run test:static && npm run test:e2e        # must be green first
-npm run deploy:staging                          # = db:migrate:staging (schema.sql, idempotent) + wrangler deploy --env staging
-node scripts/staging-check.mjs --base https://staging.shopapgo.com --admin-base https://admin-staging.shopapgo.com --credentials ~/.apgo-staging-credentials
-node scripts/airwallex-browser-smoke.mjs --base https://staging.shopapgo.com --admin-base https://admin-staging.shopapgo.com --credentials ~/.apgo-staging-credentials
+npm run deploy:next                             # = db:migrate:next (schema.sql, idempotent) + wrangler deploy --env next
+node scripts/staging-check.mjs --base https://next.shopapgo.com --admin-base https://admin-next.shopapgo.com --credentials ~/.apgo-next-credentials
+node scripts/airwallex-browser-smoke.mjs --base https://next.shopapgo.com --admin-base https://admin-next.shopapgo.com --credentials ~/.apgo-next-credentials
 ```
 
 The browser smoke runs a full sandbox card payment and checks `/admin/` shows the order as paid (screenshots: `review/airwallex-browser-staging-*.png`,
-`review/staging-*.png`). It leaves a paid **sandbox** order in the staging D1.
+`review/staging-*.png`). It leaves a paid **sandbox** order in the test site's D1.
 
 ### Custom domains (done on staging)
 
@@ -799,21 +953,22 @@ hostnames, nothing else changes.
 | Host | Serves | Protection |
 |---|---|---|
 | `https://staging.shopapgo.com` (and workers.dev) | storefront, `/api/*`; **`/admin*` → 404** | Basic auth (`STAGING_BASIC_AUTH_*`), `X-Robots-Tag` noindex |
-| `https://admin-staging.shopapgo.com/admin/` | back office page + `/admin/api/*` + its css/js/logo only (everything else → 404) | `ADMIN_TOKEN` **or** the website Basic login (`ADMIN_ACCEPT_SITE_BASIC="true"`, one prompt only), noindex on every response, `/robots.txt` Disallow |
+| `https://admin-staging.shopapgo.com/admin/` | back office page + `/admin/api/*` + its css/js/logo only (everything else → 404) | `ADMIN_LOGIN_EMAIL`/`ADMIN_LOGIN_PASSWORD` **or** `ADMIN_TOKEN` **or** the website Basic login (`ADMIN_ACCEPT_SITE_BASIC="true"`, one prompt only), noindex on every response, `/robots.txt` Disallow |
 | planned prod `store.shopapgo.com` / `admin.shopapgo.com` | same split with `ADMIN_HOST = "admin.shopapgo.com"` | commented out in `wrangler.toml`; **not deployed** |
 
 ### Separate back-office host (`worker/hosts.js`, `ADMIN_HOST`)
 
 The back office no longer shares the store's domain. With the plain var `ADMIN_HOST` set, the Worker splits by the request `Host`:
 
-- Host = `ADMIN_HOST`: only `/admin`, `/admin/*` (still `ADMIN_TOKEN`, see above), `/robots.txt` and the page's own files (`/css/commerce.css`, `/css/admin.css`,
+- Host = `ADMIN_HOST`: only `/admin`, `/admin/*` (still the admin-auth gate, see above), `/robots.txt` and the page's own files (`/css/commerce.css`, `/css/admin.css`,
   `/js/admin.js`, `/js/commerce/shared.js`, `/assets/brand/apgo-logo.png`) are served; any other path (store pages, `/api/*`, webhook, Apple Pay file) is 404. Every response
-  carries `X-Robots-Tag: noindex, nofollow`. It is exempt from the staging Basic gate (no double prompt). Login there is either `ADMIN_TOKEN` (Bearer, or Basic with any username and the token as password) or,
-  when the plain var `ADMIN_ACCEPT_SITE_BASIC = "true"` (set on staging only) and `SITE_ENV=staging`, the **same Basic user + password as the website**
+  carries `X-Robots-Tag: noindex, nofollow`. It is exempt from the staging Basic gate (no double prompt). Login there is `ADMIN_LOGIN_EMAIL` + `ADMIN_LOGIN_PASSWORD`
+  (HTTP Basic; same secret names on production and staging, no `SITE_ENV=staging` required), or `ADMIN_TOKEN` (Bearer, or Basic with any username and the token as password), or,
+  when the plain var `ADMIN_ACCEPT_SITE_BASIC = "true"` (set on staging) and `SITE_ENV=staging`, the **same Basic user + password as the website**
   (existing secrets `STAGING_BASIC_AUTH_USER` / `STAGING_BASIC_AUTH_PASSWORD`, compared in constant time via SHA-256 digests; nothing new is stored, no password is in any file).
   Empty/missing secrets never match. The site login works **only on the admin host**: the store host and workers.dev still answer 404 for `/admin*`.
-  **Production:** `ADMIN_ACCEPT_SITE_BASIC` is deliberately not set, so prod accepts `ADMIN_TOKEN` only; whether prod should also accept a shared site login is the owner's decision
-  (it would need a site login to exist on prod, which it does not today).
+  **Production:** `ADMIN_ACCEPT_SITE_BASIC` is deliberately not set (there is no website Basic login on prod). Production uses the same `ADMIN_LOGIN_EMAIL` /
+  `ADMIN_LOGIN_PASSWORD` secrets, with `ADMIN_TOKEN` as the script/ops fallback.
 - Any other host (store domain, workers.dev): `/admin` and `/admin/*` (page and API) answer **404**, even with a valid token.
 - `ADMIN_HOST` unset (local `npm run dev`, tests): one host serves both, as before.
 - The admin page calls `/admin/api/*` same-origin, so the CSRF guard (`Origin` / `Sec-Fetch-Site` same-origin, JSON content type) is evaluated against the admin
@@ -826,9 +981,11 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 - [ ] Create the production D1: `npx wrangler d1 create apgo-us-store`, paste the id into `[[env.production.d1_databases]]`, then
       `npx wrangler d1 execute apgo-us-store --env production --remote --file worker/schema.sql`.
 - [ ] Bind `store.shopapgo.com`: uncomment the `routes` line in `[env.production]` (zone `shopapgo.com`; the `www` Pages project stays untouched).
-- [ ] Production secrets with `--env production`: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (production keys), `AIRWALLEX_WEBHOOK_SECRET`, `ADMIN_TOKEN`,
+- [ ] Production secrets with `--env production`: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (production keys), `AIRWALLEX_WEBHOOK_SECRET`, `ADMIN_LOGIN_EMAIL`, `ADMIN_LOGIN_PASSWORD`, `ADMIN_TOKEN`,
       plus optional notification / email / MCF secrets.
 - [ ] Register the Airwallex production webhook `https://store.shopapgo.com/api/webhooks/airwallex` with the success/cancellation and six failed-attempt events listed below.
+- [ ] PayPal (credentials already set): register `https://store.shopapgo.com/api/webhooks/paypal` for `PAYMENT.CAPTURE.COMPLETED` in the live Dashboard and `wrangler secret put PAYPAL_WEBHOOK_ID --env production`. Same for staging sandbox. Details: [paypal.md](paypal.md).
+- [ ] Meta CAPI (production only; see `docs/meta-tracking.md`): the owner sets `META_CAPI_ACCESS_TOKEN` (and `META_TEST_EVENT_CODE` while testing) with `--env production`; run `worker/schema.sql` on the production D1 first (adds `order_attribution`, `order_meta_events`).
 - [ ] Approve prices / shipping / tax (see "Before switching `AIRWALLEX_ENV` to `prod`"), then set `PRICING_APPROVED = "true"` (until then prod takes no payments).
 - [ ] Decide MCF, emails, Apple Pay domain verification for `store.shopapgo.com`.
 - [ ] Leave `EXPRESS_CHECKOUT` unset in production until the cart-page express payment flow is built (today it is UI only).
@@ -844,6 +1001,8 @@ npm run db:migrate:remote                      # also creates order_notification
 npx wrangler secret put AIRWALLEX_CLIENT_ID
 npx wrangler secret put AIRWALLEX_API_KEY
 npx wrangler secret put AIRWALLEX_WEBHOOK_SECRET
+npx wrangler secret put ADMIN_LOGIN_EMAIL
+npx wrangler secret put ADMIN_LOGIN_PASSWORD
 npx wrangler secret put ADMIN_TOKEN
 # optional notification channels (see above)
 npx wrangler secret put ORDER_NOTIFY_WEBHOOK_URL
@@ -882,7 +1041,7 @@ Screenshots with synthetic local fixtures can be regenerated using `node scripts
 
 These are placeholders copied from the design-system kits, not approved terms:
 
-- [ ] Prices in `worker/pricing.js` / `PRICING_JSON` (D204 $29.90, D215 $24.90).
+- [ ] Prices in `worker/pricing.js` / `PRICING_JSON` (D204 $59.99, D215 $29.99).
 - [ ] Shipping methods and costs (Standard free / Express $9.00) and what shoppers are told about MCF delivery.
 - [ ] Amazon MCF: Amazon Fulfillment role on the MCP's SP-API app, outbound connection secrets, confirmed SKU map, a first real test order,
       then `MCF_AUTO_SUBMIT=true` (see "Amazon MCF"; production orders are real shipments).
@@ -1011,12 +1170,13 @@ not establish a real provider refund: record sandbox acceptance separately in
   the real Worker `fetch` handler over an in-memory SQLite D1 stand-in with
   `fetch` stubbed: PaymentIntent payload and idempotency key, failed-create
   cleanup, webhook settle / dedupe / bad signature / late delivery / amount
-  mismatch, notify-once across racing polls, admin auth (503/401/Basic/Bearer,
+  mismatch, notify-once across racing polls, admin auth (503/401/email-password Basic/Bearer,
   filters, search, writes limited to the ship endpoint), notification payloads (signed, no PII), Airwallex
   client token cache / 401 refresh / retry rules.
 - `tests/v3-cart-entry.spec.mjs` (Playwright): v3 Add to cart in every placement,
   badge and cross-tab sync, Amazon stays as the secondary link, sticky bar,
   overflow at 320/390/1440, axe, no price on the landing page.
+- `tests/product-pages.test.mjs` and `tests/product-pages.spec.mjs`: the product pages (see "Product pages").
 - `tests/admin.spec.mjs` (Playwright, `/admin/api/*` stubbed): list, filters,
   search, detail contents, unconfigured notice, overflow, axe.
 - `tests/admin-fulfillment.spec.mjs` (Playwright, stubbed API built on the real email templates
@@ -1029,11 +1189,16 @@ not establish a real provider refund: record sandbox acceptance separately in
 - `tests/commerce-mcf.test.mjs` (node:test) and `tests/admin-mcf.spec.mjs` (Playwright): Amazon MCF (see "Amazon MCF"):
   off by default, missing credentials / SKU map, idempotent submit and races, failure + retry button, lost-reply reconciliation,
   retry rules and error classes, sync → shipped once, cron switch. All against a fake Amazon; the real one is never called.
+- `tests/commerce-meta-capi.test.mjs` (node:test) with `tests/helpers/fake-meta-capi.mjs`: Meta CAPI (see "Meta Conversions API"): hashing and
+  normalisation, payloads, ids, cents to dollars, attribution validation, off-by-default, once-only sends (webhook redelivery, parallel paths), inline retry, cron re-send,
+  no PII or token in logs. Meta is never called.
 - `tests/commerce.spec.mjs` (Playwright): cart and full checkout against the
   real catalog/validation modules with `/api/*` and Airwallex.js stubbed;
   decline + retry, empty cart, overflow at 320/390/1440 px, axe.
 - `tests/commerce-pricing.test.mjs` (node:test): pricing defaults, `PRICING_JSON`
   overrides and validation, configurable tax, prod gate, no price in front-end code.
+- `tests/airwallex-pay.test.mjs` (node:test): Airwallex Pay Drop-in options (`airwallex_pay`),
+  config flag, checkout.js / checkout.html wiring.
 - `tests/commerce-wallets.test.mjs` (node:test): Apple/Google Pay detection, Airwallex.js
   element options, `payment_method_options`, flags, Apple domain-file route, wrangler routing.
 - `tests/wallets.spec.mjs` (Playwright, feature-detection mocks): no-wallet device shows

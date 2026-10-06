@@ -75,9 +75,11 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
   assert.equal(isBasicExempt("/api/webhooks/airwallex"), true);
   assert.equal(isBasicExempt("/api/webhooks/resend"), true);
   assert.equal(isBasicExempt("/api/webhooks/resend/extra"), false);
+  assert.equal(isBasicExempt("/api/webhooks/paypal"), true);
   assert.equal(isBasicExempt("/admin"), true);
   assert.equal(isBasicExempt("/admin/api/orders"), true);
   assert.equal(isBasicExempt("/api/webhooks/airwallex/extra"), false);
+  assert.equal(isBasicExempt("/api/webhooks/paypal/extra"), false);
   assert.equal(isBasicExempt("/administrator"), false);
   assert.equal(isBasicExempt("/api/orders/x"), false);
 
@@ -85,6 +87,9 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
   const hook = await call("/api/webhooks/airwallex", { method: "POST", e: env({ AIRWALLEX_WEBHOOK_SECRET: "whsec_x", DB: {} }) });
   assert.equal(hook.status, 400);
   assert.equal(hook.headers.get("x-robots-tag"), NOINDEX);
+  const paypalHook = await call("/api/webhooks/paypal", { method: "POST", e: env({ PAYPAL_WEBHOOK_ID: "wh", DB: {} }) });
+  assert.equal(paypalHook.status, 400);
+  assert.equal(paypalHook.headers.get("x-robots-tag"), NOINDEX);
 
   // /admin still needs ADMIN_TOKEN.
   const noTok = await call("/admin/api/orders");
@@ -99,6 +104,11 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
   assert.equal((await call("/css/commerce.css", { e: env({ ADMIN_TOKEN: "short" }), headers: { Authorization: basic("admin", "short") } })).status, 401);
   // The staging Basic credentials are NOT an admin token.
   assert.equal((await call("/admin/", { headers: { Authorization: basic() } })).status, 401);
+  // Owner email/password is an admin login and also passes the site gate (CSS/JS when ADMIN_HOST is unset).
+  const login = env({ ADMIN_LOGIN_EMAIL: "owner@example.com", ADMIN_LOGIN_PASSWORD: "owner-login-password-test", ADMIN_TOKEN: "" });
+  assert.equal((await call("/admin/", { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
+  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
+  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("other@example.com", "owner-login-password-test") }, e: login })).status, 401);
 });
 
 test("non-staging (prod / local dev): pass-through, no gate, no robots override, no forced header", async () => {

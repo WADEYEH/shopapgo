@@ -58,7 +58,7 @@ test.describe("Apple Pay / Google Pay", () => {
     const options = await page.evaluate(() => window.__awxWalletCreates[0].options);
     expect(options.intent_id).toBeUndefined();
     expect(options.client_secret).toBeUndefined();
-    expect(options).toMatchObject({ countryCode: "US", amount: { value: "29.9", currency: "USD" }, merchantInfo: { merchantName: "APGO" }, autoCapture: true });
+    expect(options).toMatchObject({ countryCode: "US", amount: { value: "59.99", currency: "USD" }, merchantInfo: { merchantName: "APGO" }, autoCapture: true });
   });
 
   test("a ready Google Pay button appears, gets the session and completes the order", async ({ page }) => {
@@ -72,7 +72,7 @@ test.describe("Apple Pay / Google Pay", () => {
     expect(calls.session).toHaveLength(1);
 
     const update = await page.evaluate(() => window.__awxWalletUpdates.at(-1));
-    expect(update).toEqual({ type: "googlePayButton", patch: { intent_id: "int_test", client_secret: "secret_test", amount: { value: "29.9", currency: "USD" } } });
+    expect(update).toEqual({ type: "googlePayButton", patch: { intent_id: "int_test", client_secret: "secret_test", amount: { value: "59.99", currency: "USD" } } });
 
     await page.locator('[data-stub-wallet="googlePayButton"]').click();
     await page.evaluate(() => window.__awxWalletElements.googlePayButton.fire("success", {}));
@@ -104,9 +104,9 @@ test.describe("Apple Pay / Google Pay", () => {
     expect(await creates(page)).toEqual(["applePayButton", "googlePayButton"]);
     const apple = await page.evaluate(() => window.__awxWalletCreates.find((c) => c.type === "applePayButton").options);
     expect(apple).toMatchObject({ countryCode: "US", totalPriceLabel: "APGO", buttonType: "buy" });
-    // 29.90 + 2 × 24.90 from the server quote (standard shipping is free)
-    expect(apple.amount).toEqual({ value: "79.7", currency: "USD" });
-    await expect(page.locator("[data-wallet-divider]")).toContainText("Or pay by card");
+    // 59.99 + 2 × 29.99 from the server quote (standard shipping is free)
+    expect(apple.amount).toEqual({ value: "119.97", currency: "USD" });
+    await expect(page.locator("[data-wallet-divider]")).toContainText("Or pay another way");
   });
 
   test("Apple Pay is not attempted when the device cannot pay, even if Google Pay can", async ({ page }) => {

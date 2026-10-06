@@ -56,7 +56,7 @@ test("the shipment email payload has order id, items, total, address summary and
   for (const body of [mail.text, mail.html]) {
     expect(body).toContain(PAID);
     expect(body).toContain("APGO Atomic Glaze Coating");
-    expect(body).toContain("$88.70");
+    expect(body).toContain("$128.97");
     expect(body).toContain("Austin, TX 78701");
     expect(body).toContain("1Z999AA10123456784");
   }

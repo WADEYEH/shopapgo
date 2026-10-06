@@ -1,8 +1,8 @@
 // SINGLE SOURCE for everything that changes the amount a shopper is charged:
 // product prices, shipping methods/fees, tax, quantity limit and currency.
 //
-// Nothing in this file is an approved commercial term. The numbers below are the
-// placeholders from the APGO Design System cart/checkout kits. To change them,
+// Product prices are the owner's decision (D204 $59.99, D215 $29.99). Shipping fees and tax below are
+// still the placeholders from the APGO Design System cart/checkout kits, and PRICING_APPROVED stays unset. To change them,
 // either edit DEFAULT_PRICING or (no code change) set the optional `PRICING_JSON`
 // Worker variable to a partial override, e.g.
 //
@@ -22,21 +22,21 @@ export const DEFAULT_PRICING = {
   currency: "USD",
   maxQtyPerLine: 10,
 
-  // PLACEHOLDER: D204 $29.90, D215 $24.90. Decide before going live.
+  // D204 $59.99, D215 $29.99 (owner's decision, 2026-10-05). Shipping and tax below are still undecided.
   products: {
     d204: {
       sku: "D204",
       name: "APGO Atomic Colored Glaze",
       routine: "dry",
       size: "300 mL · 10.1 fl oz",
-      priceCents: 2990,
+      priceCents: 5999,
     },
     d215: {
       sku: "D215",
       name: "APGO Atomic Glaze Coating",
       routine: "wet",
       size: "200 mL · 6.8 fl oz",
-      priceCents: 2490,
+      priceCents: 2999,
     },
   },
 

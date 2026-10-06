@@ -128,12 +128,23 @@ export function routineWord(routine) {
   return el("span", { class: `routine routine--${routine}` }, routine === "dry" ? "DRY" : "WET");
 }
 
-export function productTitle(line) {
+// Product page for a cart line (products/d204.html; Cloudflare serves it at /products/d204).
+export const productUrl = (id) => (PRODUCT_IMAGES[id] ? `products/${id}.html` : null);
+
+// The product name links to its product page. `newTab` keeps a shopper who is mid-checkout on this page.
+export function productName(line, { newTab = false } = {}) {
+  const text = line.name.replace(/^APGO /, "");
+  const href = productUrl(line.id);
+  if (!href) return el("span", { class: "product-name" }, text);
+  return el("a", { class: "product-name product-link", href, ...(newTab ? { target: "_blank", rel: "noopener" } : {}) }, text);
+}
+
+export function productTitle(line, options) {
   return el(
     "span",
     { class: "line-item__title" },
     routineWord(line.routine),
-    el("span", { class: "product-name" }, line.name.replace(/^APGO /, "")),
+    productName(line, options),
     el("span", { class: "sku-tag" }, line.sku),
   );
 }

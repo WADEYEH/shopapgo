@@ -6,13 +6,29 @@ import {
   money,
   notice,
   priceRows,
+  productName,
   renderCartCount,
   routineWord,
   track,
   isEstimate,
   withEstimate,
 } from "./shared.js";
+import { paypalEnabled, paypalOrderPayload, paypalSdkUrl, readPaypalOrder, storePaypalOrder } from "./paypal.js";
+import {
+  clearCheckoutDraft,
+  readCheckoutDraft,
+  resolveDraftStep,
+  shippingComplete,
+  writeCheckoutDraft,
+} from "./checkout-draft.js";
 import { WALLETS, candidateWallets, walletOptions, walletUpdate } from "./wallets.js";
+import {
+  AIRWALLEX_PAY_CONTAINER_ID,
+  AIRWALLEX_PAY_ELEMENT,
+  airwallexPayEnabled,
+  dropInOptions,
+  dropInUpdate,
+} from "./airwallex-pay.js";
 
 const AIRWALLEX_SDK_URL = "https://static.airwallex.com/components/sdk/v1/index.js";
 const STEPS = ["contact", "shipping", "payment"];
@@ -24,6 +40,7 @@ const SESSION_MAX_AGE_MS = 50 * 60 * 1000;
 const WALLET_READY_TIMEOUT_MS = 10_000;
 const ORDER_POLL_ATTEMPTS = 8;
 const ORDER_POLL_INTERVAL_MS = 1500;
+const DRAFT_SAVE_MS = 200;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 
@@ -39,9 +56,71 @@ const state = {
   card: null,
   sdk: null,
   wallets: { started: false, elements: {}, ready: new Set(), visible: new Set() },
+  paypal: { sdk: null, mounted: false },
+  airwallexPay: { element: null, mounted: false },
+  payMethod: "card",
   cardStatus: { cardNumber: false, expiry: false, cvc: false },
   placing: false,
 };
+
+let draftTimer = 0;
+
+function collectDraft() {
+  const contactForm = $('[data-step="contact"]');
+  const shippingForm = $('[data-step="shipping"]');
+  const value = (form, name) => form?.[name]?.value?.trim?.() ?? "";
+  return {
+    step: state.step,
+    contact: {
+      email: value(contactForm, "email"),
+      marketingOptIn: Boolean(contactForm?.marketingOptIn?.checked),
+    },
+    shipping: {
+      firstName: value(shippingForm, "firstName"),
+      lastName: value(shippingForm, "lastName"),
+      street: value(shippingForm, "street"),
+      street2: value(shippingForm, "street2"),
+      city: value(shippingForm, "city"),
+      state: value(shippingForm, "state"),
+      zip: value(shippingForm, "zip"),
+    },
+    method: state.method,
+  };
+}
+
+function saveDraftNow() {
+  writeCheckoutDraft(collectDraft());
+}
+
+function scheduleDraftSave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraftNow, DRAFT_SAVE_MS);
+}
+
+function restoreDraft() {
+  const draft = readCheckoutDraft();
+  if (!draft) return null;
+  const contactForm = $('[data-step="contact"]');
+  if (contactForm) {
+    contactForm.email.value = draft.contact.email;
+    contactForm.marketingOptIn.checked = draft.contact.marketingOptIn;
+  }
+  const shippingForm = $('[data-step="shipping"]');
+  if (shippingForm && draft.shipping) {
+    for (const name of ["firstName", "lastName", "street", "street2", "city", "state", "zip"]) {
+      if (shippingForm[name]) shippingForm[name].value = draft.shipping[name] ?? "";
+    }
+  }
+  if (draft.method && state.config.shippingMethods.some((method) => method.id === draft.method)) {
+    state.method = draft.method;
+    const radio = document.querySelector(`input[name="method"][value="${CSS.escape(draft.method)}"]`);
+    if (radio) radio.checked = true;
+  }
+  if (draft.contact.email) state.contact = { ...draft.contact };
+  const step = resolveDraftStep(draft);
+  if (step === "payment" && shippingComplete(draft.shipping)) state.shipping = { ...draft.shipping };
+  return step;
+}
 
 // ---------- Rendering ----------
 
@@ -64,7 +143,7 @@ function renderSummary(source) {
         el(
           "div",
           { class: "line-item__body" },
-          el("span", { class: "line-item__title" }, routineWord(line.routine), el("span", { class: "product-name" }, line.name.replace(/^APGO /, ""))),
+          el("span", { class: "line-item__title" }, routineWord(line.routine), productName(line, { newTab: true })),
           el("span", { class: "label" }, `Qty ${line.qty}`),
         ),
         el("span", { class: "summary-line__price" }, money(line.lineCents)),
@@ -113,8 +192,11 @@ function goTo(step, { focus = true } = {}) {
     $(".steps__dot", li).textContent = i < index ? "✓" : String(i + 1);
   }
   if (focus) $(`[data-step="${step}"] h2`)?.focus();
+  saveDraftNow();
   if (step === "payment") {
     mountCardElements();
+    renderPayMethods();
+    applyPayMethod(state.payMethod);
     syncWallets();
   }
 }
@@ -158,6 +240,7 @@ function renderShippingOptions() {
               checked: method.id === state.method,
               onchange: () => {
                 state.method = method.id;
+                saveDraftNow();
                 refreshQuote();
               },
             }),
@@ -291,15 +374,109 @@ async function mountCardElements() {
 // card form untouched. `wallets.eagerSession` (WALLET_EAGER_SESSION) switches to
 // creating the session first, as a fallback if a wallet needs an intent up front.
 
+function payMethodChoices() {
+  const choices = [];
+  if (airwallexPayEnabled(state.config)) {
+    choices.push({
+      id: "airwallex_pay",
+      label: "Airwallex Pay",
+      description: "Pay with your Airwallex balance. No card details stay on this page.",
+    });
+  }
+  choices.push({
+    id: "card",
+    label: "Card",
+    description: "Visa, Mastercard and other cards, encrypted by Airwallex.",
+  });
+  if (paypalEnabled(state.config)) {
+    choices.push({
+      id: "paypal",
+      label: "PayPal",
+      description: "Check out with your PayPal account.",
+    });
+  }
+  return choices;
+}
+
+function defaultPayMethod() {
+  return "card";
+}
+
+function renderPayMethods() {
+  const choices = payMethodChoices();
+  const fieldset = $("[data-pay-methods]");
+  const host = $("[data-pay-options]");
+  if (!fieldset || !host) return;
+  if (choices.length < 2) {
+    fieldset.hidden = true;
+    host.replaceChildren();
+    return;
+  }
+  fieldset.hidden = false;
+  if (!choices.some((choice) => choice.id === state.payMethod)) state.payMethod = defaultPayMethod();
+  host.replaceChildren(
+    ...choices.map((choice) =>
+      el(
+        "div",
+        { class: "ship-option" },
+        el(
+          "label",
+          { class: "check" },
+          el(
+            "span",
+            { class: "check__control" },
+            el("input", {
+              type: "radio",
+              name: "payMethod",
+              value: choice.id,
+              checked: choice.id === state.payMethod,
+              onchange: () => applyPayMethod(choice.id),
+            }),
+            el("span", { class: "check__box", "aria-hidden": "true" }),
+          ),
+          el("span", { class: "check__label" }, choice.label),
+          el("span", { class: "check__description" }, choice.description),
+        ),
+      ),
+    ),
+  );
+}
+
+function applyPayMethod(id) {
+  const choices = payMethodChoices();
+  state.payMethod = choices.some((choice) => choice.id === id) ? id : defaultPayMethod();
+  for (const panel of document.querySelectorAll("[data-pay-panel]")) {
+    panel.hidden = panel.dataset.payPanel !== state.payMethod;
+  }
+  const place = $("[data-place-order]");
+  if (place) place.hidden = state.payMethod !== "card";
+  setPaypalVisible(state.payMethod === "paypal");
+  if (state.payMethod === "airwallex_pay") mountAirwallexPay();
+  if (state.payMethod === "paypal") mountPaypalButtons();
+}
+
+function syncExpressDivider() {
+  const any = state.wallets.visible.size > 0;
+  $("[data-wallets]")?.classList.toggle("is-active", any);
+  const divider = $("[data-wallet-divider]");
+  if (divider) divider.hidden = !any;
+}
+
+function setPaypalVisible(visible) {
+  const slot = $("[data-paypal]");
+  if (slot) slot.hidden = !visible;
+  const panel = $('[data-pay-panel="paypal"]');
+  if (panel && state.payMethod === "paypal") panel.hidden = !visible;
+  syncExpressDivider();
+}
+
 function setWalletVisible(id, visible) {
   const slot = $(`[data-wallet-slot="${id}"]`);
   if (!slot) return;
   slot.classList.toggle("is-ready", visible);
   if (visible) state.wallets.visible.add(id);
   else state.wallets.visible.delete(id);
-  const any = state.wallets.visible.size > 0;
-  $("[data-wallets]").classList.toggle("is-active", any);
-  $("[data-wallet-divider]").hidden = !any;
+  syncExpressDivider();
 }
 
 async function onWalletSuccess() {
@@ -380,6 +557,252 @@ async function syncWallets() {
   }
 }
 
+// ---------- PayPal ----------
+//
+// Shown on the payment step when GET /api/store/config.paypal.enabled and storeReady,
+// as a choose-one option next to Card and Airwallex Pay.
+// createOrder / onApprove follow docs/paypal.md. Apple/Google Pay stay off unless
+// their own flags turn them on. Card checkout is unchanged.
+
+function loadPaypalSdk() {
+  if (window.paypal?.Buttons) return Promise.resolve(window.paypal);
+  state.paypal.sdk ??= new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = paypalSdkUrl(state.config.paypal.clientId);
+    script.async = true;
+    script.onload = () => (window.paypal?.Buttons ? resolve(window.paypal) : reject(new Error("sdk_missing")));
+    script.onerror = () => reject(new Error("sdk_load_failed"));
+    document.head.append(script);
+  });
+  state.paypal.sdk.catch(() => { state.paypal.sdk = null; });
+  return state.paypal.sdk;
+}
+
+function applyPaymentCopy() {
+  const intro = $("[data-payment-intro]");
+  const note = $("[data-summary-note]");
+  const pay = airwallexPayEnabled(state.config);
+  const paypal = paypalEnabled(state.config);
+  if (intro) {
+    if (pay && paypal) {
+      intro.textContent = "Choose Airwallex Pay, PayPal, or a card. Card details are encrypted by Airwallex and never stored by APGO.";
+    } else if (pay) {
+      intro.textContent = "Pay with Airwallex Pay, or enter a card. Card details are encrypted by Airwallex and never stored by APGO.";
+    } else if (paypal) {
+      intro.textContent = "Pay with PayPal, or enter a card. Card details are encrypted by Airwallex and never stored by APGO.";
+    }
+  }
+  if (note) {
+    if (pay && paypal) note.textContent = "Secure checkout · Payments by Airwallex and PayPal";
+    else if (paypal) note.textContent = "Secure checkout · Payments by Airwallex and PayPal";
+    else if (pay) note.textContent = "Secure checkout · Payments by Airwallex";
+  }
+}
+
+async function mountAirwallexPay() {
+  if (!airwallexPayEnabled(state.config) || !state.contact.email || !state.shipping) return;
+  if (state.airwallexPay.mounted) {
+    try {
+      const session = await ensureSession();
+      await state.airwallexPay.element?.update?.(dropInUpdate(session));
+    } catch {
+      state.session = null;
+    }
+    return;
+  }
+  const host = $(`#${AIRWALLEX_PAY_CONTAINER_ID}`);
+  if (!host) return;
+  try {
+    const session = await ensureSession();
+    track("add_payment_info", { payment_type: "airwallex_pay", value: session.quote.totalCents / 100, currency: session.quote.currency });
+    const sdk = await getSdk();
+    const element = await sdk.createElement(
+      AIRWALLEX_PAY_ELEMENT,
+      dropInOptions(session, {
+        email: state.contact.email,
+        shipping: state.shipping,
+        countryCode: state.config.wallets?.countryCode,
+      }),
+    );
+    if (!element) throw new Error("element_missing");
+    element.mount(AIRWALLEX_PAY_CONTAINER_ID);
+    element.on("success", () => onWalletSuccess());
+    element.on("error", (event) => {
+      const detail = event?.detail?.error;
+      state.session = null;
+      state.airwallexPay.mounted = false;
+      state.airwallexPay.element = null;
+      $("[data-payment-message]").replaceChildren(
+        notice("warning", "Payment not completed", detail?.message && detail.code !== "UNKNOWN_ERROR" ? detail.message : "Airwallex Pay didn't go through. Try again or choose another method."),
+      );
+    });
+    state.airwallexPay.element = element;
+    state.airwallexPay.mounted = true;
+  } catch {
+    state.airwallexPay.mounted = false;
+    state.airwallexPay.element = null;
+    $("[data-payment-message]").replaceChildren(
+      notice("warning", "Airwallex Pay unavailable", "We couldn't load Airwallex Pay. Choose card or another method."),
+    );
+    if (payMethodChoices().some((choice) => choice.id === "card")) {
+      applyPayMethod("card");
+      renderPayMethods();
+    }
+  }
+}
+
+async function createPaypalOrder() {
+  if (!state.contact?.email) throw new Error("Enter a valid email address.");
+  const data = await api("/api/checkout/paypal/order", {
+    method: "POST",
+    body: paypalOrderPayload({
+      items: cart.items(),
+      contact: state.contact,
+      shipping: state.shipping,
+      method: state.method,
+      attribution: readAttribution(),
+    }),
+  });
+  storePaypalOrder(data);
+  state.paypal.order = data;
+  if (data.quote) {
+    state.quote = data.quote;
+    renderSummary(data.quote);
+  }
+  // Same InitiateCheckout moment as the card session: eventID is ic_<orderId>
+  // (data.eventIds.initiateCheckout). Do not invent a new id.
+  track("checkout_session_created", {
+    order_id: data.orderId,
+    value: data.quote.totalCents / 100,
+    currency: data.quote.currency,
+    items: analyticsItems(data.quote.lines),
+  });
+  return data.paypal.id;
+}
+
+function firePaidPurchase(orderId, quote) {
+  if (!quote) return false;
+  try {
+    sessionStorage.setItem(`apgo_us_purchase_tracked_${orderId}`, "1");
+  } catch {
+    // Confirmation page may send a second dataLayer event; Meta still dedupes on eventID.
+  }
+  track("purchase", {
+    transaction_id: orderId,
+    value: quote.totalCents / 100,
+    currency: quote.currency,
+    items: analyticsItems(quote.lines),
+  });
+  return true;
+}
+
+async function onPaypalApprove(data) {
+  const result = await api("/api/checkout/paypal/capture", {
+    method: "POST",
+    body: { paypalOrderId: data.orderID },
+  });
+  // Only `paid` is a Pixel Purchase. `review` is a captured-but-unverified store
+  // order — show the existing confirmation UX, never treat it as Purchase.
+  if (result.status === "paid") {
+    const quote = state.paypal.order?.quote ?? readPaypalOrder()?.quote;
+    firePaidPurchase(result.orderId, quote);
+    state.placing = true;
+    cart.clear();
+    history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(result.orderId)}`);
+    await showConfirmation(result.orderId);
+    return;
+  }
+  if (result.status === "review" && result.orderId) {
+    history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(result.orderId)}`);
+    await showConfirmation(result.orderId);
+    return;
+  }
+  throw new Error(result.error?.message || "Payment could not be completed.");
+}
+
+function onPaypalCancel() {
+  setPlacing(false);
+  $("[data-payment-message]").replaceChildren(
+    notice("info", "PayPal checkout cancelled", "No payment was taken. You can try PayPal again or pay by card."),
+  );
+}
+
+async function mountPaypalButtons() {
+  if (!paypalEnabled(state.config) || !state.contact.email || state.payMethod !== "paypal") {
+    setPaypalVisible(false);
+    return;
+  }
+  if (state.paypal.mounted) {
+    setPaypalVisible(true);
+    return;
+  }
+  const host = $("#paypal-button");
+  if (!host) return;
+  try {
+    setPaypalVisible(true);
+    const paypal = await loadPaypalSdk();
+    if (state.payMethod !== "paypal") {
+      setPaypalVisible(false);
+      return;
+    }
+    await paypal.Buttons({
+      style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal", height: 48 },
+      createOrder: async () => {
+        $("[data-payment-message]").replaceChildren();
+        setPlacing(true);
+        try {
+          return await createPaypalOrder();
+        } catch (error) {
+          setPlacing(false);
+          $("[data-payment-message]").replaceChildren(
+            notice("warning", "PayPal unavailable", error.message || "Could not start PayPal."),
+          );
+          throw error;
+        }
+      },
+      onApprove: async (data) => {
+        try {
+          await onPaypalApprove(data);
+        } catch (error) {
+          setPlacing(false);
+          $("[data-payment-message]").replaceChildren(
+            notice("warning", "Payment not completed", error.message || "Payment could not be completed."),
+          );
+        }
+      },
+      onCancel: () => onPaypalCancel(),
+      onError: () => {
+        setPlacing(false);
+        $("[data-payment-message]").replaceChildren(
+          notice("warning", "PayPal unavailable", "PayPal couldn't complete checkout. Try again or pay by card."),
+        );
+      },
+    }).render("#paypal-button");
+    state.paypal.mounted = true;
+    setPaypalVisible(state.payMethod === "paypal");
+  } catch {
+    state.paypal.mounted = false;
+    setPaypalVisible(false);
+  }
+}
+
+async function handlePaypalReturn(orderId) {
+  // Redirect fallback: Worker registered {origin}/checkout.html?order=<id>&paypal=return.
+  // Capture if the popup's onApprove did not run; GET /api/orders/:id also auto-captures
+  // an APPROVED PayPal order with a usable US address.
+  try {
+    const result = await api("/api/checkout/paypal/capture", { method: "POST", body: { orderId } });
+    if (result.status === "paid") {
+      const quote = readPaypalOrder()?.quote;
+      firePaidPurchase(result.orderId, quote);
+    }
+  } catch {
+    // Poll below still settles when the order is already captured or still APPROVED.
+  }
+  history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(orderId)}`);
+  await showConfirmation(orderId);
+}
+
 // ---------- Place order ----------
 
 function setPlacing(placing) {
@@ -389,23 +812,57 @@ function setPlacing(placing) {
   button.replaceChildren(placing ? "Processing…" : `Place order · ${money(state.quote?.totalCents ?? 0)}`);
 }
 
+function readCookie(name) {
+  const hit = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  if (!hit) return "";
+  const raw = hit.slice(name.length + 1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+// Meta attribution for the server-side Conversions API (worker). Every field is optional and
+// absent fields are omitted. fbclid comes from the URL, else from the _fbc cookie
+// ("fb.1.<ms>.<fbclid>") because checkout.html is normally reached without the query string.
+function readAttribution() {
+  const fbp = readCookie("_fbp");
+  const fbc = readCookie("_fbc");
+  const fbclid = new URLSearchParams(window.location.search).get("fbclid") || fbc.split(".").slice(3).join(".");
+  const attribution = { fbp, fbc, fbclid, sourceUrl: window.location.href };
+  return Object.fromEntries(Object.entries(attribution).filter(([, value]) => value));
+}
+
+// GA4-style item list for the analytics event; prices are the server's (quote line unit price).
+const analyticsItems = (lines) =>
+  lines.map((line) => ({ item_id: line.sku, item_name: line.name, quantity: line.qty, price: line.unitCents / 100 }));
+
 async function ensureSession() {
   const payload = { items: cart.items(), contact: state.contact, shipping: state.shipping, method: state.method };
+  // The cache key is the order content only: attribution (cookies, URL) must never force a new PaymentIntent.
   const key = JSON.stringify(payload);
   const fresh = state.session && state.sessionKey === key && Date.now() - state.session.createdAt < SESSION_MAX_AGE_MS;
   if (fresh) return state.session;
 
-  const session = await api("/api/checkout/session", { method: "POST", body: payload });
+  const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, attribution: readAttribution() } });
   state.session = { ...session, createdAt: Date.now() };
   state.sessionKey = key;
   state.quote = session.quote;
   renderSummary(session.quote);
+  // The order (merchant_order_id) now exists: this is the InitiateCheckout moment for Meta.
+  track("checkout_session_created", {
+    order_id: session.orderId,
+    value: session.quote.totalCents / 100,
+    currency: session.quote.currency,
+    items: analyticsItems(session.quote.lines),
+  });
   return state.session;
 }
 
 async function placeOrder(event) {
   event.preventDefault();
-  if (state.placing) return;
+  if (state.placing || state.payMethod !== "card") return;
   const message = $("[data-payment-message]");
   message.replaceChildren();
 
@@ -458,7 +915,14 @@ function trackPurchaseOnce(order) {
   } catch {
     // Without storage a refresh may re-send; acceptable for analytics.
   }
-  track("purchase", { transaction_id: order.id, value: order.totalCents / 100, currency: order.currency });
+  // GET /api/orders/:id lines carry lineCents but no unit price, so the unit price is derived.
+  const items = (order.lines ?? []).map((line) => ({
+    item_id: line.sku,
+    item_name: line.name,
+    quantity: line.qty,
+    price: line.lineCents / line.qty / 100,
+  }));
+  track("purchase", { transaction_id: order.id, value: order.totalCents / 100, currency: order.currency, ...(items.length ? { items } : {}) });
 }
 
 async function showConfirmation(orderId) {
@@ -480,6 +944,7 @@ async function showConfirmation(orderId) {
 
   const home = el("a", { class: "btn", href: "./" }, "Back to APGO ", el("span", { "aria-hidden": "true" }, "→"));
   if (order.status === "paid") {
+    clearCheckoutDraft();
     cart.clear();
     trackPurchaseOnce(order);
     section.replaceChildren(
@@ -489,6 +954,7 @@ async function showConfirmation(orderId) {
       el("div", { class: "actions" }, home),
     );
   } else if (order.status === "review") {
+    clearCheckoutDraft();
     section.replaceChildren(
       notice("info", "Order received", `Order ${order.id} · We're verifying the payment. No action is needed.`),
       el("div", { class: "actions" }, home),
@@ -510,8 +976,15 @@ async function showConfirmation(orderId) {
 
 async function init() {
   renderCartCount();
-  const orderId = new URLSearchParams(window.location.search).get("order");
-  if (orderId) return showConfirmation(orderId);
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get("order");
+  const paypalFlag = params.get("paypal");
+
+  if (paypalFlag === "return" && orderId) return handlePaypalReturn(orderId);
+  if (orderId && paypalFlag !== "cancel") return showConfirmation(orderId);
+
+  const paypalCancelled = paypalFlag === "cancel";
+  if (paypalCancelled) history.replaceState(null, "", "checkout.html");
 
   if (cart.items().length === 0) {
     $("[data-checkout-title]").textContent = "Your cart is empty.";
@@ -526,16 +999,28 @@ async function init() {
     return;
   }
 
+  state.payMethod = defaultPayMethod();
+  applyPaymentCopy();
   renderShippingOptions();
   $("[data-checkout-flow]").hidden = false;
   $('[data-step="contact"]').addEventListener("submit", submitContact);
   $('[data-step="shipping"]').addEventListener("submit", submitShipping);
   $('[data-step="payment"]').addEventListener("submit", placeOrder);
   for (const back of document.querySelectorAll("[data-back]")) back.addEventListener("click", () => goTo(back.dataset.back));
+  for (const form of document.querySelectorAll('[data-step="contact"], [data-step="shipping"]')) {
+    form.addEventListener("input", scheduleDraftSave);
+    form.addEventListener("change", scheduleDraftSave);
+  }
+
+  const restoredStep = restoreDraft();
+
+  if (paypalCancelled) {
+    showMessage("info", "PayPal checkout cancelled", "No payment was taken. Continue below or pay by card.");
+  }
 
   const quote = await refreshQuote();
   if (quote) track("begin_checkout", { value: quote.subtotalCents / 100, currency: quote.currency, items: quote.lines.length });
-  goTo("contact", { focus: false });
+  goTo(restoredStep ?? "contact", { focus: false });
 }
 
 // Focus inside an Airwallex iframe makes the iframe the activeElement here, which

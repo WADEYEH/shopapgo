@@ -1,22 +1,29 @@
 // APGO US store Worker: serves prototype/ as static assets and owns /api/* and /admin/*.
 //
-//   GET  /api/store/config         prices, shipping methods, tax status, wallets, states, Airwallex env
+//   GET  /api/store/config         prices, shipping methods, tax status, wallets, states, Airwallex env, Airwallex Pay, PayPal
 //   GET  /.well-known/apple-developer-merchantid-domain-association   Apple Pay domain check
 //   POST /api/cart/quote           server-priced cart ({ items, state?, method? })
 //   POST /api/checkout/session     create order + Airwallex PaymentIntent
-//   GET  /api/orders/:id           public order status (syncs pending intents)
+//   POST /api/checkout/paypal/order   create order + PayPal Orders v2 order
+//   POST /api/checkout/paypal/capture capture a PayPal order and settle the store order
+//   GET  /api/orders/:id           public order status (syncs pending intents / PayPal)
 //   POST /api/webhooks/airwallex   signed Airwallex events
-//   GET  /admin/api/orders[/:id]   order back office data (ADMIN_TOKEN)
-//   POST /admin/api/orders/:id/ship  mark a paid order shipped + email the customer (ADMIN_TOKEN)
-//   POST /admin/api/orders/:id/mcf/submit | /mcf/sync, POST /admin/api/mcf/sync   Amazon MCF retry / status sync (ADMIN_TOKEN)
-//   GET  /admin/                   order back office page (ADMIN_TOKEN)
+//   POST /api/webhooks/paypal      verified PayPal events (PAYMENT.CAPTURE.COMPLETED)
+//   POST /api/webhooks/resend      Svix-signed Resend email delivery events
+//   GET  /admin/api/orders[/:id]   order back office data (admin auth)
+//   POST /admin/api/orders/:id/ship  mark a paid order shipped + email the customer (admin auth)
+//   POST /admin/api/orders/:id/mcf/submit | /mcf/sync, POST /admin/api/mcf/sync   Amazon MCF retry / status sync (admin auth)
+//   GET  /admin/                   order back office page (admin auth)
+//
+// Meta Conversions API (production only, worker/meta-capi.js): InitiateCheckout when the PaymentIntent is created and Purchase
+// when an order turns paid; a cron re-sends failures. All of it is skipped unless META_DATASET_ID is set.
 //
 // With ADMIN_HOST set, /admin* is served only on that hostname and the store hostnames answer 404 (worker/hosts.js).
 
 import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
-import { PricingConfigError, resolvePricing, storeReadiness } from "./pricing.js";
+import { PricingConfigError, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
 import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociation } from "./wallets.js";
-import { ORDER_ID_PATTERN, newOrderId, validateCheckout } from "./checkout.js";
+import { ORDER_ID_PATTERN, newOrderId, validateCheckout, validatePaypalCheckout } from "./checkout.js";
 import { recordPaymentFailure, publicPaymentFailure } from "./payment-failures.js";
 import {
   AirwallexError,
@@ -25,22 +32,44 @@ import {
   verifyWebhookSignature,
 } from "./airwallex.js";
 import {
+  PaypalError,
+  approveUrlFrom,
+  capturePaypalOrder,
+  checkoutReturnUrls,
+  createPaypalOrder,
+  inspectPaypalOrder,
+  isUsableUsShipping,
+  paypalOrderIdFromWebhook,
+  paypalOrderPayload,
+  retrievePaypalOrder,
+  storeOrderIdFromWebhook,
+  storefrontOrigin,
+  verifyPaypalWebhook,
+  paypalWebhookHeaders,
+} from "./paypal.js";
+import {
   attachPaymentIntent,
+  attachPaypalOrder,
   cancelUnpayableOrder,
   claimNotification,
   finishNotification,
   getOrder,
   getOrderByIntent,
+  getOrderByPaypalOrderId,
+  getOrderPayment,
   insertOrder,
   publicOrder,
   recordWebhookEvent,
   settleIntent,
+  settlePaypalOrder,
 } from "./orders.js";
 import { notifyOrderPaid } from "./notify.js";
 import { processConfirmationJob, processMessageJob, scheduledCustomerEmailRetry } from "./customer-email.js";
 import { handleRefundEvent } from './refunds.js';
 import { handleResendWebhook } from "./email-delivery.js";
 import { scheduledMcfSync, submitOrderToMcf } from "./mcf.js";
+import { attributionMetadata, readAttribution, saveAttribution } from "./meta-attribution.js";
+import { metaEnabled, metaEventId, scheduledMetaRetry, sendMetaEvent } from "./meta-capi.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
@@ -63,7 +92,7 @@ async function handleQuote(request, env) {
   return json(quote(body.items, { state: body.state || undefined, method: body.method || undefined }, resolvePricing(env)));
 }
 
-async function handleCheckoutSession(request, env) {
+async function handleCheckoutSession(request, env, services) {
   // With AIRWALLEX_ENV=prod the store stays closed until the owner sets
   // PRICING_APPROVED=true, so placeholder prices/shipping/tax cannot go live by accident.
   if (!storeReadiness(env).ready) {
@@ -76,6 +105,10 @@ async function handleCheckoutSession(request, env) {
   const origin = new URL(request.url).origin;
 
   await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
+
+  // Meta attribution (production only): browser-sent ids, cookies, IP and user agent, validated and stored per order.
+  // Optional by design: a missing or malformed `attribution` never affects checkout.
+  const attribution = await captureAttribution(env, request, body, orderId, origin);
 
   let intent;
   try {
@@ -115,9 +148,11 @@ async function handleCheckoutSession(request, env) {
           },
         },
       },
-      // Same capture mode for cards and the Apple Pay / Google Pay elements.
+      // Same capture mode for cards, wallets, and Airwallex Pay (Drop-in confirms
+      // `airwallex_pay` against this intent; no extra create fields are required).
       payment_method_options: paymentMethodOptions(env),
-      metadata: { source: "apgo-us-store", order_id: orderId },
+      // Attribution first so it can never overwrite source / order_id.
+      metadata: { ...attributionMetadata(attribution), source: "apgo-us-store", order_id: orderId },
     });
   } catch (error) {
     // The shopper retries with a new order; don't leave this one "pending" forever.
@@ -126,12 +161,148 @@ async function handleCheckoutSession(request, env) {
   }
 
   await attachPaymentIntent(env.DB, orderId, intent.id);
+  await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
 
   return json({
     orderId,
     quote: priced,
     intent: { id: intent.id, clientSecret: intent.client_secret, currency: intent.currency },
   });
+}
+
+function eventIdsFor(orderId) {
+  return { initiateCheckout: metaEventId("InitiateCheckout", orderId), purchase: metaEventId("Purchase", orderId) };
+}
+
+async function handlePaypalCreate(request, env, services) {
+  if (!storeReadiness(env).ready) {
+    return fail(503, "store_not_ready", "Checkout isn't open yet. Please check back soon.");
+  }
+  const body = await readBody(request);
+  const pricing = resolvePricing(env);
+  const checkout = validatePaypalCheckout(body, { requireShipping: taxStatus(pricing) === "configured" });
+  const priced = quote(body.items, { state: checkout.shipping.state || undefined, method: checkout.method }, pricing);
+  const orderId = newOrderId();
+  const origin = storefrontOrigin(request, env);
+  const { returnUrl, cancelUrl } = checkoutReturnUrls(origin, orderId);
+
+  await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
+  await captureAttribution(env, request, body, orderId, origin);
+
+  let paypalOrder;
+  try {
+    paypalOrder = await createPaypalOrder(
+      env,
+      paypalOrderPayload({ orderId, quote: priced, checkout, returnUrl, cancelUrl }),
+      orderId,
+    );
+  } catch (error) {
+    await cancelUnpayableOrder(env.DB, orderId);
+    throw error;
+  }
+
+  await attachPaypalOrder(env.DB, orderId, paypalOrder.id);
+  await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
+
+  return json({
+    orderId,
+    quote: priced,
+    paypal: { id: paypalOrder.id, status: paypalOrder.status, approveUrl: approveUrlFrom(paypalOrder) },
+    eventIds: eventIdsFor(orderId),
+  });
+}
+
+async function settleFromPaypalSnapshot(env, db, paypalOrder, services) {
+  const inspected = inspectPaypalOrder(paypalOrder);
+  return afterSettle(
+    await settlePaypalOrder(db, {
+      orderId: inspected.storeOrderId,
+      paypalOrderId: inspected.paypalOrderId,
+      status: inspected.status,
+      amountValue: inspected.amountValue,
+      currency: inspected.currency,
+      shipping: inspected.shipping,
+    }),
+    services,
+  );
+}
+
+async function captureAndSettle(env, storeOrder, paypalOrderId, services) {
+  let paypalOrder = await retrievePaypalOrder(env, paypalOrderId);
+  let inspected = inspectPaypalOrder(paypalOrder);
+
+  if (inspected.status !== "COMPLETED") {
+    if (!isUsableUsShipping(inspected.shipping)) {
+      return { error: fail(400, "missing_shipping_address", "PayPal did not return a usable US shipping address."), inspected, order: storeOrder };
+    }
+    paypalOrder = await capturePaypalOrder(env, paypalOrderId, `${storeOrder.id}-capture`);
+    inspected = inspectPaypalOrder(paypalOrder);
+  }
+
+  await settleFromPaypalSnapshot(env, env.DB, paypalOrder, services);
+  const order = await getOrder(env.DB, storeOrder.id);
+  return { order, inspected, paypalOrder };
+}
+
+async function handlePaypalCapture(request, env, services) {
+  if (!storeReadiness(env).ready) {
+    return fail(503, "store_not_ready", "Checkout isn't open yet. Please check back soon.");
+  }
+  const body = await readBody(request);
+  const paypalOrderId = String(body.paypalOrderId ?? body.paypal_order_id ?? "").trim();
+  const orderId = String(body.orderId ?? body.order_id ?? "").trim();
+  if (!paypalOrderId && !orderId) return fail(400, "invalid_request", "Provide paypalOrderId or orderId.");
+  if (orderId && !ORDER_ID_PATTERN.test(orderId)) return fail(404, "not_found", "Order not found.");
+
+  const storeOrder = paypalOrderId
+    ? await getOrderByPaypalOrderId(env.DB, paypalOrderId)
+    : await getOrder(env.DB, orderId);
+  if (!storeOrder) return fail(404, "not_found", "Order not found.");
+  if (orderId && storeOrder.id !== orderId) return fail(400, "invalid_request", "PayPal order does not match this store order.");
+  if (paypalOrderId && storeOrder.payment_intent_id !== paypalOrderId) {
+    return fail(400, "invalid_request", "PayPal order does not match this store order.");
+  }
+
+  const result = await captureAndSettle(env, storeOrder, storeOrder.payment_intent_id, services);
+  if (result.error) return result.error;
+  return json({
+    orderId: result.order.id,
+    status: result.order.status,
+    paypal: { id: result.inspected.paypalOrderId, status: result.inspected.status },
+    eventIds: eventIdsFor(result.order.id),
+  });
+}
+
+// Stores the attribution for a new order. Returns it (for the PaymentIntent metadata) or null when Meta is off / on error.
+async function captureAttribution(env, request, body, orderId, origin) {
+  if (!metaEnabled(env)) return null;
+  try {
+    const attribution = readAttribution(body, request, { fallbackUrl: `${origin}/checkout.html?order=${orderId}` });
+    await saveAttribution(env.DB, orderId, attribution);
+    return attribution;
+  } catch (error) {
+    console.error("order_attribution_error", { orderId, reason: error?.name });
+    return null;
+  }
+}
+
+// Meta CAPI event for one order, once. Reads the order fresh; never throws.
+async function runMetaEvent(env, orderId, eventName) {
+  if (!metaEnabled(env)) return;
+  try {
+    await sendMetaEvent(env, await getOrder(env.DB, orderId), eventName);
+  } catch (error) {
+    console.error("meta_capi_error", { eventName, reason: error?.name });
+  }
+}
+
+// Runs background work after the response when the runtime allows it (ctx.waitUntil), otherwise inline.
+function deferred(services, work) {
+  if (services?.ctx?.waitUntil) {
+    services.ctx.waitUntil(work);
+    return undefined;
+  }
+  return work;
 }
 
 // Runs the one-time "new paid order" notification. The claim row makes it fire at
@@ -163,6 +334,7 @@ function afterSettle(settled, { env, ctx, adminOrigin }) {
     runNotification(env, settled.order, adminOrigin),
     runCustomerConfirmation(env, settled.order),
     runMcfSubmit(env, settled.order),
+    runMetaEvent(env, settled.order.id, "Purchase"),
   ]);
   if (ctx?.waitUntil) {
     ctx.waitUntil(work);
@@ -178,16 +350,28 @@ async function handleOrder(orderId, env, services) {
 
   // Covers shoppers who land here before the webhook arrives (e.g. after a 3DS redirect).
   if (order.status === "pending" && order.payment_intent_id) {
-    try {
-      const intent = await retrievePaymentIntent(env, order.payment_intent_id);
-      const settled = await settleIntent(env.DB, intent);
-      await afterSettle(settled, services);
-      if (settled.status && settled.status !== order.status) order = await getOrder(env.DB, orderId);
-      return json({ ...publicOrder(order), paymentStatus: intent.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
-    } catch (error) {
-      if (!(error instanceof AirwallexError)) throw error;
-      // Fall back to the stored status; the webhook will settle it.
-      console.error("airwallex_retrieve_failed", { orderId, status: error.status, code: error.code });
+    const payment = await getOrderPayment(env.DB, orderId);
+    if (payment?.provider === "paypal") {
+      try {
+        const result = await captureAndSettle(env, order, order.payment_intent_id, services);
+        if (!result.error && result.order) order = result.order;
+        return json({ ...publicOrder(order), paymentStatus: result.inspected?.status || order.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
+      } catch (error) {
+        if (!(error instanceof PaypalError)) throw error;
+        console.error("paypal_retrieve_failed", { orderId, status: error.status, code: error.code });
+      }
+    } else {
+      try {
+        const intent = await retrievePaymentIntent(env, order.payment_intent_id);
+        const settled = await settleIntent(env.DB, intent);
+        await afterSettle(settled, services);
+        if (settled.status && settled.status !== order.status) order = await getOrder(env.DB, orderId);
+        return json({ ...publicOrder(order), paymentStatus: intent.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
+      } catch (error) {
+        if (!(error instanceof AirwallexError)) throw error;
+        // Fall back to the stored status; the webhook will settle it.
+        console.error("airwallex_retrieve_failed", { orderId, status: error.status, code: error.code });
+      }
     }
   }
   return json({ ...publicOrder(order), paymentFailure: await publicPaymentFailure(env.DB, order) });
@@ -244,15 +428,58 @@ async function handleWebhook(request, env, services) {
   return json({ received: true, duplicate: !firstDelivery });
 }
 
+const PAYPAL_SETTLE_EVENTS = new Set(["PAYMENT.CAPTURE.COMPLETED", "CHECKOUT.ORDER.COMPLETED"]);
+
+async function handlePaypalWebhook(request, env, services) {
+  const rawBody = await request.text();
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return fail(400, "invalid_payload", "Webhook body is not valid JSON.");
+  }
+  if (!event || typeof event !== "object" || !event.id || !event.event_type) {
+    return fail(400, "invalid_payload", "Webhook body is not a PayPal event.");
+  }
+
+  const verified = await verifyPaypalWebhook(env, { headers: paypalWebhookHeaders(request), event });
+  if (!verified) return fail(400, "invalid_signature", "Webhook signature verification failed.");
+
+  if (PAYPAL_SETTLE_EVENTS.has(String(event.event_type))) {
+    const paypalOrderId = paypalOrderIdFromWebhook(event);
+    const customId = storeOrderIdFromWebhook(event);
+    const storeOrder = paypalOrderId
+      ? await getOrderByPaypalOrderId(env.DB, paypalOrderId)
+      : customId && ORDER_ID_PATTERN.test(customId)
+        ? await getOrder(env.DB, customId)
+        : null;
+    if (storeOrder?.payment_intent_id) {
+      try {
+        const paypalOrder = await retrievePaypalOrder(env, storeOrder.payment_intent_id);
+        await settleFromPaypalSnapshot(env, env.DB, paypalOrder, services);
+      } catch (error) {
+        if (!(error instanceof PaypalError)) throw error;
+        console.error("paypal_webhook_retrieve_failed", { orderId: storeOrder.id, status: error.status, code: error.code });
+      }
+    }
+  }
+
+  const firstDelivery = await recordWebhookEvent(env.DB, event);
+  return json({ received: true, duplicate: !firstDelivery });
+}
+
 async function route(request, env, services) {
   const { pathname } = new URL(request.url);
   const { method } = request;
 
   if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env));
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
-  if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env);
+  if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env, services);
+  if (pathname === "/api/checkout/paypal/order" && method === "POST") return handlePaypalCreate(request, env, services);
+  if (pathname === "/api/checkout/paypal/capture" && method === "POST") return handlePaypalCapture(request, env, services);
   if (pathname === "/api/webhooks/airwallex" && method === "POST") return handleWebhook(request, env, services);
   if (pathname === "/api/webhooks/resend" && method === "POST") return handleResendWebhook(request, env);
+  if (pathname === "/api/webhooks/paypal" && method === "POST") return handlePaypalWebhook(request, env, services);
   const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)$/);
   if (orderMatch && method === "GET") return handleOrder(decodeURIComponent(orderMatch[1]), env, services);
   return fail(404, "not_found", "Not found.");
@@ -285,6 +512,10 @@ async function dispatch(request, env, ctx) {
       console.error("airwallex_error", { status: error.status, code: error.code, source: error.source, message: error.message });
       return fail(502, "payment_provider_error", "We couldn't start the payment. Please try again.");
     }
+    if (error instanceof PaypalError) {
+      console.error("paypal_error", { status: error.status, code: error.code, message: error.message });
+      return fail(502, "payment_provider_error", "We couldn't start the payment. Please try again.");
+    }
     console.error("unhandled_error", error);
     return fail(500, "server_error", "Something went wrong. Please try again.");
   }
@@ -295,9 +526,10 @@ export default {
   fetch(request, env, ctx) {
     return withStaging(request, env, () => handleRequest(request, env, ctx));
   },
-  // Each job is separately opt-in. Staging cron processes only configured email
-  // retries; MCF remains off unless its own synchronization flag is enabled.
+  // Cron. Three independent jobs, each a no-op unless enabled: Amazon MCF status sync (MCF_SYNC_CRON=true),
+  // customer email retries (customer email configured) and the Meta CAPI re-send of failed events (META_DATASET_ID set).
+  // allSettled: one failing job must not cancel the others.
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(Promise.all([scheduledMcfSync(env), scheduledCustomerEmailRetry(env)]));
+    ctx.waitUntil(Promise.allSettled([scheduledMcfSync(env), scheduledCustomerEmailRetry(env), scheduledMetaRetry(env)]));
   },
 };

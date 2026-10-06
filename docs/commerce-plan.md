@@ -83,6 +83,7 @@
 | D32 | 10/6 | 地址验证用 Google Address Validation（每月前 5,000 次免费） | 见 `docs/design/modules/M3-cart-checkout.md` |
 | D33 | 10/6 | 后台一开始只有一个拥有者帐号（wadeyeh@apgo.com.tw）；之后要加人，由拥有者在后台「成员」页面加入名单 | 修改 D15；见 `docs/design/modules/M9-admin.md` |
 | D34 | 10/6 | 后台第一版加上：首页营收与订单数、顾客名单与顾客页（含隐私请求）、销售报表、库存页、内部备注、全站操作纪录、团队通知设定、拒付筛选 | 依标准电商后台对照；情境 I6–I13 |
+| D35 | 10/6 | 合并后的新版用自己的测试站 `next.shopapgo.com`（后台 `admin-next.shopapgo.com`），有独立的 Worker 和数据库；staging 继续留给 landing 部署，这个 repo 不再部署 staging | 解决 P1；阶段 1 的完成条件改在 next 验收 |
 
 ---
 
@@ -135,7 +136,7 @@
 
 | # | 问题 | 处理方式 |
 |---|---|---|
-| P1 | 两个 repo 部署到同一个 staging，会互相覆盖 | 阶段 0 冻结 landing |
+| P1 | 两个 repo 部署到同一个 staging，会互相覆盖 | 新版改用自己的测试站 next.shopapgo.com，这个 repo 不再部署 staging（D35） |
 | P2 | 正式环境从本机部署，设定没有进版本控制 | 阶段 0 盘点；之后只从 CI 部署（M12） |
 | P3 | Meta Pixel 有两套代码（品牌站、店面），事件不一致；品牌站还在送 `AmazonClick` | M10 统一 |
 | P4 | 品牌站有两套 GTM/GA4：线上用的是 `GTM-56WK5G8T` → `G-DRY1NJHGXW`；9 月建的 `GTM-TD5NTFH9` → `G-YM10YMKE30` 没有载入 | 待决 O2 |
@@ -295,7 +296,7 @@ wrangler.toml            Worker 设定（staging / production）
 - 建立 D1 迁移文件：以正式数据库现有的结构为起点，再加上 shopapgo 才有的 7 张表（付款失败、退款、邮件投递、邮件工作、讯息工作、邮件事件、停寄名单）。两边共用的 7 张表栏位名称完全一致（10/5 已核对），所以迁移只需要新增资料表，不用改既有的表。
 - 合并进 `main`，让品牌站和 `commerce/` 在同一个 repo；CI 涵盖两边的测试。
 
-**完成条件**：CI 全部通过；从 `main` 部署 staging 成功；后端在 staging 跑通付款、退款、邮件和 MCF 假服务。
+**完成条件**：CI 全部通过；部署到 `next.shopapgo.com` 成功（D35）；后端在 next 跑通付款、退款、邮件；MCF 用假服务在自动测试里验（D26）。
 
 ### 阶段 2：单一网站前台（约 5–7 天）
 

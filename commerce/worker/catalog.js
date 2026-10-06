@@ -95,6 +95,8 @@ export function quote(items, { state, method } = {}, pricing = DEFAULT_PRICING) 
 // What the browser may know about the store. Wallet buttons are on unless switched
 // off (APPLE_PAY_ENABLED / GOOGLE_PAY_ENABLED = "false"); the page still hides any
 // button the device or Airwallex cannot actually offer (see worker/wallets.js).
+// `paypal` exposes only the public client id + env for the JS SDK.
+// `airwallexPay.enabled` is the Airwallex Pay radio on the payment step (default on).
 export function publicConfig(env = {}, pricing = resolvePricing(env)) {
   const enabled = (name) => String(env[name] ?? "true").toLowerCase() !== "false";
   return {
@@ -122,6 +124,18 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
     // Cart-page Apple Pay / Google Pay block. Off unless EXPRESS_CHECKOUT is exactly "true".
     expressCheckout: env.EXPRESS_CHECKOUT === "true",
     wallets: walletConfig(env),
+    // Airwallex Pay (e-wallet) on the payment step. Default on — production Cards
+    // are not enabled yet, so this is the working Airwallex method. Set
+    // AIRWALLEX_PAY_ENABLED=false to hide the option; the card UI stays.
+    airwallexPay: {
+      enabled: String(env.AIRWALLEX_PAY_ENABLED ?? "true").toLowerCase() !== "false",
+    },
+    paypal: {
+      // Client id is public (PayPal JS SDK). enabled is false until PAYPAL_CLIENT_ID is set.
+      enabled: Boolean(String(env.PAYPAL_CLIENT_ID ?? "").trim()),
+      clientId: String(env.PAYPAL_CLIENT_ID ?? "").trim(),
+      env: String(env.PAYPAL_ENV ?? "").trim().toLowerCase() === "live" ? "live" : "sandbox",
+    },
     states: Object.entries(US_STATES).map(([code, name]) => ({ code, name })),
   };
 }

@@ -9,9 +9,9 @@ import { DEFAULT_PRICING, PricingConfigError, applyOverrides, computeTax, resolv
 
 const ITEMS = [{ sku: "d204", qty: 1 }];
 
-test("defaults are the documented placeholders and tax is undecided (0)", () => {
-  assert.equal(DEFAULT_PRICING.products.d204.priceCents, 2990);
-  assert.equal(DEFAULT_PRICING.products.d215.priceCents, 2490);
+test("defaults are the owner prices, placeholder shipping, and tax is undecided (0)", () => {
+  assert.equal(DEFAULT_PRICING.products.d204.priceCents, 5999);
+  assert.equal(DEFAULT_PRICING.products.d215.priceCents, 2999);
   assert.equal(DEFAULT_PRICING.shippingMethods.standard.amountCents, 0);
   assert.equal(DEFAULT_PRICING.shippingMethods.express.amountCents, 900);
   assert.equal(DEFAULT_PRICING.tax.defaultRateBps, 0);
@@ -35,7 +35,7 @@ test("PRICING_JSON overrides prices, shipping and tax, and feeds quote() and pub
     }),
   };
   const pricing = resolvePricing(env);
-  assert.equal(DEFAULT_PRICING.products.d204.priceCents, 2990, "defaults are never mutated");
+  assert.equal(DEFAULT_PRICING.products.d204.priceCents, 5999, "defaults are never mutated");
 
   const result = quote(ITEMS, { state: "CA" }, pricing);
   assert.equal(result.lines[0].unitCents, 3490);
@@ -93,7 +93,7 @@ test("front-end code contains no price, shipping fee or tax rate of its own", as
   const dir = "prototype/js/commerce";
   for (const file of await readdir(dir)) {
     const source = await readFile(`${dir}/${file}`, "utf8");
-    assert.ok(!/priceCents\s*[:=]\s*\d|amountCents\s*[:=]\s*\d|2990|2490|\b29\.90|\b24\.90/.test(source), `${file} hard-codes a price`);
+    assert.ok(!/priceCents\s*[:=]\s*\d|amountCents\s*[:=]\s*\d|5999|2999|\b59\.99|\b29\.99/.test(source), `${file} hard-codes a price`);
     assert.ok(!/RateBps|taxRate/i.test(source), `${file} hard-codes a tax rate`);
   }
 });
@@ -101,6 +101,6 @@ test("front-end code contains no price, shipping fee or tax rate of its own", as
 test("worker code takes every amount from pricing.js", async () => {
   const catalog = await readFile("worker/catalog.js", "utf8");
   const index = await readFile("worker/index.js", "utf8");
-  assert.ok(!/\b(2990|2490|900)\b/.test(catalog + index), "no literal price in catalog.js / index.js");
+  assert.ok(!/\b(5999|2999|900)\b/.test(catalog + index), "no literal price in catalog.js / index.js");
   assert.ok(index.includes("resolvePricing(env)"));
 });

@@ -18,6 +18,15 @@ Amazon link configuration) are included. V1/V2 landing pages, their tests and
 old Shopify/blueprint documents are not imported. V3 and its style board remain
 available at `/v3.html` and `/v3-style.html`; the Worker root serves V3.
 
+**Sync point 1 (2026-10-06).** The landing repo kept developing after the import. Its
+`main` at `cbdf77e` was merged into `commerce/` with history (`9a30bfc` recorded as already
+imported, then `git merge -X subtree=commerce cbdf77e`). It brought PayPal Orders v2
+(`docs/paypal.md`), the Meta Pixel and Conversions API with checkout attribution
+(`docs/meta-tracking.md`), the product pages (`docs/product-pages.md`), Airwallex Pay, checkout
+drafts, email/password admin login and the live production settings. The legacy landing pages
+(`index.html`, `v2.html`) stay out. Gaps found in the audit are listed in
+`docs/design/landing-audit.md` at the repository root; later landing work is merged the same way.
+
 ## Two applications, one repository
 
 - Root: existing Next.js brand site and 20 guides, still exported for Pages.
@@ -75,9 +84,17 @@ payment or shipment.
 - All asset requests run through the Worker in every environment. Host split,
   admin authentication, root-page override and staging protection consequently
   apply to static pages as well as API requests.
-- Production has `ADMIN_HOST=admin.shopapgo.com`; its routes and D1 ID are still
-  placeholders, and `PRICING_APPROVED` remains unset.
-- Cart-page express wallets remain **off on staging and production** because
+- Test site: `next.shopapgo.com` + `admin-next.shopapgo.com` (`[env.next]`: own Worker and D1,
+  Airwallex/PayPal sandbox, Basic-auth gate, emails only to the approved test address, no
+  Amazon MCF, no Meta). Deploy with `npm --prefix commerce run deploy:next`, which first runs
+  `worker/schema.sql` on its D1. `staging.shopapgo.com` is still deployed from the landing repo
+  until it is archived, so this repo has no script for it.
+- Production settings mirror the live store (`store.shopapgo.com`, `admin.shopapgo.com`, the
+  production D1). This repo does not deploy production yet; `PRICING_APPROVED` stays unset here.
+- D1 changes follow one rule: `worker/schema.sql` only creates missing tables and indexes and is
+  re-run on every deploy. `tests/schema.test.mjs` applies it to the production structure
+  (`tests/fixtures/production-schema-2026-10-06.sql`) and checks that only new tables appear.
+- Cart-page express wallets remain **off on the test sites and production** because
   the imported cart express flow is UI only. Checkout-step wallets are retained.
 - Policy generator output is explicitly LF to remain deterministic on Windows.
 - Original handoff documents in `docs/` describe the upstream staging state;

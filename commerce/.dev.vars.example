@@ -10,9 +10,15 @@ AIRWALLEX_WEBHOOK_SECRET=
 # AIRWALLEX_LOGIN_AS=
 
 # --- Order back office (/admin/) ---------------------------------------------------
-# Long random string (>= 16 chars); the password for /admin/ (any username) or a
+# Owner email + password (HTTP Basic username / password). Set remotely with
+#   npx wrangler secret put ADMIN_LOGIN_EMAIL --env production
+#   npx wrangler secret put ADMIN_LOGIN_PASSWORD --env production
+# and the same pair for --env staging. Never commit real values.
+ADMIN_LOGIN_EMAIL=
+ADMIN_LOGIN_PASSWORD=
+# Fallback: long random string (>= 16 chars); Basic password (any username) or
 # Bearer token. Generate one with:  openssl rand -base64 32
-# Left empty, /admin/ and /admin/api/* answer 503 (closed).
+# If neither the login pair nor a long-enough token is set, /admin* answers 503.
 ADMIN_TOKEN=
 
 # --- New paid-order notification (all optional; nothing is sent when unset) --------
@@ -55,6 +61,26 @@ CUSTOMER_EMAIL_TEST_RECIPIENTS=
 # WALLET_MERCHANT_NAME=
 # "false" = authorize only instead of capturing immediately (default capture).
 # PAYMENT_AUTO_CAPTURE=
+
+# --- PayPal Checkout (Orders v2; Client Secret stays on the Worker) -----------------
+# Developer Dashboard → Apps → the US store app. PAYPAL_ENV is "sandbox" locally / on
+# staging and "live" in production. Never commit real values. PAYPAL_CLIENT_ID is also
+# returned (publicly) by GET /api/store/config for the JS SDK.
+PAYPAL_CLIENT_ID=
+PAYPAL_CLIENT_SECRET=
+# PAYPAL_ENV=sandbox
+# Webhook id from the Dashboard after you register /api/webhooks/paypal (required for
+# signed webhook deliveries; capture + GET /api/orders/:id still settle without it).
+PAYPAL_WEBHOOK_ID=
+
+# --- Meta Conversions API (production only; see docs/meta-tracking.md) -------------------------
+# Leave META_DATASET_ID empty locally and on staging: with no dataset id every Meta CAPI step is skipped.
+# In production the dataset id is a plain var in wrangler.toml [env.production.vars]; the token is a secret
+# (`npx wrangler secret put META_CAPI_ACCESS_TOKEN --env production`). Never commit real values.
+META_CAPI_ACCESS_TOKEN=
+# Events Manager > Test events code (e.g. TEST12345). While set, events show up in Test Events only; remove it for real traffic.
+META_TEST_EVENT_CODE=
+META_DATASET_ID=
 
 # --- Amazon Multi-Channel Fulfillment (MCF, optional; OFF unless MCF_AUTO_SUBMIT=true) ----------
 # Logistics: paid orders are sent to Amazon MCF (real shipments that use your FBA stock). This Worker holds NO
