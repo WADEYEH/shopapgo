@@ -635,6 +635,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/5 | 第 19 条与 12 个模块已确认（D19、D20）。下一步：写订单核心、付款、出货、售后、购物车与结账的设计规格 |
 | 10/6 | M4 订单核心规格 v0.1 完成（`docs/design/modules/M4-order-core.md`），待审核格式、深度和冷静期长度 |
 | 10/6 | landing 同步点 1 检查完成（`docs/design/landing-audit.md`）；加入 PayPal（D21）；landing 继续开发、分批合并（D22）；情境清单新增 D13–D20 |
+| 10/6 | 最终保留哪个网站（D9），正在跟同事讨论。决定前先做不受影响的工作：设计规格、后端合并、补付款漏洞；前台搬家（阶段 2）和网址切换（阶段 4）等决定后再动 |
 
 ---
 
