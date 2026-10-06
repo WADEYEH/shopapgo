@@ -160,3 +160,6 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   *, *::before, *::after { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto; }
 }
+
+/* Header/footer Cart link into the store (lib/us/store.js); off unless the store switch is set. */
+.us-store-cart { white-space: nowrap; }

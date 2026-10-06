@@ -1,0 +1,212 @@
+name = "apgo-us-store"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# prototype/ is served as-is; the Worker runs first for /api/*, the protected /admin/* back office and the
+# Apple Pay domain-verification path (wrangler skips dot-folders, so the file lives in prototype/apple-pay/).
+[assets]
+directory = "./prototype"
+binding = "ASSETS"
+run_worker_first = true
+
+# Create once with `npx wrangler d1 create apgo-us-store`, then paste the id here.
+# Local dev (`wrangler dev`) works with the placeholder id.
+[[d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+# "demo" = Airwallex sandbox. Switch to "prod" only after prices, shipping and
+# tax in worker/catalog.js are approved.
+AIRWALLEX_ENV = "demo"
+ROOT_PAGE = "/v3"
+SITE_HOME_URL = "http://127.0.0.1:3012/us"
+
+# Optional, non-secret store settings (all have safe defaults; see docs/commerce.md):
+#   PRICING_JSON      partial override of worker/pricing.js DEFAULT_PRICING (prices, shipping, tax)
+#   PRICING_APPROVED  must be "true" before AIRWALLEX_ENV="prod" will take payments
+#   APPLE_PAY_ENABLED / GOOGLE_PAY_ENABLED   "false" hides that wallet button (default on)
+#   AIRWALLEX_PAY_ENABLED                    "false" hides Airwallex Pay (default on)
+#   PAYMENT_AUTO_CAPTURE                     "false" = authorize only (default capture)
+#   WALLET_MERCHANT_NAME                     label shown on the wallet sheet (default "APGO")
+#   EXPRESS_CHECKOUT  "true" shows the cart-page Apple Pay / Google Pay block (UI incomplete; off in staging and production)
+
+[observability]
+enabled = true
+
+# Secrets (never commit): set locally in .dev.vars, remotely with
+#   npx wrangler secret put AIRWALLEX_CLIENT_ID
+#   npx wrangler secret put AIRWALLEX_API_KEY
+#   npx wrangler secret put AIRWALLEX_WEBHOOK_SECRET
+# PayPal Orders v2 (already set on Cloudflare; Client Secret is Worker-only):
+#   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV (live|sandbox)
+#   PAYPAL_WEBHOOK_ID  after the operator registers the Dashboard webhook URL
+
+# ---------------------------------------------------------------------------------------------------------------
+# Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit
+# bindings / vars / assets into [env.*], so each environment repeats them. Secrets are per environment too.
+#
+#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; still deployed from the landing repo, not from here
+#   next        next.shopapgo.com + admin-next.shopapgo.com; this repo's test site: npm run deploy:next
+#   production  store.shopapgo.com + admin.shopapgo.com; checkout stays 503 until PRICING_APPROVED (see docs/commerce.md "Go-live checklist").
+# ---------------------------------------------------------------------------------------------------------------
+
+[env.staging]
+name = "apgo-us-store-staging"
+workers_dev = true
+preview_urls = false
+# Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy; workers.dev stays on.
+#   staging.shopapgo.com        the storefront (Basic-auth gate); /admin* answers 404 here
+#   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); email/password or ADMIN_TOKEN
+routes = [
+  { pattern = "staging.shopapgo.com", custom_domain = true },
+  { pattern = "admin-staging.shopapgo.com", custom_domain = true },
+]
+
+[env.staging.assets]
+directory = "./prototype"
+binding = "ASSETS"
+# true = the Worker runs first for EVERY path, so static pages/images also get the Basic-auth gate and X-Robots-Tag
+# (without it Cloudflare serves static files directly, bypassing worker/staging.js). All environments use this gate.
+run_worker_first = true
+
+# Staging has its own D1 (created with `npx wrangler d1 create apgo-us-store-staging`; the id is not a secret).
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store-staging"
+database_id = "246c3158-a70e-420e-a165-cda01b4ca434"
+
+[env.staging.vars]
+AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
+SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
+SITE_HOME_URL = "https://www.shopapgo.com/us"
+ROOT_PAGE = "/v3"         # worker/root-page.js: "/" serves the v3 store entry (cart badge + Add to cart), not the old Amazon landing
+ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
+ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
+EXPRESS_CHECKOUT = "false"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block off (UI only, not ready). Do NOT set in production yet.
+CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
+CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
+CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
+CUSTOMER_EMAIL_POLICY_NOTE = "TEST EMAIL - Sample order and shipping details only. No payment or shipment took place."
+CUSTOMER_EMAIL_ENABLED = "true"             # staging only: dedicated key configured, exact owner-approved recipient allowlist
+CUSTOMER_EMAIL_RETRY_CRON = "true"          # recovers new payment instructions and outbox rows; no historical backfill
+REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw" # owner-approved test mailbox only; set a production team recipient separately
+# Secrets (wrangler secret put <NAME> --env staging): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (sandbox keys only),
+# ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD;
+# AIRWALLEX_WEBHOOK_SECRET once the sandbox webhook exists.
+# PayPal sandbox: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV=sandbox; PAYPAL_WEBHOOK_ID after registering
+# https://staging.shopapgo.com/api/webhooks/paypal in the PayPal sandbox Dashboard.
+
+[env.staging.observability]
+enabled = true
+
+[env.staging.triggers]
+crons = ["*/2 * * * *"]
+
+# ---------------------------------------------------------------------------------------------------------------
+# next.shopapgo.com: the merged store's own test site (plan phase 1). staging.shopapgo.com above is still deployed
+# from the landing repo until that repo is archived, so this repo deploys only this environment
+# (`npm run deploy:next`) and has no npm script for staging on purpose.
+#   next.shopapgo.com         the storefront (Basic-auth gate); /admin* answers 404 here
+#   admin-next.shopapgo.com   the order back office on its own host (ADMIN_HOST below)
+# Sandbox only: Airwallex demo, PayPal sandbox, emails only to the approved test recipient, no Amazon MCF connection,
+# no Meta (js/meta-pixel.js only runs on the store hosts; META_DATASET_ID unset).
+# ---------------------------------------------------------------------------------------------------------------
+[env.next]
+name = "apgo-us-store-next"
+workers_dev = true
+preview_urls = false
+routes = [
+  { pattern = "next.shopapgo.com", custom_domain = true },
+  { pattern = "admin-next.shopapgo.com", custom_domain = true },
+]
+
+[env.next.assets]
+directory = "./prototype"
+binding = "ASSETS"
+run_worker_first = true
+
+# Own D1 (created with `npx wrangler d1 create apgo-us-store-next`; the id is not a secret).
+[[env.next.d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store-next"
+database_id = "2c7f214a-917d-44e1-a18b-6c97785ad6e0"
+
+[env.next.vars]
+AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX
+PAYPAL_ENV = "sandbox"   # worker/paypal.js; a plain var so a live value cannot be set as a secret by mistake
+SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
+SITE_HOME_URL = "https://www.shopapgo.com/us"
+ROOT_PAGE = "/v3"
+ADMIN_HOST = "admin-next.shopapgo.com"
+ADMIN_ACCEPT_SITE_BASIC = "true"
+EXPRESS_CHECKOUT = "false"
+CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
+CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
+CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved test recipient; all other recipients are blocked
+CUSTOMER_EMAIL_POLICY_NOTE = "TEST EMAIL - Sample order and shipping details only. No payment or shipment took place."
+CUSTOMER_EMAIL_ENABLED = "true"
+CUSTOMER_EMAIL_RETRY_CRON = "true"
+REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw"
+# Secrets (wrangler secret put <NAME> --env next), sandbox values only: AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY,
+# AIRWALLEX_WEBHOOK_SECRET (sandbox webhook https://next.shopapgo.com/api/webhooks/airwallex), PAYPAL_CLIENT_ID,
+# PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID (sandbox webhook https://next.shopapgo.com/api/webhooks/paypal),
+# ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD,
+# RESEND_API_KEY, RESEND_WEBHOOK_SECRET.
+
+[env.next.triggers]
+crons = ["*/2 * * * *"]
+
+[env.next.observability]
+enabled = true
+
+# Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office: ADMIN_LOGIN_EMAIL/PASSWORD or ADMIN_TOKEN). Checkout answers 503 until PRICING_APPROVED="true".
+[env.production]
+name = "apgo-us-store"
+workers_dev = false
+# Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy.
+routes = [
+  { pattern = "store.shopapgo.com", custom_domain = true },
+  { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host (ADMIN_HOST below); the store host answers 404 for /admin*
+]
+
+[env.production.assets]
+directory = "./prototype"
+binding = "ASSETS"
+run_worker_first = true
+
+# Production D1 (created with `npx wrangler d1 create apgo-us-store`; the id is not a secret).
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "apgo-us-store"
+database_id = "b409b132-2f2d-4da8-970c-2cf5560ac830"
+
+[env.production.vars]
+AIRWALLEX_ENV = "prod"
+ROOT_PAGE = "/v3"                   # worker/root-page.js: "/" serves the v3 store entry (this repo has no legacy index.html)
+ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
+SITE_HOME_URL = "https://www.shopapgo.com/us"
+# Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
+# path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
+# while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
+META_DATASET_ID = "2606879866471418"
+# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Admin login is
+# ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
+# PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
+# prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
+# Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
+# AIRWALLEX_WEBHOOK_SECRET, ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, META_CAPI_ACCESS_TOKEN,
+# plus the optional notification / email / MCF secrets.
+# PayPal live: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV=live; PAYPAL_WEBHOOK_ID after registering
+# https://store.shopapgo.com/api/webhooks/paypal (and www path-route equivalent) in the PayPal live Dashboard.
+
+# Cron: every 15 minutes the Worker's scheduled() re-sends Meta CAPI events that failed, and (only when the MCF_SYNC_CRON var
+# is switched on) syncs Amazon MCF shipment status. The test sites run every 2 minutes for customer email retries; local dev
+# has no cron. Every job is a no-op when its switch is off.
+[env.production.triggers]
+crons = ["*/15 * * * *"]
+
+[env.production.observability]
+enabled = true

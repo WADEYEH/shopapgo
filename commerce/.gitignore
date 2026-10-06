@@ -1,0 +1,24 @@
+.DS_Store
+node_modules/
+test-results/
+playwright-report/
+review/tmp/
+*.log
+.dev.vars
+.wrangler/
+
+.dev.vars.*
+!.dev.vars.example
+
+# Secrets and local credential files (never commit)
+.env
+.env.*
+!.env.example
+.apgo-staging-credentials
+*.credentials
+
+# Generated review screenshots/recordings from `npm run capture*` / smoke scripts are not committed
+# (regenerate with the scripts). Files already tracked in review/ stay tracked.
+review/*.png
+review/*.jpg
+review/*.webm
