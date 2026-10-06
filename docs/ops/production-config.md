@@ -15,7 +15,7 @@
 | www.shopapgo.com（另有 shopapgo.pages.dev） | 品牌站（首页 `/`、指南 `/us/guides`） | Pages 专案 `shopapgo` | **手动上传**：这个 Pages 专案没有接 GitHub，是在某个人的电脑上建置后直接上传 | shopapgo `main` |
 | www.shopapgo.com 上的商店路径：`/products/*`、`/cart`、`/checkout`、`/api/*`、政策页及其 css/js/图片 | 商品页、购物车、结账（品牌站的购买按钮连到这里） | Worker `apgo-us-store`（跟 store.shopapgo.com 同一个） | 网域路由直接在 Cloudflare 设定，**不在任何 repo 里** | landing（同上） |
 | store.shopapgo.com、admin.shopapgo.com | landing 线上店与后台 | Worker `apgo-us-store` | 从本机用 wrangler 部署 | landing `codex/v2-content-blueprint`（同步点 1：`cbdf77e`） |
-| staging.shopapgo.com、admin-staging.shopapgo.com | 测试站 | Worker `apgo-us-store-staging` | 从本机部署；10/6 起只由 shopapgo 部署（D38） | shopapgo `main` |
+| staging.shopapgo.com、admin-staging.shopapgo.com | 测试站 | Worker `apgo-us-store-staging` | 从本机部署；10/6 起只由 shopapgo 部署（D38） | shopapgo（10/6 部署 PR #28 的 `efc48f2`，版本 `e1cafee9`；landing 的旧版是 `b6a48a8c`，可回退） |
 | next.shopapgo.com、admin-next.shopapgo.com | 停用 | Worker `apgo-us-store-next`、D1 `apgo-us-store-next` | 10/6 建立，当天改回 staging（D38） | 待你在 Cloudflare 删除 |
 
 **10/6 下午更正**：上午盘点时漏了上面第二列。实测 www 的 `/products/d204`、`/cart`、`/api/store/config`、`/privacy` 都由线上店的 Worker 回应（没有 Pages 的回应标头），首页和指南仍是 Pages。品牌站 `main` 的 #25（购买按钮改连 `/products/*`）、#26（首页改成 `/`，`/us` 转到 `/`）已经上线。也就是说，D9「所有顾客页面都在 www」已经由 landing 那边部分上线。确切的路由清单见下一段。

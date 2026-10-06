@@ -431,6 +431,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/6 | 阶段 1 代码合并完成（分支 `claude/phase1-merge`）：landing 同步点 1（`cbdf77e`）保留历史合进 `commerce/`，最新 `main`（#25、#26）也合进来；静态测试 278 项、浏览器测试 213 项、品牌站测试 26 项通过。新版已部署到测试站 `next.shopapgo.com`（D35），等你设定测试用密钥后做付款测试。另外发现 www 上的商店路径已经由线上店的 Worker 提供（D9 已部分上线），路由只存在 Cloudflare，已记进 `docs/ops/production-config.md` |
 | 10/6 | 订单改为付款成功才成立（D36，Shopify 的做法）：没付款的是「未完成结账」，一次购买一笔纪录、24 小时失效、个人资料 30 天后删除，失效后才付款仍成立订单。M3、M4、M5 更新为 v0.3，M8、M9、情境清单、隐私权政策草稿同步修改；新增情境 I14，对照表为 111 个情境、157 条验收测试，没有缺口 |
 | 10/6 | 阶段 1 的 PR #27 已合进 `main`。决定留 shopapgo、landing 不再修改（D37），阶段 2 可以开始。另外查到：线上 www 载入的 GTM `GTM-56WK5G8T` 把资料送到 GA4 `G-DRY1NJHGXW`（不在 mkt@apgo.com.tw 底下），9 月建的 `G-YM10YMKE30` 只在 9/22–9/23 收到资料；要决定用哪一组 |
+| 10/6 | 测试站改回 staging（D38），合并后的新版已部署上去，沿用 staging 原有的测试用密钥；未登录的检查 12 项全部通过（包含 landing 版本挡住的寄信状态通知）。landing 部署版本里两个没提交的后台付款查询工具已移植。下一步：你在 staging 下测试单，完成阶段 1 |
 
 ---
 
