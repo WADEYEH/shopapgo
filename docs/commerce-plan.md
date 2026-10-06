@@ -85,6 +85,7 @@
 | D34 | 10/6 | 后台第一版加上：首页营收与订单数、顾客名单与顾客页（含隐私请求）、销售报表、库存页、内部备注、全站操作纪录、团队通知设定、拒付筛选 | 依标准电商后台对照；情境 I6–I13 |
 | D35 | 10/6 | 合并后的新版用自己的测试站 `next.shopapgo.com`（后台 `admin-next.shopapgo.com`），有独立的 Worker 和数据库；staging 继续留给 landing 部署，这个 repo 不再部署 staging | 解决 P1；阶段 1 的完成条件改在 next 验收 |
 | D36 | 10/6 | 付款成功才成立订单（Shopify 的做法）。还没付款的是「未完成结账」：一次购买一笔纪录，重试和换付款方式都沿用；24 小时失效并作废付款单；失效后才付款成功照样成立订单；个人资料 30 天后删除；后台第一版加「未完成结账」页 | 修改情境 D8 的处理；见 M3 第 5 节、M4、M5 第 3.4 节 |
+| D37 | 10/6 | D9 定案：留 shopapgo。所有顾客页面放在 www.shopapgo.com，后台在 admin.shopapgo.com，store.shopapgo.com 转址到 www。landing repo 不再修改，也不再部署；同步点 1（`cbdf77e`）是最后一次合并 | 取代 D22（分批同步）；landing 线上店照常营业到阶段 4 切换 |
 
 ---
 
@@ -428,6 +429,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/6 | 阶段 0 盘点完成（`docs/ops/production-config.md`）。法务与税务草稿完成（`docs/legal/`：销售税分析、隐私选项分析、四份英文政策页），待你和同事过目，再请律师、会计师确认（O1、O6、O7） |
 | 10/6 | 阶段 1 代码合并完成（分支 `claude/phase1-merge`）：landing 同步点 1（`cbdf77e`）保留历史合进 `commerce/`，最新 `main`（#25、#26）也合进来；静态测试 278 项、浏览器测试 213 项、品牌站测试 26 项通过。新版已部署到测试站 `next.shopapgo.com`（D35），等你设定测试用密钥后做付款测试。另外发现 www 上的商店路径已经由线上店的 Worker 提供（D9 已部分上线），路由只存在 Cloudflare，已记进 `docs/ops/production-config.md` |
 | 10/6 | 订单改为付款成功才成立（D36，Shopify 的做法）：没付款的是「未完成结账」，一次购买一笔纪录、24 小时失效、个人资料 30 天后删除，失效后才付款仍成立订单。M3、M4、M5 更新为 v0.3，M8、M9、情境清单、隐私权政策草稿同步修改；新增情境 I14，对照表为 111 个情境、157 条验收测试，没有缺口 |
+| 10/6 | 阶段 1 的 PR #27 已合进 `main`。决定留 shopapgo、landing 不再修改（D37），阶段 2 可以开始。另外查到：线上 www 载入的 GTM `GTM-56WK5G8T` 把资料送到 GA4 `G-DRY1NJHGXW`（不在 mkt@apgo.com.tw 底下），9 月建的 `G-YM10YMKE30` 只在 9/22–9/23 收到资料；要决定用哪一组 |
 
 ---
 
