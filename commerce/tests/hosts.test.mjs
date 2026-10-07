@@ -115,7 +115,7 @@ const envSection = (toml, name) => {
   return end === -1 ? toml.slice(start) : toml.slice(start, start + 1 + end);
 };
 
-test("wrangler.toml binds each test site's custom domains and sets ADMIN_HOST; production binds store + admin hosts without site-Basic", async () => {
+test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; production binds store + admin hosts without site-Basic", async () => {
   const { readFile } = await import("node:fs/promises");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
   const staging = envSection(toml, "staging");
@@ -123,25 +123,21 @@ test("wrangler.toml binds each test site's custom domains and sets ADMIN_HOST; p
   assert.match(staging, /pattern = "admin-staging\.shopapgo\.com", custom_domain = true/);
   assert.match(staging, /^ADMIN_HOST = "admin-staging\.shopapgo\.com"/m);
   assert.match(staging, /^ADMIN_ACCEPT_SITE_BASIC = "true"/m);
-  const next = envSection(toml, "next");
-  assert.match(next, /^name = "apgo-us-store-next"/m);
-  assert.match(next, /pattern = "next\.shopapgo\.com", custom_domain = true/);
-  assert.match(next, /pattern = "admin-next\.shopapgo\.com", custom_domain = true/);
-  assert.match(next, /^ADMIN_HOST = "admin-next\.shopapgo\.com"/m);
-  assert.match(next, /^SITE_ENV = "staging"/m, "the test site keeps the Basic-auth gate and noindex");
-  assert.match(next, /^AIRWALLEX_ENV = "demo"/m);
-  assert.match(next, /^PAYPAL_ENV = "sandbox"/m);
-  assert.match(next, /database_name = "apgo-us-store-next"\ndatabase_id = "(?!00000000-)[0-9a-f-]{36}"/, "next has its own real D1, not the placeholder");
-  assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID|MCF_AUTO_SUBMIT|AMAZON_OUTBOUND_BASE_URL)\s*=/m.test(next),"the test site never takes live payments, sends Meta events or ships through Amazon");
-  for (const other of [staging, envSection(toml, "production")]) {
-    assert.ok(!other.includes("apgo-us-store-next"), "next has its own Worker and D1");
-  }
+  assert.match(staging, /^SITE_ENV = "staging"/m, "the test site keeps the Basic-auth gate and noindex");
+  assert.match(staging, /^AIRWALLEX_ENV = "demo"/m);
+  assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID|MCF_AUTO_SUBMIT)\s*=/m.test(staging), "the test site never takes live payments, sends Meta events or ships through Amazon");
+  assert.ok(!toml.includes("[env.next"), "next.shopapgo.com was retired (plan D38)");
   const production = envSection(toml, "production");
   assert.match(production, /pattern = "store\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /^ADMIN_HOST = "admin\.shopapgo\.com"/m);
-  assert.match(production, /^ROOT_PAGE = "\/v3"/m,"this repo has no legacy index.html, so / must serve the v3 store entry");
-  for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, next, production]) {
+  // The live www/apex store routes (Cloudflare Workers Routes, 2026-10-06). Wrangler replaces dashboard routes with the
+  // configured list on deploy, so dropping one here would take that store path off the live site.
+  const storePaths = ["/products*", "/cart*", "/checkout*", "/api/*", "/terms*", "/privacy*", "/returns*", "/contact*", "/css/*", "/js/*", "/assets/*", "/.well-known/*"];
+  const zoneRoutes = [...production.matchAll(/\{ pattern = "([^"]+)", zone_name = "shopapgo\.com" \}/g)].map((match) => match[1]);
+  assert.deepEqual(zoneRoutes.sort(), ["www.shopapgo.com", "shopapgo.com"].flatMap((host) => storePaths.map((path) => host + path)).sort());
+  assert.match(production, /^ROOT_PAGE = "\/v3"/m, "this repo has no legacy index.html, so / must serve the v3 store entry");
+  for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");
   }
   assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|MCF_AUTO_SUBMIT|SITE_ENV)\s*=/m.test(production), "no flag that would open payments or the staging gate in production");

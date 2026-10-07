@@ -775,9 +775,9 @@ test("hygiene: the MCF modules hold no credentials and the example env documents
   assert.ok(!/^MCF_AUTO_SUBMIT=\S/m.test(example), "auto-submit is never on in the example");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
   assert.ok(!/MCF_AUTO_SUBMIT\s*=\s*"true"/i.test(toml) && !/MCF_SYNC_CRON\s*=\s*"true"/i.test(toml), "MCF auto-submit and cron sync stay off");
-  // Crons exist only for production (Meta CAPI re-send) and the test sites (customer email retries); MCF sync stays off
+  // Crons exist only for production (Meta CAPI re-send) and staging (customer email retries); MCF sync stays off
   // everywhere through MCF_SYNC_CRON, and local dev has none.
   const cronOwners = [...toml.matchAll(/^\s*crons\s*=/gm)].map((m) => [...toml.slice(0, m.index).matchAll(/^\[([^\]]+)\]/gm)].at(-1)?.[1]);
-  assert.deepEqual(cronOwners.sort(), ["env.next.triggers", "env.production.triggers", "env.staging.triggers"]);
+  assert.deepEqual(cronOwners.sort(), ["env.production.triggers", "env.staging.triggers"]);
   assert.ok(!/OUTBOUND_INTERNAL_TOKEN\s*=\s*"[^"]+"/.test(toml));
 });

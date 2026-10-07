@@ -48,8 +48,7 @@ enabled = true
 # Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit
 # bindings / vars / assets into [env.*], so each environment repeats them. Secrets are per environment too.
 #
-#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; still deployed from the landing repo, not from here
-#   next        next.shopapgo.com + admin-next.shopapgo.com; this repo's test site: npm run deploy:next
+#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; this repo's test site: npm run deploy:staging
 #   production  store.shopapgo.com + admin.shopapgo.com; checkout stays 503 until PRICING_APPROVED (see docs/commerce.md "Go-live checklist").
 # ---------------------------------------------------------------------------------------------------------------
 
@@ -105,63 +104,6 @@ enabled = true
 [env.staging.triggers]
 crons = ["*/2 * * * *"]
 
-# ---------------------------------------------------------------------------------------------------------------
-# next.shopapgo.com: the merged store's own test site (plan phase 1). staging.shopapgo.com above is still deployed
-# from the landing repo until that repo is archived, so this repo deploys only this environment
-# (`npm run deploy:next`) and has no npm script for staging on purpose.
-#   next.shopapgo.com         the storefront (Basic-auth gate); /admin* answers 404 here
-#   admin-next.shopapgo.com   the order back office on its own host (ADMIN_HOST below)
-# Sandbox only: Airwallex demo, PayPal sandbox, emails only to the approved test recipient, no Amazon MCF connection,
-# no Meta (js/meta-pixel.js only runs on the store hosts; META_DATASET_ID unset).
-# ---------------------------------------------------------------------------------------------------------------
-[env.next]
-name = "apgo-us-store-next"
-workers_dev = true
-preview_urls = false
-routes = [
-  { pattern = "next.shopapgo.com", custom_domain = true },
-  { pattern = "admin-next.shopapgo.com", custom_domain = true },
-]
-
-[env.next.assets]
-directory = "./prototype"
-binding = "ASSETS"
-run_worker_first = true
-
-# Own D1 (created with `npx wrangler d1 create apgo-us-store-next`; the id is not a secret).
-[[env.next.d1_databases]]
-binding = "DB"
-database_name = "apgo-us-store-next"
-database_id = "2c7f214a-917d-44e1-a18b-6c97785ad6e0"
-
-[env.next.vars]
-AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX
-PAYPAL_ENV = "sandbox"   # worker/paypal.js; a plain var so a live value cannot be set as a secret by mistake
-SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
-SITE_HOME_URL = "https://www.shopapgo.com/us"
-ROOT_PAGE = "/v3"
-ADMIN_HOST = "admin-next.shopapgo.com"
-ADMIN_ACCEPT_SITE_BASIC = "true"
-EXPRESS_CHECKOUT = "false"
-CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
-CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
-CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved test recipient; all other recipients are blocked
-CUSTOMER_EMAIL_POLICY_NOTE = "TEST EMAIL - Sample order and shipping details only. No payment or shipment took place."
-CUSTOMER_EMAIL_ENABLED = "true"
-CUSTOMER_EMAIL_RETRY_CRON = "true"
-REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw"
-# Secrets (wrangler secret put <NAME> --env next), sandbox values only: AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY,
-# AIRWALLEX_WEBHOOK_SECRET (sandbox webhook https://next.shopapgo.com/api/webhooks/airwallex), PAYPAL_CLIENT_ID,
-# PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID (sandbox webhook https://next.shopapgo.com/api/webhooks/paypal),
-# ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD,
-# RESEND_API_KEY, RESEND_WEBHOOK_SECRET.
-
-[env.next.triggers]
-crons = ["*/2 * * * *"]
-
-[env.next.observability]
-enabled = true
-
 # Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office: ADMIN_LOGIN_EMAIL/PASSWORD or ADMIN_TOKEN). Checkout answers 503 until PRICING_APPROVED="true".
 [env.production]
 name = "apgo-us-store"
@@ -170,6 +112,33 @@ workers_dev = false
 routes = [
   { pattern = "store.shopapgo.com", custom_domain = true },
   { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host (ADMIN_HOST below); the store host answers 404 for /admin*
+  # www.shopapgo.com and the apex: the brand pages stay on Pages, these store paths come to this Worker. They were added in
+  # the dashboard (copied from Workers Routes on 2026-10-06). Wrangler replaces dashboard routes with this list on deploy,
+  # so every one of them must stay here or a production deploy takes the store off www.
+  { pattern = "www.shopapgo.com/products*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/cart*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/checkout*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/api/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/terms*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/privacy*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/returns*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/contact*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/css/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/js/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/assets/*", zone_name = "shopapgo.com" },
+  { pattern = "www.shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/products*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/cart*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/checkout*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/api/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/terms*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/privacy*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/returns*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/contact*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/css/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/js/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/assets/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
 ]
 
 [env.production.assets]
@@ -203,7 +172,7 @@ META_DATASET_ID = "2606879866471418"
 # https://store.shopapgo.com/api/webhooks/paypal (and www path-route equivalent) in the PayPal live Dashboard.
 
 # Cron: every 15 minutes the Worker's scheduled() re-sends Meta CAPI events that failed, and (only when the MCF_SYNC_CRON var
-# is switched on) syncs Amazon MCF shipment status. The test sites run every 2 minutes for customer email retries; local dev
+# is switched on) syncs Amazon MCF shipment status. Staging runs every 2 minutes for customer email retries; local dev
 # has no cron. Every job is a no-op when its switch is off.
 [env.production.triggers]
 crons = ["*/15 * * * *"]

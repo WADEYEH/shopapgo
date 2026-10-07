@@ -81,7 +81,7 @@ npx wrangler secret delete META_TEST_EVENT_CODE --env production
 
 ## Deploy (documented only: this branch did not deploy anything)
 
-There is no `db:migrate:production` / `deploy:production` npm script. The test-site scripts (`npm run db:migrate:next`, `npm run deploy:next`) deploy with CAPI off.
+There is no `db:migrate:production` / `deploy:production` npm script. The staging scripts (`npm run db:migrate:staging`, `npm run deploy:staging`) deploy with CAPI off.
 Production, after the prerequisites in `docs/commerce.md` "Go-live checklist" (real D1 id in `[[env.production.d1_databases]]`, routes uncommented, secrets set):
 
 ```bash

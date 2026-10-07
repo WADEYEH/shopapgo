@@ -1,7 +1,7 @@
 // D1 migration policy (worker/schema.sql): every deploy re-runs the whole file, so it may only create tables and indexes
 // that are missing. These tests apply it on top of the production structure (fixture exported read-only from the
 // production D1 on 2026-10-06) and check that it only adds the new tables, never changes an existing one, and that a
-// re-run is a no-op. A fresh database (next.shopapgo.com) must end up with the same columns as production.
+// re-run is a no-op. A fresh database (a new test site) must end up with the same columns as production.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";

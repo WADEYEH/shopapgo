@@ -11,6 +11,7 @@
 //   POST /api/webhooks/paypal      verified PayPal events (PAYMENT.CAPTURE.COMPLETED)
 //   POST /api/webhooks/resend      Svix-signed Resend email delivery events
 //   GET  /admin/api/orders[/:id]   order back office data (admin auth)
+//   GET  /admin/api/airwallex/intents/:id, /admin/api/paypal/orders/:id   read-only provider lookups (admin auth)
 //   POST /admin/api/orders/:id/ship  mark a paid order shipped + email the customer (admin auth)
 //   POST /admin/api/orders/:id/mcf/submit | /mcf/sync, POST /admin/api/mcf/sync   Amazon MCF retry / status sync (admin auth)
 //   GET  /admin/                   order back office page (admin auth)
