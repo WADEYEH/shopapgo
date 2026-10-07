@@ -15,7 +15,7 @@
 | www.shopapgo.com（另有 shopapgo.pages.dev） | 品牌站（首页 `/`、指南 `/us/guides`） | Pages 专案 `shopapgo` | **手动上传**：这个 Pages 专案没有接 GitHub，是在某个人的电脑上建置后直接上传 | shopapgo `main` |
 | www.shopapgo.com 上的商店路径：`/products/*`、`/cart`、`/checkout`、`/api/*`、政策页及其 css/js/图片 | 商品页、购物车、结账（品牌站的购买按钮连到这里） | Worker `apgo-us-store`（跟 store.shopapgo.com 同一个） | 网域路由直接在 Cloudflare 设定，**不在任何 repo 里** | landing（同上） |
 | store.shopapgo.com、admin.shopapgo.com | landing 线上店与后台 | Worker `apgo-us-store` | 从本机用 wrangler 部署 | landing `codex/v2-content-blueprint`（同步点 1：`cbdf77e`） |
-| staging.shopapgo.com、admin-staging.shopapgo.com | 测试站，也是单一网站的预览：品牌首页、指南、商品页、购物车、结账都由同一个 Worker 提供 | Worker `apgo-us-store-staging` | 从本机部署；10/6 起只由 shopapgo 部署（D38），`npm run deploy:staging` 会先合并品牌站和商店页面 | shopapgo（10/7 部署阶段 2 第二步第一部分 `fa19141`，版本 `af3a1ff8`；上一版 `46631cf5`（PR #29）、`e1cafee9`，landing 旧版 `b6a48a8c`，都可回退） |
+| staging.shopapgo.com、admin-staging.shopapgo.com | 测试站，也是单一网站的预览：品牌首页、指南、商品页、购物车、结账都由同一个 Worker 提供 | Worker `apgo-us-store-staging` | 从本机部署；10/6 起只由 shopapgo 部署（D38），`npm run deploy:staging` 会先合并品牌站和商店页面 | shopapgo（10/7 部署阶段 2 第二步第二部分（M3），版本 `3b2b8b11`；上一版 `af3a1ff8`（第一部分）、`46631cf5`（PR #29）、`e1cafee9`，landing 旧版 `b6a48a8c`，都可回退） |
 | next.shopapgo.com、admin-next.shopapgo.com | 停用 | Worker `apgo-us-store-next`、D1 `apgo-us-store-next` | 10/6 建立，当天改回 staging（D38） | 待你在 Cloudflare 删除 |
 
 **10/6 下午更正**：上午盘点时漏了上面第二列。实测 www 的 `/products/d204`、`/cart`、`/api/store/config`、`/privacy` 都由线上店的 Worker 回应（没有 Pages 的回应标头），首页和指南仍是 Pages。品牌站 `main` 的 #25（购买按钮改连 `/products/*`）、#26（首页改成 `/`，`/us` 转到 `/`）已经上线。也就是说，D9「所有顾客页面都在 www」已经由 landing 那边部分上线。确切的路由清单见下一段。
@@ -95,6 +95,7 @@
 | Airwallex（正式） | 正式金钥有效；付款通知有收到（78 则，付款单与付款尝试事件），签章验证通过；还没有任何一笔付款成功 | 在 Airwallex 后台确认通知网址、退款事件有没有订阅、5 笔刷卡失败的原因；之后加订阅争议事件 |
 | PayPal（正式） | 正式收款已开启（landing） | 建立付款通知（webhook），设定 `PAYPAL_WEBHOOK_ID` |
 | Resend | 正式没有设定；staging 有 | 新版上线前设定；寄件网域待 O8 |
+| Google 地址验证（`GOOGLE_ADDRESS_VALIDATION_KEY`） | 正式、staging 都还没有 | 你在 Google Cloud 建金钥（只开 Address Validation API，设每日用量上限和费用提醒），先设到 staging，上线前再设正式（D32） |
 | Amazon（经 `amazon-spapi-mcp`） | 正式没有连线；staging 有连线设定 | 新版上线前设定；先确认危险品分类（F11） |
 | Meta | Dataset／Pixel `2606879866471418`；正式有 CAPI 金钥，也有测试事件代码 | 确认后移除测试事件代码 |
 | Google Analytics／GTM | 品牌站载入 `GTM-56WK5G8T` → `G-DRY1NJHGXW`；另一套 `GTM-TD5NTFH9` → `G-YM10YMKE30` 没有载入 | 留哪一套待 O2 |
