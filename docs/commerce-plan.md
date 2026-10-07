@@ -88,6 +88,7 @@
 | D37 | 10/6 | D9 定案：留 shopapgo。所有顾客页面放在 www.shopapgo.com，后台在 admin.shopapgo.com，store.shopapgo.com 转址到 www。landing repo 不再修改，也不再部署；同步点 1（`cbdf77e`）是最后一次合并 | 取代 D22（分批同步）；landing 线上店照常营业到阶段 4 切换 |
 | D38 | 10/6 | 测试站改回 `staging.shopapgo.com`（后台 `admin-staging.shopapgo.com`）：landing 冻结后不会再互相覆盖，而且 staging 已经设好全部测试用密钥和 Airwallex 测试通知。`next.shopapgo.com` 停用，它的 Worker 和数据库由你在 Cloudflare 删除 | 取代 D35 |
 | D39 | 10/7 | M1 前台：商品页网址改用商品名称（旧网址 301）；页首加「Shop」和购物车件数；新增商品总览 `/products`；store.shopapgo.com 的网址都 301 到 www，保留到你删除 store 为止（删除前先搬付款通知、Apple Pay 网域和广告连结）；商品页正式上线时才开放收录 | 见 `docs/design/modules/M1-pages-content.md` |
+| D40 | 10/7 | GA4／GTM 用 9 月建的那一套：GTM `GTM-TD5NTFH9` → GA4 `G-YM10YMKE30`（资源「shopapgo.com (US)」，在公司行销帐号 mkt@apgo.com.tw 底下）。线上现在载入的 `GTM-56WK5G8T` → `G-DRY1NJHGXW` 不再使用，已收到的资料留作历史 | 解决 O2；见 M10 |
 
 ---
 
@@ -366,7 +367,7 @@ wrangler.toml            Worker 设定（staging / production）
 | # | 事项 | 谁决定 | 影响 | 期限 |
 |---|---|---|---|---|
 | O1 | 销售税：哪些州要收（库存放在 Amazon 仓库，可能在某些州产生纳税义务），要不要接计税服务 | 你和会计师 | 结账金额、能否上线 | 阶段 4 前 |
-| O2 | GTM/GA4 留哪一套 | 你 | M10 | 阶段 2 前 |
+| O2 | GTM/GA4 留哪一套 | 你 | M10 | 已解决（D40） |
 | O3 | 已解决（D31）：运费每单 $7.99 | — | M2 | — |
 | O4 | 已解决（D26）：不做真实出货测试，改用 Hold 测试单与送单后自动比对 | — | M6 | — |
 | O5 | 已解决（D18、D24）：退货寄回 Amazon 仓库，由负责客服的人处理 | — | M7 | — |
@@ -435,6 +436,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/6 | 阶段 1 的 PR #27 已合进 `main`。决定留 shopapgo、landing 不再修改（D37），阶段 2 可以开始。另外查到：线上 www 载入的 GTM `GTM-56WK5G8T` 把资料送到 GA4 `G-DRY1NJHGXW`（不在 mkt@apgo.com.tw 底下），9 月建的 `G-YM10YMKE30` 只在 9/22–9/23 收到资料；要决定用哪一组 |
 | 10/6 | 测试站改回 staging（D38），合并后的新版已部署上去，沿用 staging 原有的测试用密钥；未登录的检查 12 项全部通过（包含 landing 版本挡住的寄信状态通知）。landing 部署版本里两个没提交的后台付款查询工具已移植。下一步：你在 staging 下测试单，完成阶段 1 |
 | 10/7 | staging 上用信用卡测试付款成功（订单 APGO-US-XMW9QVZPFDRG，确认信已寄出）；PayPal 测试等测试帐号。阶段 2 第一步完成：staging 由同一个 Worker 提供整个网站（品牌首页、指南、商品页、购物车、结账），`/us` 转到首页，测试版不载入任何追踪程式（PR #29） |
+| 10/7 | 阶段 2 第二步的第一部分完成，已部署到 staging（版本 `af3a1ff8`）：品牌站加上「单一网站开关」，只在测试站和切换后的 www 打开；页首加「Shop」和购物车件数；新增商品总览 `/products`；商品页改用新网址，旧网址和 `/v3` 都 301。商店的商品页、购物车、结账维持现有页面，由同一个 Worker 跟品牌页一起提供，没有照第 6 章原本写的改写成 Next.js 元件（待你确认）。测试：商店静态 293 项、浏览器 219 项、品牌站 29 项、单一网站 7 项都通过。下一部分：M3 结账规则 |
 
 ---
 

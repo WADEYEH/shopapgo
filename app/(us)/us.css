@@ -161,5 +161,8 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   html { scroll-behavior: auto; }
 }
 
-/* Header/footer Cart link into the store (lib/us/store.js); off unless the store switch is set. */
-.us-store-cart { white-space: nowrap; }
+/* Cart in the header (components/us/CartLink.js); single site only (lib/us/routes.js). */
+.us-cart-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; white-space: nowrap; }
+.us-cart-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: #f08417; color: #080a0c; font-size: 12px; font-weight: 700; line-height: 1; }
+.us-cart-count[hidden] { display: none; }
+@media (max-width: 900px) { .us-cart-label { display: none; } }

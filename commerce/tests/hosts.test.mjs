@@ -39,7 +39,7 @@ test("store host: /admin and /admin/api/* answer 404 (even with the right token)
       assert.equal(res.status, 404, `${path} ${Object.keys(headers)}`);
     }
   }
-  assert.equal((await call(STORE, "/v3.html", { headers: { Authorization: BASIC } })).status, 200);
+  assert.equal((await call(STORE, "/cart.html", { headers: { Authorization: BASIC } })).status, 200);
   assert.equal((await call(STORE, "/", {})).status, 401, "store stays behind the Basic gate");
   // workers.dev is a store host too
   assert.equal((await call("apgo-us-store-staging.acct.workers.dev", "/admin/", { headers: bearer })).status, 404);
@@ -63,7 +63,7 @@ test("admin host: no token -> 401, token -> page and API, everything noindex", {
 });
 
 test("admin host: only the back office and its own css/js/logo; the storefront is 404 and there is one password only", { skip }, async () => {
-  for (const path of ["/css/commerce.css", "/css/admin.css", "/js/admin.js", "/js/commerce/shared.js", "/assets/brand/apgo-logo.png"]) {
+  for (const path of ["/css/commerce.css", "/css/admin.css", "/js/admin.js", "/js/commerce/shared.js", "/js/commerce/product-data.js", "/assets/brand/apgo-logo.png"]) {
     const res = await call(ADMIN, path);
     assert.equal(res.status, 200, path);
     assert.ok(res.headers.get("x-robots-tag").includes("noindex"), path);
@@ -103,8 +103,8 @@ test("admin host: CSRF same-origin check is relative to the admin host", { skip 
 test("ADMIN_HOST unset (local dev / tests): one host serves store and back office as before", { skip }, async () => {
   const e = env({ ADMIN_HOST: undefined, SITE_ENV: undefined });
   assert.equal((await call("localhost", "/admin/", { headers: bearer, e })).status, 200);
-  assert.equal((await call("localhost", "/v3.html", { e })).status, 200);
-  assert.equal((await call(ADMIN, "/v3.html", { e })).status, 200);
+  assert.equal((await call("localhost", "/cart.html", { e })).status, 200);
+  assert.equal((await call(ADMIN, "/cart.html", { e })).status, 200);
 });
 
 // One [env.<name>] block with its sub-tables, up to the next environment.

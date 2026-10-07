@@ -1,3 +1,5 @@
+import { PRODUCT_SLUGS } from "../prototype/js/commerce/product-data.js";
+
 // Optional "home page" override: with the plain var ROOT_PAGE (e.g. "/v3") set, GET/HEAD "/" serves that static page
 // (the URL stays "/"). Used where the assets are the store pages only (production until the cutover): they have no
 // index.html. Unset where the assets include the brand site (staging, the single site): "/" is the brand home.
@@ -12,12 +14,28 @@ export const rootPageOverride = (request, env = {}) => {
   return new Request(url, request);
 };
 
-// The brand home moved from /us to / (main #26): exact /us and /us/ answer 301 to / on the same host, keeping the
-// query string (ad tags). The guides keep their /us/guides/* URLs, so nothing below /us is redirected. On Cloudflare
-// Pages public/_redirects did this; the single site leaves that file out (commerce/scripts/build-site.mjs).
-export const brandRedirect = (request) => {
+// Old URLs that moved answer 301 to the new one on the same host, keeping the query string (ad tags):
+// - /us and /us/ -> /: the brand home moved from /us to / (main #26). The guides keep their /us/guides/* URLs, so
+//   nothing below /us is redirected. On Cloudflare Pages public/_redirects did this; the single site leaves that
+//   file out (commerce/scripts/build-site.mjs).
+// - /products/d204 and /products/d215 (also with .html or a trailing slash) -> the named product URLs (D39).
+// - /v3 (the old store home, also /v3.html) -> /, the brand home (D39). Where ROOT_PAGE is "/v3" (production until
+//   the cutover), "/" still shows that page, so nothing changes for shoppers there.
+const MOVED = new Map([
+  ["/us", "/"],
+  ["/us/", "/"],
+  ["/v3", "/"],
+  ["/v3.html", "/"],
+  ["/v3/", "/"],
+  ...Object.entries(PRODUCT_SLUGS).flatMap(([sku, slug]) =>
+    ["", ".html", "/"].map((suffix) => [`/products/${sku}${suffix}`, `/products/${slug}`]),
+  ),
+]);
+
+export const siteRedirect = (request) => {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   const url = new URL(request.url);
-  if (url.pathname !== "/us" && url.pathname !== "/us/") return null;
-  return Response.redirect(new URL(`/${url.search}`, url).href, 301);
+  const target = MOVED.get(url.pathname.toLowerCase());
+  if (!target) return null;
+  return Response.redirect(new URL(`${target}${url.search}`, url).href, 301);
 };

@@ -196,7 +196,7 @@ test.describe("product pages", () => {
   test("view_item -> one ViewContent per view, add to cart -> AddToCart with API prices; a pair is one AddToCart per product", async ({ page }) => {
     await serveHost(page, STORE);
     await mockStore(page);
-    await page.goto(`https://${STORE}/products/d204.html`);
+    await page.goto(`https://${STORE}/products/atomic-colored-glaze.html`);
     await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
     await page.waitForTimeout(300);
     expect(await tracked(page, "ViewContent")).toHaveLength(1);
@@ -234,7 +234,7 @@ test.describe("product pages", () => {
     test(`${host}: the product page loads no Meta and still works`, async ({ page }) => {
       const meta = await serveHost(page, host);
       await mockStore(page);
-      await page.goto(`https://${host}/products/d215.html?fbclid=TEST123`);
+      await page.goto(`https://${host}/products/atomic-glaze-coating.html?fbclid=TEST123`);
       await page.locator("[data-buyrow] [data-pdp-add]").click();
       await expect(page.locator("[data-added]")).toContainText("Added to cart");
       expect(meta.fbeventsRequests).toBe(0);
@@ -242,10 +242,28 @@ test.describe("product pages", () => {
     });
   }
 
+  test("the /products overview: one ViewContent for both products (no single value), AddToCart with the API price", async ({ page }) => {
+    await serveHost(page, STORE);
+    await mockStore(page);
+    await page.goto(`https://${STORE}/products.html`);
+    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
+    expect((await tracked(page, "ViewContent"))[0][2]).toEqual({
+      content_type: "product",
+      content_ids: ["D204", "D215"],
+      contents: [{ id: "D204", quantity: 1, item_price: price("d204") }, { id: "D215", quantity: 1, item_price: price("d215") }],
+      currency: "USD",
+    });
+    await page.locator('[data-add-to-cart="d215"]').click();
+    await expect.poll(async () => (await tracked(page, "AddToCart")).length).toBe(1);
+    expect((await tracked(page, "AddToCart"))[0][2]).toEqual({
+      content_type: "product", content_ids: ["D215"], contents: [{ id: "D215", quantity: 1, item_price: price("d215") }], currency: "USD", value: price("d215"),
+    });
+  });
+
   test("product pages have no serious or critical axe violations with the pixel active", async ({ page }) => {
     await serveHost(page, STORE);
     await mockStore(page);
-    await page.goto(`https://${STORE}/products/d204.html`);
+    await page.goto(`https://${STORE}/products/atomic-colored-glaze.html`);
     await page.waitForLoadState("networkidle");
     const results = await new AxeBuilder({ page }).analyze();
     const blocking = results.violations.filter((v) => ["serious", "critical"].includes(v.impact));

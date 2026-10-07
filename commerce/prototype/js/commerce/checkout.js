@@ -988,7 +988,7 @@ async function init() {
 
   if (cart.items().length === 0) {
     $("[data-checkout-title]").textContent = "Your cart is empty.";
-    showMessage("info", "Nothing to check out", "Add a coating to your cart first.", el("a", { href: "./#choose" }, "Choose Dry or Wet →"));
+    showMessage("info", "Nothing to check out", "Add a coating to your cart first.", el("a", { href: "products.html" }, "Choose Dry or Wet →"));
     return;
   }
 

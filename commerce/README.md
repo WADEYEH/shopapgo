@@ -31,13 +31,19 @@ drafts, email/password admin login and the live production settings. The legacy 
 
 - Root: existing Next.js brand site and its guides, still exported for Pages.
 - `commerce/`: standalone package, Worker and storefront.
-- Brand-site product CTAs link to the same-host store pages `/products/d204` and
-  `/products/d215` (main #25). On the live site, `www.shopapgo.com` serves those
-  store paths (`/products/*`, `/cart`, `/checkout`, `/api/*`, the policy pages and
-  their assets) from the production store Worker; those routes were set up directly
-  in Cloudflare and are not in any repository yet (`docs/ops/production-config.md`).
-- The header/footer Cart link stays off unless `NEXT_PUBLIC_APGO_US_STORE_READY=true`
-  and `NEXT_PUBLIC_APGO_US_STORE_URL` is a valid HTTPS origin (`lib/us/store.js`).
+- Brand-site product CTAs link to the same-host store pages. On the live site,
+  `www.shopapgo.com` serves those store paths (`/products/*`, `/cart`, `/checkout`,
+  `/api/*`, the policy pages and their assets) from the production store Worker
+  (routes in `wrangler.toml`, see `docs/ops/production-config.md`).
+- Single-site switch `NEXT_PUBLIC_APGO_US_SINGLE_SITE` (`lib/us/routes.js`), on only in
+  builds served together with the store pages (`scripts/build-site.mjs` sets it for the
+  test site; www gets it at the cutover): Shop and the cart count in the brand header,
+  Shop/Cart and the policy pages in its footer, and the named product URLs
+  `/products/atomic-colored-glaze` and `/products/atomic-glaze-coating` (D39). Off, the
+  brand pages keep `/products/d204` and `/products/d215`; the Worker answers those, and
+  `/v3`, with a 301 to the new URLs (`worker/root-page.js`).
+- `/products` is the overview of every product on sale (`prototype/products.html`,
+  generated with the product pages by `scripts/build-product-pages.mjs`).
 - Store footers link back to the brand site and guides. `SITE_HOME_URL` selects
   the destination, defaulting to `https://www.shopapgo.com/us` (which now redirects to `/`).
 
@@ -56,12 +62,10 @@ npm run commerce:test:e2e
 npm run commerce:verify
 ```
 
-For the six cross-origin integration checks, start both preview servers, then
-from `commerce/` set `APGO_BRAND_URL=http://127.0.0.1:3012/us`,
-`APGO_STORE_URL=http://127.0.0.1:8799` and
-`APGO_BASE_URL=http://127.0.0.1:8799`, and run
-`npx playwright test tests/brand-store.spec.mjs --workers=1`. Those checks are
-skipped in the standalone store suite when no brand server is supplied.
+The single-site checks (`tests/brand-store.spec.mjs`) run against a served single
+site; the header of that file has the commands (`npm run build:site`, then
+`wrangler dev` on `./site`, then Playwright with `APGO_SITE_URL`). They are skipped
+in the standalone store suite.
 
 Start the Worker with `npm run commerce:dev` (port 8799). Initialize only its
 local D1 with `npm --prefix commerce run db:migrate:local`. Copy
@@ -69,16 +73,9 @@ local D1 with `npm --prefix commerce run db:migrate:local`. Copy
 your sandbox credentials when testing actual sandbox payment. Without those
 credentials, quote/cart work but a payment cannot be created.
 
-To preview the brand site's purchase entries, set its `.env.local`:
-
-```dotenv
-NEXT_PUBLIC_APGO_US_STORE_URL=http://127.0.0.1:8799
-NEXT_PUBLIC_APGO_US_STORE_READY=true
-```
-
-Then run `npm run dev -- --port 3012`. Local `SITE_HOME_URL` in `wrangler.toml`
-matches this port. Browser tests mock Airwallex/Resend/Amazon and take no real
-payment or shipment.
+The brand site's Shop and cart links are same-host paths, so preview them on the
+single site above rather than on `npm run dev`. Browser tests mock
+Airwallex/Resend/Amazon and take no real payment or shipment.
 
 ## Integration adjustments
 
