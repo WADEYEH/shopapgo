@@ -140,6 +140,11 @@ export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, am
   const addressOk = isUsableUsShipping(shipping);
   const nextStatus = matches && addressOk ? "paid" : "review";
   const timestamp = now();
+  // The phone and the address check come from our checkout page; PayPal's address carries neither. The check only
+  // still applies when PayPal ships to the very address that was checked.
+  const stored = JSON.parse(order.shipping_json || "{}");
+  const sameAddress = ["street", "street2", "city", "state", "zip"]
+    .every((key) => String(stored[key] ?? "").trim().toLowerCase() === String(shipping?.[key] ?? "").trim().toLowerCase());
   const shippingJson = shipping ? JSON.stringify({
     firstName: shipping.firstName,
     lastName: shipping.lastName,
@@ -148,6 +153,8 @@ export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, am
     city: shipping.city,
     state: shipping.state,
     zip: shipping.zip,
+    ...(stored.phone ? { phone: stored.phone } : {}),
+    addressCheck: sameAddress && stored.addressCheck ? stored.addressCheck : { status: "unverified", reason: "paypal_address" },
   }) : order.shipping_json;
 
   const result = await db

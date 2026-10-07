@@ -1,8 +1,8 @@
 // SINGLE SOURCE for everything that changes the amount a shopper is charged:
 // product prices, shipping methods/fees, tax, quantity limit and currency.
 //
-// Product prices are the owner's decision (D204 $59.99, D215 $29.99). Shipping fees and tax below are
-// still the placeholders from the APGO Design System cart/checkout kits, and PRICING_APPROVED stays unset. To change them,
+// Product prices are the owner's decision (D204 $59.99, D215 $29.99), and so is shipping ($7.99 per order, D31).
+// Tax below is still undecided (O1). To change any of them,
 // either edit DEFAULT_PRICING or (no code change) set the optional `PRICING_JSON`
 // Worker variable to a partial override, e.g.
 //
@@ -40,10 +40,10 @@ export const DEFAULT_PRICING = {
     },
   },
 
-  // PLACEHOLDER: Standard free / Express $9.00 and the delivery promises.
+  // $7.99 per order, every order (D12, D31). One speed: Amazon MCF Standard (M6); no express option. The delivery
+  // wording is the shipping policy's (docs/legal/shipping-policy.md): an estimate, never a date.
   shippingMethods: {
-    standard: { label: "Standard", detail: "5–7 business days", amountCents: 0 },
-    express: { label: "Express", detail: "2 business days", amountCents: 900 },
+    standard: { label: "Standard shipping", detail: "Most orders arrive in 3–5 business days", amountCents: 799 },
   },
   defaultShippingMethod: "standard",
 

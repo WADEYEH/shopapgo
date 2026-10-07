@@ -89,7 +89,7 @@ test.describe("cart express checkout", () => {
 
     // The amount handed to the wallet is the server quote (from the store mock), not a front-end number.
     const apple = await page.evaluate(() => window.__awxWalletCreates.find((c) => c.type === "applePayButton").options);
-    expect(apple.amount).toEqual({ value: "59.99", currency: "USD" });
+    expect(apple.amount).toEqual({ value: "67.98", currency: "USD" });
     expect(apple.intent_id, "no PaymentIntent is created from the cart page").toBeUndefined();
     expect(calls.session, "no order is created from the cart page").toHaveLength(0);
   });
@@ -120,7 +120,7 @@ test.describe("cart express checkout", () => {
     release();
     await expect(block(page)).toHaveAttribute("data-state", "ready");
     const update = await page.evaluate(() => window.__awxWalletUpdates.at(-1));
-    expect(update).toEqual({ type: "googlePayButton", patch: { amount: { value: "119.98", currency: "USD" } } });
+    expect(update).toEqual({ type: "googlePayButton", patch: { amount: { value: "127.97", currency: "USD" } } });
   });
 
   test("emptying the cart hides the block again", async ({ page }) => {

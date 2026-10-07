@@ -44,6 +44,8 @@ enabled = true
 # PayPal Orders v2 (already set on Cloudflare; Client Secret is Worker-only):
 #   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV (live|sandbox)
 #   PAYPAL_WEBHOOK_ID  after the operator registers the Dashboard webhook URL
+# Address check at checkout (worker/address-check.js; optional, without it addresses are recorded "unverified"):
+#   GOOGLE_ADDRESS_VALIDATION_KEY  Google Cloud API key restricted to the Address Validation API
 
 # ---------------------------------------------------------------------------------------------------------------
 # Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit

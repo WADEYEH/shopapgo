@@ -3,6 +3,7 @@
 //   GET  /api/store/config         prices, shipping methods, tax status, wallets, states, Airwallex env, Airwallex Pay, PayPal
 //   GET  /.well-known/apple-developer-merchantid-domain-association   Apple Pay domain check
 //   POST /api/cart/quote           server-priced cart ({ items, state?, method? })
+//   POST /api/checkout/address     shipping-address check before payment ({ shipping }; worker/address-check.js)
 //   POST /api/checkout/session     create order + Airwallex PaymentIntent
 //   POST /api/checkout/paypal/order   create order + PayPal Orders v2 order
 //   POST /api/checkout/paypal/capture capture a PayPal order and settle the store order
@@ -25,6 +26,8 @@ import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
 import { PricingConfigError, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
 import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociation } from "./wallets.js";
 import { ORDER_ID_PATTERN, newOrderId, validateCheckout, validatePaypalCheckout } from "./checkout.js";
+import { ADDRESS_MESSAGES, checkAddress, enforceAddress } from "./address-check.js";
+import { checkShipping } from "../prototype/js/commerce/address-rules.js";
 import { recordPaymentFailure, publicPaymentFailure } from "./payment-failures.js";
 import {
   AirwallexError,
@@ -93,6 +96,22 @@ async function handleQuote(request, env) {
   return json(quote(body.items, { state: body.state || undefined, method: body.method || undefined }, resolvePricing(env)));
 }
 
+// The checkout page asks before showing the payment step: { status, suggestion?, message? }. status is valid,
+// suggest (with Google's spelling), missing_unit, undeliverable, po_box or unverified (no answer; the order goes ahead).
+async function handleAddressCheck(request, env) {
+  const body = await readBody(request);
+  const { value, errors } = checkShipping(body.shipping);
+  const [field, message] = Object.entries(errors)[0] ?? [];
+  if (field) throw new QuoteError("invalid_address", message, field);
+  const result = await checkAddress(env, value);
+  const messages = { undeliverable: ADDRESS_MESSAGES.undeliverable, missing_unit: ADDRESS_MESSAGES.missingUnit, po_box: ADDRESS_MESSAGES.poBox };
+  return json({
+    status: result.status,
+    ...(result.suggestion ? { suggestion: result.suggestion } : {}),
+    ...(messages[result.status] ? { message: messages[result.status] } : {}),
+  });
+}
+
 async function handleCheckoutSession(request, env, services) {
   // With AIRWALLEX_ENV=prod the store stays closed until the owner sets
   // PRICING_APPROVED=true, so placeholder prices/shipping/tax cannot go live by accident.
@@ -102,6 +121,8 @@ async function handleCheckoutSession(request, env, services) {
   const body = await readBody(request);
   const checkout = validateCheckout(body);
   const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, resolvePricing(env));
+  // Checked again here, whatever the page did: an undeliverable address never reaches a payment.
+  checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
   const orderId = newOrderId();
   const origin = new URL(request.url).origin;
 
@@ -183,6 +204,10 @@ async function handlePaypalCreate(request, env, services) {
   const pricing = resolvePricing(env);
   const checkout = validatePaypalCheckout(body, { requireShipping: taxStatus(pricing) === "configured" });
   const priced = quote(body.items, { state: checkout.shipping.state || undefined, method: checkout.method }, pricing);
+  // Our address is checked like a card checkout. An address PayPal supplies later meets the same rules before capture.
+  if (checkout.shippingSource === "checkout") {
+    checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
+  }
   const orderId = newOrderId();
   const origin = storefrontOrigin(request, env);
   const { returnUrl, cancelUrl } = checkoutReturnUrls(origin, orderId);
@@ -475,6 +500,7 @@ async function route(request, env, services) {
 
   if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env));
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
+  if (pathname === "/api/checkout/address" && method === "POST") return handleAddressCheck(request, env);
   if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env, services);
   if (pathname === "/api/checkout/paypal/order" && method === "POST") return handlePaypalCreate(request, env, services);
   if (pathname === "/api/checkout/paypal/capture" && method === "POST") return handlePaypalCapture(request, env, services);
@@ -503,7 +529,9 @@ async function dispatch(request, env, ctx) {
     const adminOrigin = adminHost(env) ? `https://${adminHost(env)}` : origin;
     return await route(request, env, { env, ctx, origin, adminOrigin });
   } catch (error) {
-    if (error instanceof QuoteError) return fail(400, error.code, error.message);
+    if (error instanceof QuoteError) {
+      return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, 400);
+    }
     if (error instanceof PricingConfigError) {
       // A broken PRICING_JSON must never fall back to other numbers: refuse and say why in the log.
       console.error("pricing_config_invalid", { reason: error.message });

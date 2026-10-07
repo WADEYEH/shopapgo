@@ -49,6 +49,13 @@
               <label class="field__label" for="email">Email<span class="req" aria-hidden="true"> *</span></label>
               <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
               <span class="field__error" data-error hidden></span>
+              <p class="field__hint" data-email-suggestion hidden></p>
+            </div>
+            <div class="field" data-field="phone">
+              <label class="field__label" for="phone">Phone<span class="req" aria-hidden="true"> *</span></label>
+              <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required aria-describedby="phone-hint">
+              <span class="field__hint" id="phone-hint">For delivery questions. US numbers only.</span>
+              <span class="field__error" data-error hidden></span>
             </div>
             <label class="check">
               <span class="check__control"><input type="checkbox" name="marketingOptIn"><span class="check__box" aria-hidden="true"></span></span>
@@ -62,7 +69,7 @@
           <form class="stack" data-step="shipping" novalidate hidden>
             <div class="shop-intro">
               <h2 class="heading-guide-h2" tabindex="-1">Shipping address</h2>
-              <p class="body body--sm">US addresses only for now.</p>
+              <p class="body body--sm">We ship to the 48 contiguous states and DC. No PO boxes or military addresses.</p>
             </div>
             <div class="row-2">
               <div class="field" data-field="firstName">
@@ -84,6 +91,7 @@
             <div class="field" data-field="street2">
               <label class="field__label" for="street2">Apt, suite, unit</label>
               <input id="street2" name="street2" autocomplete="shipping address-line2">
+              <span class="field__error" data-error hidden></span>
             </div>
             <div class="row-2">
               <div class="field" data-field="city">
@@ -110,6 +118,7 @@
               <legend class="label label--xs">Shipping method</legend>
               <div class="ship-options" data-ship-options></div>
             </fieldset>
+            <div class="address-check" data-address-check aria-live="polite"></div>
             <div class="actions">
               <button class="btn" type="submit">Continue to payment <span aria-hidden="true">→</span></button>
               <button class="btn btn--text" type="button" data-back="contact">← Back</button>

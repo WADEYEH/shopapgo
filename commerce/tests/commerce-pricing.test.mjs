@@ -9,11 +9,12 @@ import { DEFAULT_PRICING, PricingConfigError, applyOverrides, computeTax, resolv
 
 const ITEMS = [{ sku: "d204", qty: 1 }];
 
-test("defaults are the owner prices, placeholder shipping, and tax is undecided (0)", () => {
+test("defaults are the owner prices and shipping ($7.99, one speed), and tax is undecided (0)", () => {
   assert.equal(DEFAULT_PRICING.products.d204.priceCents, 5999);
   assert.equal(DEFAULT_PRICING.products.d215.priceCents, 2999);
-  assert.equal(DEFAULT_PRICING.shippingMethods.standard.amountCents, 0);
-  assert.equal(DEFAULT_PRICING.shippingMethods.express.amountCents, 900);
+  assert.deepEqual(Object.keys(DEFAULT_PRICING.shippingMethods), ["standard"], "no express (D31)");
+  assert.equal(DEFAULT_PRICING.shippingMethods.standard.amountCents, 799);
+  assert.equal(DEFAULT_PRICING.shippingMethods.standard.detail, "Most orders arrive in 3–5 business days", "the shipping policy's wording");
   assert.equal(DEFAULT_PRICING.tax.defaultRateBps, 0);
   assert.deepEqual(DEFAULT_PRICING.tax.stateRatesBps, {});
   assert.equal(taxStatus(DEFAULT_PRICING), "undecided");
@@ -93,7 +94,7 @@ test("front-end code contains no price, shipping fee or tax rate of its own", as
   const dir = "prototype/js/commerce";
   for (const file of await readdir(dir)) {
     const source = await readFile(`${dir}/${file}`, "utf8");
-    assert.ok(!/priceCents\s*[:=]\s*\d|amountCents\s*[:=]\s*\d|5999|2999|\b59\.99|\b29\.99/.test(source), `${file} hard-codes a price`);
+    assert.ok(!/priceCents\s*[:=]\s*\d|amountCents\s*[:=]\s*\d|5999|2999|\b59\.99|\b29\.99|\b7\.99/.test(source), `${file} hard-codes a price`);
     assert.ok(!/RateBps|taxRate/i.test(source), `${file} hard-codes a tax rate`);
   }
 });

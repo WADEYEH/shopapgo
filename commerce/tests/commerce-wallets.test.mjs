@@ -88,7 +88,7 @@ const jsonResponse = (status, body) => new Response(JSON.stringify(body), { stat
 const loginOk = () => jsonResponse(201, { token: "tok", expires_at: new Date(Date.now() + 30 * 60_000).toISOString().replace(/\.\d+Z$/, "+0000") });
 const checkoutBody = {
   items: [{ sku: "d204", qty: 1 }],
-  contact: { email: "ada@example.com" },
+  contact: { email: "ada@example.com", phone: "(512) 555-0134" },
   shipping: { firstName: "Ada", lastName: "Lee", street: "1 Main St", city: "Austin", state: "TX", zip: "78701" },
 };
 const envFor = (db, extra = {}, assets) => ({
@@ -122,7 +122,7 @@ test("checkout session sends payment_method_options for cards and wallets", { sk
   const { response, payloads } = await createSession(envFor(await createD1()));
   assert.equal(response.status, 200);
   assert.deepEqual(payloads[0].payment_method_options, { card: { auto_capture: true } });
-  assert.equal(payloads[0].amount, 59.99);
+  assert.equal(payloads[0].amount, 67.98, "D204 $59.99 + $7.99 shipping");
 
   const held = await createSession(envFor(await createD1(), { PAYMENT_AUTO_CAPTURE: "false" }));
   assert.deepEqual(held.payloads[0].payment_method_options, { card: { auto_capture: false } });
@@ -131,7 +131,7 @@ test("checkout session sends payment_method_options for cards and wallets", { sk
 test("checkout uses PRICING_JSON prices for the PaymentIntent amount", { skip }, async () => {
   const env = envFor(await createD1(), { PRICING_JSON: JSON.stringify({ products: { d204: { priceCents: 3490 } } }) });
   const { payloads } = await createSession(env);
-  assert.equal(payloads[0].amount, 34.9);
+  assert.equal(payloads[0].amount, 42.89, "overridden D204 $34.90 + $7.99 shipping");
 });
 
 test("a broken PRICING_JSON refuses checkout and quotes instead of charging other numbers", { skip }, async () => {

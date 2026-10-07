@@ -2,10 +2,12 @@
 // Schema matches checkout.js state keys only: step, contact, shipping, method.
 // Not localStorage — this is a tab-scoped in-progress form, not a cart.
 
+import { normalizeUsPhone } from "./address-rules.js";
+
 export const CHECKOUT_DRAFT_KEY = "apgo_us_checkout_draft";
 
 export const DRAFT_STEPS = ["contact", "shipping", "payment"];
-export const CONTACT_FIELDS = ["email", "marketingOptIn"];
+export const CONTACT_FIELDS = ["email", "phone", "marketingOptIn"];
 export const SHIPPING_FIELDS = ["firstName", "lastName", "street", "street2", "city", "state", "zip"];
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,7 +18,7 @@ const text = (value) => String(value ?? "").trim();
 export function emptyDraft() {
   return {
     step: "contact",
-    contact: { email: "", marketingOptIn: false },
+    contact: { email: "", phone: "", marketingOptIn: false },
     shipping: null,
     method: null,
   };
@@ -54,6 +56,7 @@ export function normalizeCheckoutDraft(raw) {
     step: DRAFT_STEPS.includes(raw.step) ? raw.step : "contact",
     contact: {
       email: text(contactIn.email),
+      phone: text(contactIn.phone),
       marketingOptIn: contactIn.marketingOptIn === true,
     },
     shipping: shippingEmpty ? null : shipping,
@@ -63,10 +66,11 @@ export function normalizeCheckoutDraft(raw) {
 
 export function resolveDraftStep(draft) {
   const normalized = normalizeCheckoutDraft(draft) ?? emptyDraft();
-  const emailOk = EMAIL_PATTERN.test(normalized.contact.email);
+  // The contact step is done once the email and a US phone are there (the phone became required with M3).
+  const contactOk = EMAIL_PATTERN.test(normalized.contact.email) && Boolean(normalizeUsPhone(normalized.contact.phone));
   const shipOk = shippingComplete(normalized.shipping);
-  if (normalized.step === "payment") return emailOk && shipOk ? "payment" : emailOk ? "shipping" : "contact";
-  if (normalized.step === "shipping") return emailOk ? "shipping" : "contact";
+  if (normalized.step === "payment") return contactOk && shipOk ? "payment" : contactOk ? "shipping" : "contact";
+  if (normalized.step === "shipping") return contactOk ? "shipping" : "contact";
   return "contact";
 }
 

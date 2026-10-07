@@ -22,6 +22,7 @@ import {
   writeCheckoutDraft,
 } from "./checkout-draft.js";
 import { WALLETS, candidateWallets, walletOptions, walletUpdate } from "./wallets.js";
+import { checkContact, checkShipping, formatUsPhone, suggestEmail } from "./address-rules.js";
 import {
   AIRWALLEX_PAY_CONTAINER_ID,
   AIRWALLEX_PAY_ELEMENT,
@@ -32,8 +33,8 @@ import {
 
 const AIRWALLEX_SDK_URL = "https://static.airwallex.com/components/sdk/v1/index.js";
 const STEPS = ["contact", "shipping", "payment"];
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
+const SHIPPING_FIELDS = ["firstName", "lastName", "street", "street2", "city", "state", "zip"];
+const ADDRESS_FIELDS = ["street", "street2", "city", "state", "zip"];
 // Airwallex client secrets expire 60 minutes after the PaymentIntent is created.
 const SESSION_MAX_AGE_MS = 50 * 60 * 1000;
 // A wallet button that has not reported `ready` by then stays hidden.
@@ -47,8 +48,12 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const state = {
   config: null,
   step: "contact",
-  contact: { email: "", marketingOptIn: false },
+  contact: { email: "", phone: "", marketingOptIn: false },
   shipping: null,
+  // Last address check for the address in the form: { key, status, suggestion?, message?, review? } (M3 §4).
+  addressCheck: null,
+  // What the shopper answered about it, sent with the payment: { choice: "suggested" | "original" } or { noUnit: true }.
+  addressReview: {},
   method: null,
   quote: null,
   session: null,
@@ -73,6 +78,7 @@ function collectDraft() {
     step: state.step,
     contact: {
       email: value(contactForm, "email"),
+      phone: value(contactForm, "phone"),
       marketingOptIn: Boolean(contactForm?.marketingOptIn?.checked),
     },
     shipping: {
@@ -88,7 +94,11 @@ function collectDraft() {
   };
 }
 
+// Once the order page is showing, the draft is gone for good: a save still waiting on its timer must not bring it
+// back (the next checkout in this tab would open on the payment step with the old details).
 function saveDraftNow() {
+  clearTimeout(draftTimer);
+  if (state.confirming) return;
   writeCheckoutDraft(collectDraft());
 }
 
@@ -103,11 +113,12 @@ function restoreDraft() {
   const contactForm = $('[data-step="contact"]');
   if (contactForm) {
     contactForm.email.value = draft.contact.email;
+    contactForm.phone.value = draft.contact.phone;
     contactForm.marketingOptIn.checked = draft.contact.marketingOptIn;
   }
   const shippingForm = $('[data-step="shipping"]');
   if (shippingForm && draft.shipping) {
-    for (const name of ["firstName", "lastName", "street", "street2", "city", "state", "zip"]) {
+    for (const name of SHIPPING_FIELDS) {
       if (shippingForm[name]) shippingForm[name].value = draft.shipping[name] ?? "";
     }
   }
@@ -116,7 +127,10 @@ function restoreDraft() {
     const radio = document.querySelector(`input[name="method"][value="${CSS.escape(draft.method)}"]`);
     if (radio) radio.checked = true;
   }
-  if (draft.contact.email) state.contact = { ...draft.contact };
+  if (draft.contact.email) {
+    const { value } = checkContact(draft.contact);
+    state.contact = { email: value.email, phone: value.phone, marketingOptIn: draft.contact.marketingOptIn };
+  }
   const step = resolveDraftStep(draft);
   if (step === "payment" && shippingComplete(draft.shipping)) state.shipping = { ...draft.shipping };
   return step;
@@ -174,13 +188,18 @@ function setFieldError(form, name, message) {
     if (error.id === "") error.id = `${name}-error`;
   }
   if (input) {
+    input.dataset.describedby ??= input.getAttribute("aria-describedby") ?? "";
+    const ids = [input.dataset.describedby, message ? `${name}-error` : ""].filter(Boolean).join(" ");
     input.setAttribute("aria-invalid", message ? "true" : "false");
-    if (message) input.setAttribute("aria-describedby", `${name}-error`);
+    if (ids) input.setAttribute("aria-describedby", ids);
     else input.removeAttribute("aria-describedby");
   }
 }
 
-function goTo(step, { focus = true } = {}) {
+// initial: the step restored when the page opens. Any other call is the shopper moving on, which that one must
+// never undo (it runs only after the first quote, and on a slow connection the shopper may already be on step 2).
+function goTo(step, { focus = true, initial = false } = {}) {
+  if (!initial) state.moved = true;
   state.step = step;
   const index = STEPS.indexOf(step);
   for (const form of document.querySelectorAll("[data-step]")) form.hidden = form.dataset.step !== step;
@@ -254,47 +273,198 @@ function renderShippingOptions() {
   );
 }
 
+// "Did you mean name@gmail.com?" under the email field. Only a hint: the shopper may keep what they typed (M3-06).
+function renderEmailSuggestion(form) {
+  const hint = $("[data-email-suggestion]", form);
+  if (!hint) return;
+  const suggestion = suggestEmail(form.email.value);
+  hint.hidden = !suggestion;
+  if (!suggestion) return hint.replaceChildren();
+  const apply = () => {
+    form.email.value = suggestion;
+    renderEmailSuggestion(form);
+    scheduleDraftSave();
+    form.email.focus();
+  };
+  hint.replaceChildren("Did you mean ", el("button", { type: "button", class: "link-button", onclick: apply }, suggestion), "?");
+}
+
 function submitContact(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const email = form.email.value.trim();
-  const valid = EMAIL_PATTERN.test(email);
-  setFieldError(form, "email", valid ? "" : "Enter a valid email address.");
-  if (!valid) return form.email.focus();
-  state.contact = { email, marketingOptIn: form.marketingOptIn.checked };
+  const { value, errors } = checkContact({ email: form.email.value, phone: form.phone.value });
+  for (const name of ["email", "phone"]) setFieldError(form, name, errors[name] ?? "");
+  renderEmailSuggestion(form);
+  const firstInvalid = ["email", "phone"].find((name) => errors[name]);
+  if (firstInvalid) return form[firstInvalid].focus();
+  form.phone.value = formatUsPhone(value.phone);
+  state.contact = { email: value.email, phone: value.phone, marketingOptIn: form.marketingOptIn.checked };
   goTo("shipping");
+}
+
+// ---------- Address check (M3 §4) ----------
+//
+// Before the payment step the Worker checks the address (POST /api/checkout/address). It may come back with a
+// corrected spelling to choose, a missing apartment number to add or confirm, or an address that cannot be delivered.
+// The Worker checks again when the payment is created, so this step is for the shopper's benefit only.
+
+const addressKey = (shipping) => JSON.stringify(ADDRESS_FIELDS.map((name) => String(shipping[name] ?? "").trim().toLowerCase()));
+const oneLine = (s) => `${[s.street, s.street2].filter(Boolean).join(", ")}, ${s.city}, ${s.state} ${s.zip}`;
+
+function setAddressPanel(...children) {
+  $("[data-address-check]").replaceChildren(...children);
+}
+
+function checkOption(attrs, label, description) {
+  return el(
+    "label",
+    { class: "check" },
+    el("span", { class: "check__control" }, el("input", attrs), el("span", { class: "check__box", "aria-hidden": "true" })),
+    el("span", { class: "check__label" }, label),
+    description && el("span", { class: "check__description" }, description),
+  );
+}
+
+function showAddressCheck(check, shipping) {
+  if (check.status === "suggest") {
+    setAddressPanel(
+      el(
+        "div",
+        { class: "notice notice--info", role: "group", "aria-labelledby": "address-check-title" },
+        el("span", { class: "notice__title", id: "address-check-title" }, "Check your address"),
+        el("span", { class: "notice__body" }, "We found a more complete version of this address. Choose one, then continue."),
+        el(
+          "div",
+          { class: "address-check__options" },
+          checkOption({ type: "radio", name: "addressChoice", value: "suggested", checked: true }, "Use the suggested address", oneLine(check.suggestion)),
+          checkOption({ type: "radio", name: "addressChoice", value: "original" }, "Keep the address I entered", oneLine(shipping)),
+        ),
+      ),
+    );
+  } else if (check.status === "missing_unit") {
+    setAddressPanel(
+      el(
+        "div",
+        { class: "notice notice--warning", role: "alert" },
+        el("span", { class: "notice__title" }, "Apartment or unit number?"),
+        el("span", { class: "notice__body" }, check.message),
+        checkOption({ type: "checkbox", name: "noUnit" }, "My address doesn't have a unit number"),
+      ),
+    );
+  } else if (check.status === "undeliverable") {
+    setAddressPanel(notice("warning", "We couldn't confirm this address", check.message));
+  } else {
+    setAddressPanel();
+  }
+}
+
+// The address in the form changed: an earlier check (and the shopper's answer to it) no longer applies.
+function forgetAddressCheck(form) {
+  if (!state.addressCheck) return;
+  const current = Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, form[name].value]));
+  if (addressKey(current) === state.addressCheck.key) return;
+  state.addressCheck = null;
+  setAddressPanel();
+}
+
+function resolveAddress(shipping, review) {
+  state.addressCheck = { key: addressKey(shipping), status: "resolved", review };
+  setAddressPanel();
+  return { shipping, review };
+}
+
+// Returns { shipping, review } to continue with, or null while the shopper has something to fix or answer.
+async function reviewAddress(form, shipping) {
+  const key = addressKey(shipping);
+  const known = state.addressCheck?.key === key ? state.addressCheck : null;
+  if (known?.status === "resolved") return { shipping, review: known.review };
+  if (known?.status === "suggest") {
+    if (form.addressChoice?.value === "original") return resolveAddress(shipping, { choice: "original" });
+    const corrected = { ...shipping, ...known.suggestion };
+    for (const name of ADDRESS_FIELDS) form[name].value = corrected[name];
+    return resolveAddress(corrected, { choice: "suggested" });
+  }
+  if (known?.status === "missing_unit") {
+    if (form.noUnit?.checked) return resolveAddress(shipping, { noUnit: true });
+    form.street2.focus();
+    return null;
+  }
+  if (known?.status === "undeliverable") {
+    form.street.focus();
+    return null;
+  }
+
+  let check;
+  try {
+    check = await api("/api/checkout/address", { method: "POST", body: { shipping } });
+  } catch (error) {
+    if (error.status === 400 && error.field && form[error.field]) {
+      setFieldError(form, error.field, error.message);
+      form[error.field].focus();
+      return null;
+    }
+    check = { status: "unverified" }; // no answer: the payment step checks again
+  }
+  if (check.status === "po_box") {
+    setFieldError(form, "street", check.message);
+    form.street.focus();
+    return null;
+  }
+  state.addressCheck = { key, ...check };
+  showAddressCheck(check, shipping);
+  if (check.status === "suggest") {
+    $("[data-address-check] input")?.focus();
+    return null;
+  }
+  if (check.status === "missing_unit") {
+    form.street2.focus();
+    return null;
+  }
+  if (check.status === "undeliverable") return null;
+  return resolveAddress(shipping, {});
 }
 
 async function submitShipping(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const value = (name) => form[name].value.trim();
-  const shipping = {
-    firstName: value("firstName"),
-    lastName: value("lastName"),
-    street: value("street"),
-    street2: value("street2"),
-    city: value("city"),
-    state: value("state"),
-    zip: value("zip"),
-  };
-  const errors = {
-    firstName: shipping.firstName ? "" : "Enter your first name.",
-    lastName: shipping.lastName ? "" : "Enter your last name.",
-    street: shipping.street ? "" : "Enter a street address.",
-    city: shipping.city ? "" : "Enter a city.",
-    state: shipping.state ? "" : "Choose a state.",
-    zip: ZIP_PATTERN.test(shipping.zip) ? "" : "Enter a 5-digit ZIP.",
-  };
-  for (const [name, message] of Object.entries(errors)) setFieldError(form, name, message);
-  const firstInvalid = Object.keys(errors).find((name) => errors[name]);
+  const { value: shipping, errors } = checkShipping(Object.fromEntries(SHIPPING_FIELDS.map((name) => [name, form[name].value])));
+  for (const name of SHIPPING_FIELDS) setFieldError(form, name, errors[name] ?? "");
+  const firstInvalid = SHIPPING_FIELDS.find((name) => errors[name]);
   if (firstInvalid) return form[firstInvalid].focus();
 
-  state.shipping = shipping;
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  let reviewed;
+  try {
+    reviewed = await reviewAddress(form, shipping);
+  } finally {
+    button.disabled = false;
+  }
+  if (!reviewed) return;
+  state.shipping = reviewed.shipping;
+  state.addressReview = reviewed.review;
+  saveDraftNow();
   const quote = await refreshQuote();
   if (!quote) return;
   track("add_shipping_info", { shipping_tier: state.method, value: quote.totalCents / 100, currency: quote.currency });
   goTo("payment");
+}
+
+// The Worker refused the contact details or the address when the payment was being created (it checks everything
+// again): back to that step with the message on the field.
+function returnToFix(error) {
+  if (error?.status !== 400 || !error.field) return false;
+  const step = ["email", "phone"].includes(error.field) ? "contact" : "shipping";
+  const form = $(`[data-step="${step}"]`);
+  if (!form?.[error.field]) return false;
+  state.session = null;
+  state.addressCheck = null;
+  setAddressPanel();
+  setPlacing(false);
+  goTo(step);
+  setFieldError(form, error.field, error.message);
+  form[error.field].focus();
+  return true;
 }
 
 // ---------- Airwallex card elements ----------
@@ -638,9 +808,10 @@ async function mountAirwallexPay() {
     });
     state.airwallexPay.element = element;
     state.airwallexPay.mounted = true;
-  } catch {
+  } catch (error) {
     state.airwallexPay.mounted = false;
     state.airwallexPay.element = null;
+    if (returnToFix(error)) return;
     $("[data-payment-message]").replaceChildren(
       notice("warning", "Airwallex Pay unavailable", "We couldn't load Airwallex Pay. Choose card or another method."),
     );
@@ -660,6 +831,7 @@ async function createPaypalOrder() {
       contact: state.contact,
       shipping: state.shipping,
       method: state.method,
+      addressReview: state.addressReview,
       attribution: readAttribution(),
     }),
   });
@@ -754,6 +926,7 @@ async function mountPaypalButtons() {
           return await createPaypalOrder();
         } catch (error) {
           setPlacing(false);
+          if (returnToFix(error)) throw error;
           $("[data-payment-message]").replaceChildren(
             notice("warning", "PayPal unavailable", error.message || "Could not start PayPal."),
           );
@@ -839,7 +1012,7 @@ const analyticsItems = (lines) =>
   lines.map((line) => ({ item_id: line.sku, item_name: line.name, quantity: line.qty, price: line.unitCents / 100 }));
 
 async function ensureSession() {
-  const payload = { items: cart.items(), contact: state.contact, shipping: state.shipping, method: state.method };
+  const payload = { items: cart.items(), contact: state.contact, shipping: state.shipping, method: state.method, addressReview: state.addressReview };
   // The cache key is the order content only: attribution (cookies, URL) must never force a new PaymentIntent.
   const key = JSON.stringify(payload);
   const fresh = state.session && state.sessionKey === key && Date.now() - state.session.createdAt < SESSION_MAX_AGE_MS;
@@ -886,6 +1059,7 @@ async function placeOrder(event) {
     history.replaceState(null, "", `checkout.html?order=${encodeURIComponent(session.orderId)}`);
     await showConfirmation(session.orderId);
   } catch (error) {
+    if (returnToFix(error)) return;
     const text = "Your payment wasn't completed. Check your card details or try another payment method.";
     message.replaceChildren(notice("warning", "Payment not completed", text));
     setPlacing(false);
@@ -926,6 +1100,8 @@ function trackPurchaseOnce(order) {
 }
 
 async function showConfirmation(orderId) {
+  state.confirming = true;
+  clearTimeout(draftTimer);
   $("[data-checkout-flow]").hidden = true;
   const section = $("[data-confirmation]");
   section.hidden = false;
@@ -1011,6 +1187,14 @@ async function init() {
     form.addEventListener("input", scheduleDraftSave);
     form.addEventListener("change", scheduleDraftSave);
   }
+  const contactForm = $('[data-step="contact"]');
+  contactForm.email.addEventListener("change", () => renderEmailSuggestion(contactForm));
+  const shippingForm = $('[data-step="shipping"]');
+  for (const type of ["input", "change"]) {
+    shippingForm.addEventListener(type, (event) => {
+      if (ADDRESS_FIELDS.includes(event.target.name)) forgetAddressCheck(shippingForm);
+    });
+  }
 
   const restoredStep = restoreDraft();
 
@@ -1020,7 +1204,7 @@ async function init() {
 
   const quote = await refreshQuote();
   if (quote) track("begin_checkout", { value: quote.subtotalCents / 100, currency: quote.currency, items: quote.lines.length });
-  goTo(restoredStep ?? "contact", { focus: false });
+  if (!state.moved) goTo(restoredStep ?? "contact", { focus: false, initial: true });
 }
 
 // Focus inside an Airwallex iframe makes the iframe the activeElement here, which

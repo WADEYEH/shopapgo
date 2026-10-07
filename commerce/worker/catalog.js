@@ -9,10 +9,11 @@ import { siteLinks } from "./site.js";
 // `PRICING_JSON` override applies, and passes the result to quote()/publicConfig().
 
 import { DEFAULT_PRICING, computeTax, pricingApproved, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
+import { SHIP_STATES } from "../prototype/js/commerce/address-rules.js";
 import { US_STATES } from "./states.js";
 import { walletConfig } from "./wallets.js";
 
-export { US_STATES };
+export { SHIP_STATES, US_STATES };
 
 export const CURRENCY = DEFAULT_PRICING.currency;
 export const MAX_QTY_PER_LINE = DEFAULT_PRICING.maxQtyPerLine;
@@ -22,10 +23,12 @@ export const DEFAULT_SHIPPING_METHOD = DEFAULT_PRICING.defaultShippingMethod;
 // Same object as DEFAULT_PRICING.tax.stateRatesBps (empty: tax is undecided).
 export const TAX_RATES_BPS = DEFAULT_PRICING.tax.stateRatesBps;
 
+// field: the checkout field the shopper should fix, when there is one (returned with the error).
 export class QuoteError extends Error {
-  constructor(code, message) {
+  constructor(code, message, field) {
     super(message);
     this.code = code;
+    if (field) this.field = field;
   }
 }
 
@@ -71,8 +74,9 @@ export function quote(items, { state, method } = {}, pricing = DEFAULT_PRICING) 
   const methodId = method ?? pricing.defaultShippingMethod;
   const shippingMethod = pricing.shippingMethods[methodId];
   if (!shippingMethod) throw new QuoteError("invalid_shipping", "Choose a shipping method.");
-  if (state !== undefined && state !== null && !US_STATES[state]) {
-    throw new QuoteError("invalid_state", "Choose a US state.");
+  // Only where we ship (48 states and DC, D4), the same list as the checkout page.
+  if (state !== undefined && state !== null && !SHIP_STATES[state]) {
+    throw new QuoteError("invalid_state", "We currently ship only to the 48 contiguous states and DC.", "state");
   }
 
   const subtotalCents = lines.reduce((sum, line) => sum + line.lineCents, 0);
@@ -136,6 +140,6 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
       clientId: String(env.PAYPAL_CLIENT_ID ?? "").trim(),
       env: String(env.PAYPAL_ENV ?? "").trim().toLowerCase() === "live" ? "live" : "sandbox",
     },
-    states: Object.entries(US_STATES).map(([code, name]) => ({ code, name })),
+    states: Object.entries(SHIP_STATES).map(([code, name]) => ({ code, name })),
   };
 }

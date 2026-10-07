@@ -2,7 +2,9 @@ import { expect } from "@playwright/test";
 
 import { QuoteError, publicConfig, quote } from "../../worker/catalog.js";
 import { validateCheckout } from "../../worker/checkout.js";
+import { ADDRESS_MESSAGES } from "../../worker/address-check.js";
 import { resolvePricing } from "../../worker/pricing.js";
+import { checkShipping } from "../../prototype/js/commerce/address-rules.js";
 
 // The static test server has no Worker, so /api/* is answered here with the real
 // catalog/validation modules, and Airwallex.js is replaced by a local stub whose
@@ -11,6 +13,28 @@ import { resolvePricing } from "../../worker/pricing.js";
 export const ORDER_ID = "APGO-US-0123456789AB";
 export const PAYPAL_ID = "5O190127TN364715T";
 export const ENABLED_PAYPAL = { enabled: true, clientId: "test-paypal-client", env: "sandbox" };
+export const TEST_PHONE = "(512) 555-0134";
+
+// What the address check answers in these tests (worker/address-check.js statuses). Without a Google key the real
+// Worker says "unverified", so that is the default. A function gets the checked address.
+const ADDRESS_ANSWERS = {
+  suggest: (shipping) => ({ status: "suggest", suggestion: { street: `${shipping.street.toUpperCase()} STE 200`, street2: "", city: shipping.city, state: shipping.state, zip: `${shipping.zip.slice(0, 5)}-1234` } }),
+  missing_unit: () => ({ status: "missing_unit", message: ADDRESS_MESSAGES.missingUnit }),
+  undeliverable: () => ({ status: "undeliverable", message: ADDRESS_MESSAGES.undeliverable }),
+  po_box: () => ({ status: "po_box", message: ADDRESS_MESSAGES.poBox }),
+};
+const addressAnswer = (addressCheck, shipping) =>
+  typeof addressCheck === "function" ? addressCheck(shipping) : (ADDRESS_ANSWERS[addressCheck]?.(shipping) ?? { status: addressCheck });
+
+// The Worker checks the address again when the payment is created (enforceAddress); same outcome here.
+function enforceAddress(addressCheck, checkout) {
+  const answer = addressAnswer(addressCheck, checkout.shipping);
+  if (answer.status === "undeliverable") throw new QuoteError("address_undeliverable", ADDRESS_MESSAGES.undeliverable, "street");
+  if (answer.status === "po_box") throw new QuoteError("address_po_box", ADDRESS_MESSAGES.poBox, "street");
+  if (answer.status === "missing_unit" && checkout.addressReview.noUnit !== true) {
+    throw new QuoteError("address_needs_unit", ADDRESS_MESSAGES.missingUnit, "street2");
+  }
+}
 
 const AIRWALLEX_STUB = `
 window.AirwallexComponentsSDK = {
@@ -114,8 +138,8 @@ window.paypal = {
 };
 `;
 
-export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null } = {}) {
-  const calls = { session: [], paypalOrder: [], paypalCapture: [] };
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified" } = {}) {
+  const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
     route.fulfill({ contentType: "application/javascript", body: AIRWALLEX_STUB }));
   await page.route("https://www.paypal.com/sdk/js**", (route) =>
@@ -133,14 +157,23 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         return reply(200, config);
       }
       if (pathname === "/api/cart/quote") return reply(200, quote(body.items, { state: body.state, method: body.method }, resolvePricing(env)));
+      if (pathname === "/api/checkout/address") {
+        calls.address.push(body);
+        const { value, errors } = checkShipping(body?.shipping);
+        const [field, message] = Object.entries(errors)[0] ?? [];
+        if (field) throw new QuoteError("invalid_address", message, field);
+        return reply(200, addressAnswer(addressCheck, value));
+      }
       if (pathname === "/api/checkout/session") {
         calls.session.push(body);
         const checkout = validateCheckout(body);
+        enforceAddress(addressCheck, checkout);
         const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, resolvePricing(env));
         return reply(200, { orderId: ORDER_ID, quote: priced, intent: { id: "int_test", clientSecret: "secret_test", currency: "USD" } });
       }
       if (pathname === "/api/checkout/paypal/order") {
         calls.paypalOrder.push(body);
+        if (body.shipping) enforceAddress(addressCheck, validateCheckout(body));
         const priced = quote(body.items, { state: body.shipping?.state, method: body.method }, resolvePricing(env));
         return reply(200, {
           orderId: ORDER_ID,
@@ -179,7 +212,7 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {
-      if (error instanceof QuoteError) return reply(400, { error: { code: error.code, message: error.message } });
+      if (error instanceof QuoteError) return reply(400, { error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } });
       throw error;
     }
   });
@@ -206,9 +239,14 @@ export async function selectPayMethod(page, id) {
   await expect(radio).toBeChecked();
 }
 
-export async function fillToPayment(page, { payMethod } = {}) {
+export async function fillContact(page) {
   await page.locator("#email").fill("test.shopper@example.com");
+  await page.locator("#phone").fill(TEST_PHONE);
   await page.getByRole("button", { name: /Continue to shipping/ }).click();
+}
+
+export async function fillToPayment(page, { payMethod } = {}) {
+  await fillContact(page);
   await page.getByLabel("First name").fill("Test");
   await page.getByLabel("Last name").fill("Shopper");
   await page.getByLabel("Street address").fill("100 Example Ave");
