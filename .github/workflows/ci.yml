@@ -21,6 +21,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # The single site: the brand export and the store pages must combine without any shared path.
+      - run: node commerce/scripts/build-site.mjs --out "${{ runner.temp }}/site"
 
   commerce:
     runs-on: ubuntu-latest

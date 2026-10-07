@@ -8,6 +8,7 @@ workers_dev = true
 [assets]
 directory = "./prototype"
 binding = "ASSETS"
+not_found_handling = "404-page"   # with --assets ./site (the single site) unknown paths get the brand 404 page
 run_worker_first = true
 
 # Create once with `npx wrangler d1 create apgo-us-store`, then paste the id here.
@@ -22,7 +23,7 @@ database_id = "00000000-0000-0000-0000-000000000000"
 # tax in worker/catalog.js are approved.
 AIRWALLEX_ENV = "demo"
 ROOT_PAGE = "/v3"
-SITE_HOME_URL = "http://127.0.0.1:3012/us"
+SITE_HOME_URL = "http://127.0.0.1:3012"   # local brand dev server (next dev); only its origin is used
 
 # Optional, non-secret store settings (all have safe defaults; see docs/commerce.md):
 #   PRICING_JSON      partial override of worker/pricing.js DEFAULT_PRICING (prices, shipping, tax)
@@ -48,7 +49,8 @@ enabled = true
 # Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit
 # bindings / vars / assets into [env.*], so each environment repeats them. Secrets are per environment too.
 #
-#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; this repo's test site: npm run deploy:staging
+#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; this repo's test site and the single site (brand pages +
+#               store from one Worker): npm run deploy:staging builds site/ (scripts/build-site.mjs) and deploys it
 #   production  store.shopapgo.com + admin.shopapgo.com; checkout stays 503 until PRICING_APPROVED (see docs/commerce.md "Go-live checklist").
 # ---------------------------------------------------------------------------------------------------------------
 
@@ -65,8 +67,10 @@ routes = [
 ]
 
 [env.staging.assets]
-directory = "./prototype"
+# The single site: the brand's Next.js export plus the store pages, combined by scripts/build-site.mjs (npm run build:site).
+directory = "./site"
 binding = "ASSETS"
+not_found_handling = "404-page"   # unknown paths get the brand site's 404 page
 # true = the Worker runs first for EVERY path, so static pages/images also get the Basic-auth gate and X-Robots-Tag
 # (without it Cloudflare serves static files directly, bypassing worker/staging.js). All environments use this gate.
 run_worker_first = true
@@ -80,8 +84,8 @@ database_id = "246c3158-a70e-420e-a165-cda01b4ca434"
 [env.staging.vars]
 AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
-SITE_HOME_URL = "https://www.shopapgo.com/us"
-ROOT_PAGE = "/v3"         # worker/root-page.js: "/" serves the v3 store entry (cart badge + Add to cart), not the old Amazon landing
+SITE_HOME_URL = "https://staging.shopapgo.com"   # worker/site.js: the store's Home/Guides links stay on the single site
+# No ROOT_PAGE: "/" is the brand home from the brand export (index.html).
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
 EXPRESS_CHECKOUT = "false"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block off (UI only, not ready). Do NOT set in production yet.
@@ -156,7 +160,7 @@ database_id = "b409b132-2f2d-4da8-970c-2cf5560ac830"
 AIRWALLEX_ENV = "prod"
 ROOT_PAGE = "/v3"                   # worker/root-page.js: "/" serves the v3 store entry (this repo has no legacy index.html)
 ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
-SITE_HOME_URL = "https://www.shopapgo.com/us"
+SITE_HOME_URL = "https://www.shopapgo.com"
 # Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.

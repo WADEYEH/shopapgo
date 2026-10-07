@@ -197,7 +197,10 @@ test.describe("checkout", () => {
     await expect(page.locator("[data-confirmation]")).not.toContainText("Your card was not charged");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apgo_us_cart_v1")))).toEqual([{ sku: "d204", qty: 1 }]);
     await page.locator('[data-confirmation] a[href="checkout.html"]').click();
-    await expect(page.locator("#email")).toBeVisible();
+    // The checkout draft (js/commerce/checkout-draft.js) brings the shopper straight back to the payment step with their
+    // details kept, so they can retry at once. (Waiting for #email to be visible raced that restore.)
+    await expect(page.locator('[data-step="payment"]')).toBeVisible();
+    await expect(page.locator("#email")).toHaveValue("test.shopper@example.com");
   });
 });
 

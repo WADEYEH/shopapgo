@@ -11,7 +11,7 @@ FOOTER = """    <footer class="shop-footer">
       <div class="shop-footer__inner">
         <img src="assets/brand/apgo-logo.png" alt="APGO" width="89" height="24">
         <nav class="shop-footer__links" aria-label="Legal and support">
-          <a href="https://www.shopapgo.com/us" data-site-home>APGO website</a>
+          <a href="https://www.shopapgo.com/" data-site-home>APGO website</a>
           <a href="https://www.shopapgo.com/us/guides" data-site-guides>Guides</a>
           <a href="privacy.html"{p}>Privacy Policy</a>
           <a href="terms.html"{t}>Terms of Sale</a>

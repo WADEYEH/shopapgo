@@ -87,6 +87,7 @@
 | D36 | 10/6 | 付款成功才成立订单（Shopify 的做法）。还没付款的是「未完成结账」：一次购买一笔纪录，重试和换付款方式都沿用；24 小时失效并作废付款单；失效后才付款成功照样成立订单；个人资料 30 天后删除；后台第一版加「未完成结账」页 | 修改情境 D8 的处理；见 M3 第 5 节、M4、M5 第 3.4 节 |
 | D37 | 10/6 | D9 定案：留 shopapgo。所有顾客页面放在 www.shopapgo.com，后台在 admin.shopapgo.com，store.shopapgo.com 转址到 www。landing repo 不再修改，也不再部署；同步点 1（`cbdf77e`）是最后一次合并 | 取代 D22（分批同步）；landing 线上店照常营业到阶段 4 切换 |
 | D38 | 10/6 | 测试站改回 `staging.shopapgo.com`（后台 `admin-staging.shopapgo.com`）：landing 冻结后不会再互相覆盖，而且 staging 已经设好全部测试用密钥和 Airwallex 测试通知。`next.shopapgo.com` 停用，它的 Worker 和数据库由你在 Cloudflare 删除 | 取代 D35 |
+| D39 | 10/7 | M1 前台：商品页网址改用商品名称（旧网址 301）；页首加「Shop」和购物车件数；新增商品总览 `/products`；store.shopapgo.com 的网址都 301 到 www，保留到你删除 store 为止（删除前先搬付款通知、Apple Pay 网域和广告连结）；商品页正式上线时才开放收录 | 见 `docs/design/modules/M1-pages-content.md` |
 
 ---
 
@@ -221,7 +222,7 @@ wrangler.toml            Worker 设定（staging / production）
 
 | 代号 | 模块 | 负责 | 最重要的规则 | 规格 | 状态 |
 |---|---|---|---|---|---|
-| M1 | 前台页面与内容 | 首页、指南、产品页、订单状态页、政策页、联络我们；SEO | 文案只用核准过的说法；页面上的数字一律取自商品资料和政策 | `M1-pages-content.md` | 待审核 |
+| M1 | 前台页面与内容 | 首页、指南、产品页、订单状态页、政策页、联络我们；SEO | 文案只用核准过的说法；页面上的数字一律取自商品资料和政策 | `M1-pages-content.md` | 已审核（D39） |
 | M2 | 商品与价格 | 商品资料、组合包、价格、运费、税 | 运费每单 $7.99；金额只由后端算；停售立即生效 | `M2-catalog-pricing.md` | 待审核 |
 | M3 | 购物车与结账 | 购物车、栏位检查、配送范围、地址验证、结账纪录（付款成功才成立订单） | 出不了货的订单在付款前挡下；地址用 Google 验证 | `M3-cart-checkout.md` | 已审核 |
 | M4 | 订单核心 | 订单状态与转换、冻结条件、操作纪录 | 只有订单核心能改订单状态；付款后有 1 小时冷静期 | `M4-order-core.md` | 已审核 |
@@ -337,6 +338,7 @@ wrangler.toml            Worker 设定（staging / production）
 
 - landing repo 改为封存（只读）。之后再决定是否删除，删除由你操作。
 - 稳定两周后删除 Pages 专案（由你操作）。
+- 之后删除 store.shopapgo.com（由你操作，D39）：删除前先把付款通知网址、Apple Pay 网域、广告和 email 里的连结都改到 www，并确认 store 的流量已经接近零。
 - 删掉过时的文件和设定：`vercel.json`、旧进度文件、不用的密钥。
 - 执行 GTM/GA4 的决定（O2）。
 
@@ -432,6 +434,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/6 | 订单改为付款成功才成立（D36，Shopify 的做法）：没付款的是「未完成结账」，一次购买一笔纪录、24 小时失效、个人资料 30 天后删除，失效后才付款仍成立订单。M3、M4、M5 更新为 v0.3，M8、M9、情境清单、隐私权政策草稿同步修改；新增情境 I14，对照表为 111 个情境、157 条验收测试，没有缺口 |
 | 10/6 | 阶段 1 的 PR #27 已合进 `main`。决定留 shopapgo、landing 不再修改（D37），阶段 2 可以开始。另外查到：线上 www 载入的 GTM `GTM-56WK5G8T` 把资料送到 GA4 `G-DRY1NJHGXW`（不在 mkt@apgo.com.tw 底下），9 月建的 `G-YM10YMKE30` 只在 9/22–9/23 收到资料；要决定用哪一组 |
 | 10/6 | 测试站改回 staging（D38），合并后的新版已部署上去，沿用 staging 原有的测试用密钥；未登录的检查 12 项全部通过（包含 landing 版本挡住的寄信状态通知）。landing 部署版本里两个没提交的后台付款查询工具已移植。下一步：你在 staging 下测试单，完成阶段 1 |
+| 10/7 | staging 上用信用卡测试付款成功（订单 APGO-US-XMW9QVZPFDRG，确认信已寄出）；PayPal 测试等测试帐号。阶段 2 第一步完成：staging 由同一个 Worker 提供整个网站（品牌首页、指南、商品页、购物车、结账），`/us` 转到首页，测试版不载入任何追踪程式（PR #29） |
 
 ---
 

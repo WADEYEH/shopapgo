@@ -127,6 +127,11 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(staging, /^AIRWALLEX_ENV = "demo"/m);
   assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID|MCF_AUTO_SUBMIT)\s*=/m.test(staging), "the test site never takes live payments, sends Meta events or ships through Amazon");
   assert.ok(!toml.includes("[env.next"), "next.shopapgo.com was retired (plan D38)");
+  // Staging is the single site: brand export + store pages (scripts/build-site.mjs), "/" is the brand home.
+  assert.match(staging, /^directory = "\.\/site"/m);
+  assert.match(staging, /^not_found_handling = "404-page"/m);
+  assert.ok(!/^\s*ROOT_PAGE\s*=/m.test(staging), "the brand export has its own index.html");
+  assert.match(staging, /^SITE_HOME_URL = "https:\/\/staging\.shopapgo\.com"/m);
   const production = envSection(toml, "production");
   assert.match(production, /pattern = "store\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
@@ -136,6 +141,7 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   const storePaths = ["/products*", "/cart*", "/checkout*", "/api/*", "/terms*", "/privacy*", "/returns*", "/contact*", "/css/*", "/js/*", "/assets/*", "/.well-known/*"];
   const zoneRoutes = [...production.matchAll(/\{ pattern = "([^"]+)", zone_name = "shopapgo\.com" \}/g)].map((match) => match[1]);
   assert.deepEqual(zoneRoutes.sort(), ["www.shopapgo.com", "shopapgo.com"].flatMap((host) => storePaths.map((path) => host + path)).sort());
+  assert.match(production, /^directory = "\.\/prototype"/m, "production serves the store pages only until the cutover");
   assert.match(production, /^ROOT_PAGE = "\/v3"/m, "this repo has no legacy index.html, so / must serve the v3 store entry");
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");

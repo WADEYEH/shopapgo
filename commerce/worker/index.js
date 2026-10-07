@@ -74,7 +74,7 @@ import { metaEnabled, metaEventId, scheduledMetaRetry, sendMetaEvent } from "./m
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
-import { rootPageOverride } from "./root-page.js";
+import { brandRedirect, rootPageOverride } from "./root-page.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 
 async function readBody(request) {
@@ -497,7 +497,7 @@ async function dispatch(request, env, ctx) {
   const { pathname, origin } = new URL(request.url);
   if (isAdminPath(pathname)) return handleAdmin(request, env);
   if (pathname === APPLE_PAY_DOMAIN_PATH) return serveAppleDomainAssociation(request, env);
-  if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(rootPageOverride(request, env) || request);
+  if (!pathname.startsWith("/api/")) return brandRedirect(request) || env.ASSETS.fetch(rootPageOverride(request, env) || request);
   try {
     // "New paid order" notifications link to the back-office hostname when one is configured.
     const adminOrigin = adminHost(env) ? `https://${adminHost(env)}` : origin;
