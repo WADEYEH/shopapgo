@@ -41,6 +41,12 @@ const pages = [
   // Batch 2 guides (early)
   { path: routes.winterWash, lastModified: "2026-10-02" },
   { path: routes.coatingScratches, lastModified: "2026-10-02" },
+  // Batch 2 guides (#13, #21, #26, #30, #51)
+  { path: routes.isSprayWorthIt, lastModified: "2026-10-06" },
+  { path: routes.chooseCoatingSpray, lastModified: "2026-10-06" },
+  { path: routes.clayBarFirst, lastModified: "2026-10-06" },
+  { path: routes.detailingSteps, lastModified: "2026-10-06" },
+  { path: routes.windshieldCoating, lastModified: "2026-10-06" },
 ];
 
 export default function sitemap() {

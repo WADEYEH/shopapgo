@@ -26,12 +26,17 @@ const MORE_GUIDES = [
   { key: "whatIsCarGlaze", label: "What is car glaze?" },
   { key: "sprayVsCoating", label: "Ceramic spray vs coating" },
   { key: "coatingScratches", label: "Scratches & coating" },
+  { key: "isSprayWorthIt", label: "Is ceramic spray worth it?" },
+  { key: "chooseCoatingSpray", label: "Choose a coating spray" },
   { key: "prepForSpray", label: "Prep for ceramic spray" },
+  { key: "clayBarFirst", label: "Clay bar before coating" },
+  { key: "detailingSteps", label: "Exterior detailing steps" },
   { key: "removeWaxFirst", label: "Remove wax first" },
   { key: "waitToWash", label: "When to wash after spraying" },
   { key: "coatingMaintenance", label: "Coating maintenance" },
   { key: "washCoatedCar", label: "Wash a coated car" },
   { key: "winterWash", label: "Winter washing" },
+  { key: "windshieldCoating", label: "Windshield & glass" },
   { key: "streaksHighSpots", label: "Streaks & high spots" },
 ];
 
