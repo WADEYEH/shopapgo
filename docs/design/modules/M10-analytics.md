@@ -19,7 +19,7 @@
 
 | 项目 | 规则 |
 |---|---|
-| GTM／GA4 | 只留一套。线上现在是 `GTM-56WK5G8T`，9 月建的 `GTM-TD5NTFH9` 没有载入；留哪一套待你决定（企划 O2） |
+| GTM／GA4 | 只留一套：9 月建的 `GTM-TD5NTFH9` → GA4 `G-YM10YMKE30`（在公司行销帐号 mkt@apgo.com.tw 底下，D40）。线上现在载入的 `GTM-56WK5G8T` → `G-DRY1NJHGXW` 不再使用，资料留作历史。正式网站的建置一律用 D40 这一套（M12：由 CI 建置，不再依赖个人电脑上的设定）；测试站一律不载入 |
 | Meta Pixel | 只留一份程式，品牌页和商店页共用；只在正式网域启动 |
 | Meta Conversions API | 沿用 landing 的实作：付款和开始结账由后端另外送一份，用同一个事件编号让 Meta 自动去重 |
 | 移除 | 品牌站的 `AmazonClick`、`amazon_referral_click`（已经不导去 Amazon） |
@@ -67,5 +67,5 @@
 | Meta Pixel、CAPI、广告归因 | ✓ landing 的商店页；品牌站另有一份 Pixel | 合成一份 |
 | GA4 电商事件 | ✗ | 新增 |
 | 退款回报 GA4 | ✗ | 新增 |
-| GTM | 两套（O2） | 留一套 |
+| GTM | 两套；线上用的不是 9 月那套 | 正式网站改回 `GTM-TD5NTFH9`（D40），最晚在阶段 4 切换时 |
 | 品牌站导去 Amazon 的事件 | 还在 | 移除 |
