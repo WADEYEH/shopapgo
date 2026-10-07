@@ -21,13 +21,13 @@ const GUIDE_GROUPS = [
     id: "compare-and-choose",
     label: "Compare & choose",
     labelColor: color.tertiary,
-    items: [routes.paintProtectionTypes, routes.whatIsSprayCeramic, routes.whatIsCarGlaze, routes.sprayVsCoating, routes.coatingScratches, routes.waxVsSprayCoating, routes.diyVsPro],
+    items: [routes.paintProtectionTypes, routes.whatIsSprayCeramic, routes.whatIsCarGlaze, routes.sprayVsCoating, routes.coatingScratches, routes.waxVsSprayCoating, routes.isSprayWorthIt, routes.diyVsPro, routes.chooseCoatingSpray],
   },
   {
     id: "prep-and-application",
     label: "Prep & application",
     labelColor: color.orange,
-    items: [routes.prepForSpray, routes.wetOrDry, routes.coatingOverWax, routes.removeWaxFirst, routes.waitToWash, routes.coloredGlaze, routes.glazeCoating],
+    items: [routes.prepForSpray, routes.clayBarFirst, routes.detailingSteps, routes.wetOrDry, routes.coatingOverWax, routes.removeWaxFirst, routes.waitToWash, routes.coloredGlaze, routes.glazeCoating],
   },
   {
     id: "wash-and-care",
@@ -40,6 +40,12 @@ const GUIDE_GROUPS = [
     label: "Durability & weather",
     labelColor: color.wet,
     items: [routes.howOftenReapply, routes.rainDamageCoating, routes.winterWash],
+  },
+  {
+    id: "paint-vehicle-surface",
+    label: "By paint, vehicle & surface",
+    labelColor: color.dry,
+    items: [routes.windshieldCoating],
   },
   {
     id: "troubleshooting",
@@ -56,8 +62,12 @@ const JUMP_LINK_LABELS = {
   [routes.sprayVsCoating]: "Ceramic spray vs coating",
   [routes.coatingScratches]: "Scratches & coating",
   [routes.waxVsSprayCoating]: "Wax vs spray coating",
+  [routes.isSprayWorthIt]: "Is ceramic spray worth it?",
   [routes.diyVsPro]: "DIY ceramic coating vs professional",
+  [routes.chooseCoatingSpray]: "Choose a coating spray",
   [routes.prepForSpray]: "Prep for ceramic spray",
+  [routes.clayBarFirst]: "Clay bar before coating",
+  [routes.detailingSteps]: "Exterior detailing steps",
   [routes.wetOrDry]: "Compare dry & wet",
   [routes.coatingOverWax]: "Coating over wax?",
   [routes.removeWaxFirst]: "Remove wax first",
@@ -71,6 +81,7 @@ const JUMP_LINK_LABELS = {
   [routes.howOftenReapply]: "How often to reapply",
   [routes.rainDamageCoating]: "Rain & coating",
   [routes.winterWash]: "Winter washing",
+  [routes.windshieldCoating]: "Windshield & glass",
   [routes.streaksHighSpots]: "Streaks & high spots",
 };
 
@@ -265,6 +276,14 @@ export default function GuidesPage() {
                 <span style={cardExcerpt}>Compare traditional car wax and spray ceramic coating on time, steps, and how long the finish holds—without another how-to tutorial.</span>
                 <GuideButton>Read the comparison →</GuideButton>
               </Link>
+              {/* #13 is-ceramic-spray-worth-it */}
+              <Link href={routes.isSprayWorthIt} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/is-ceramic-spray-worth-it-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Compare · Worth it for you</span>
+                <span style={cardTitle}>Is Ceramic Spray Worth It? An Honest Look for Everyday Drivers</span>
+                <span style={cardExcerpt}>Is ceramic spray worth it? It depends on how you wash, the time you'll spend after a wash, and what you expect from it. See when it pays off and when it won't.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
               {/* existing: diy-ceramic-coating-vs-professional */}
               <Link href={routes.diyVsPro} style={cardStyle(color.orange)}>
                 <img src={asset("generated/diy-vs-pro-hero-title.png")} alt="" style={cardImg} />
@@ -272,6 +291,14 @@ export default function GuidesPage() {
                 <span style={cardTitle}>DIY Ceramic Coating vs Professional</span>
                 <span style={cardExcerpt}>DIY spray coating buys a redoable afternoon at home; a pro shop buys bay time and a longer package. Compare time, cost, and effort before you choose.</span>
                 <GuideButton>Read the comparison →</GuideButton>
+              </Link>
+              {/* #21 how-to-choose-a-ceramic-coating */}
+              <Link href={routes.chooseCoatingSpray} style={cardStyle(color.tertiary)}>
+                <img src={asset("generated/how-to-choose-a-ceramic-coating-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.tertiary)}>Check · Label checklist</span>
+                <span style={cardTitle}>How to Choose a Ceramic Coating Spray: What to Check Before You Buy</span>
+                <span style={cardExcerpt}>How to choose a ceramic coating spray: match the label to how you wash. Check wet or dry use, listed surfaces, durability as a ceiling and what's on your paint.</span>
+                <GuideButton>Read the guide →</GuideButton>
               </Link>
             </div>
           </div>
@@ -309,6 +336,22 @@ export default function GuidesPage() {
                 <span style={cardLabel(color.orange)}>Prep · Wash, decon, dry</span>
                 <span style={cardTitle}>How to Prep Your Car for Ceramic Spray (Wash, Decon, Dry)</span>
                 <span style={cardExcerpt}>How to prep car for ceramic spray: wash, check for bonded contamination, decon only if needed, confirm there's no old wax, then dry or leave wet per your label.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #26 clay-bar-before-ceramic-coating */}
+              <Link href={routes.clayBarFirst} style={cardStyle(color.orange)}>
+                <img src={asset("generated/clay-bar-before-ceramic-coating-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.orange)}>Prep · Clay bar</span>
+                <span style={cardTitle}>Clay Bar Before Ceramic Coating: When a Spray Finish Actually Needs It</span>
+                <span style={cardExcerpt}>Clay bar before ceramic coating? Use the bag test to see if your paint needs it, clay safely with plenty of lubricant, and see where iron remover fits.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+              {/* #30 exterior-car-detailing-steps */}
+              <Link href={routes.detailingSteps} style={cardStyle(color.orange)}>
+                <img src={asset("generated/exterior-car-detailing-steps-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.orange)}>Steps · Full exterior order</span>
+                <span style={cardTitle}>Exterior Car Detailing Steps: The Right Order From Wheels to Protection</span>
+                <span style={cardExcerpt}>Exterior car detailing steps in the right order: wheels first, top-down wash, decontaminate if needed, rinse, dry, inspect, protect, then glass and trim.</span>
                 <GuideButton>Read the guide →</GuideButton>
               </Link>
               {/* existing: wet-or-dry-application */}
@@ -501,6 +544,38 @@ export default function GuidesPage() {
                 <span style={cardLabel(color.wet)}>Weather · Winter washing</span>
                 <span style={cardTitle}>How to Wash Your Car in Winter (Cold, Salt & Freezing Temps)</span>
                 <span style={cardExcerpt}>How to wash your car in winter: pick the right day and place, rinse road salt from the low areas first, dry seals and locks, and clear snow without scratching.</span>
+                <GuideButton>Read the guide →</GuideButton>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* BY PAINT, VEHICLE & SURFACE */}
+        <section id="paint-vehicle-surface" style={{ borderBottom: `1px solid ${color.hairline}` }}>
+          <div
+            style={{
+              maxWidth: 1100,
+              margin: "0 auto",
+              padding: "clamp(40px,5vw,72px) 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 24,
+            }}
+          >
+            <h2 style={sectionH2}>By paint, vehicle & surface</h2>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))",
+                gap: "clamp(16px,2vw,24px)",
+              }}
+            >
+              {/* #51 ceramic-coating-on-windshield */}
+              <Link href={routes.windshieldCoating} style={cardStyle(color.dry)}>
+                <img src={asset("generated/ceramic-coating-on-windshield-hero.png")} alt="" style={cardImg} />
+                <span style={cardLabel(color.dry)}>Surface · Glass prep</span>
+                <span style={cardTitle}>Can You Use Ceramic Coating on a Windshield? (And How to Prep the Glass)</span>
+                <span style={cardExcerpt}>Ceramic coating on windshield glass: check that the label lists glass, remove the oil film first, test a small area, and fix wiper chatter before you drive.</span>
                 <GuideButton>Read the guide →</GuideButton>
               </Link>
             </div>

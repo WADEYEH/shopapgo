@@ -159,6 +159,42 @@ export const CARDS = {
     labelColor: color.orange,
     title: "Ceramic Coating Streaks, Haze or High Spots? How to Fix Them",
   },
+  // Batch 2 guides (#13, #21, #26, #30, #51)
+  isSprayWorthIt: {
+    href: routes.isSprayWorthIt,
+    img: asset("generated/is-ceramic-spray-worth-it-hero.png"),
+    label: "Compare",
+    labelColor: color.tertiary,
+    title: "Is Ceramic Spray Worth It? An Honest Look for Everyday Drivers",
+  },
+  chooseCoatingSpray: {
+    href: routes.chooseCoatingSpray,
+    img: asset("generated/how-to-choose-a-ceramic-coating-hero.png"),
+    label: "Check",
+    labelColor: color.tertiary,
+    title: "How to Choose a Ceramic Coating Spray: What to Check Before You Buy",
+  },
+  clayBarFirst: {
+    href: routes.clayBarFirst,
+    img: asset("generated/clay-bar-before-ceramic-coating-hero.png"),
+    label: "Prep",
+    labelColor: color.orange,
+    title: "Clay Bar Before Ceramic Coating: When a Spray Finish Actually Needs It",
+  },
+  detailingSteps: {
+    href: routes.detailingSteps,
+    img: asset("generated/exterior-car-detailing-steps-hero.png"),
+    label: "Steps",
+    labelColor: color.orange,
+    title: "Exterior Car Detailing Steps: The Right Order From Wheels to Protection",
+  },
+  windshieldCoating: {
+    href: routes.windshieldCoating,
+    img: asset("generated/ceramic-coating-on-windshield-hero.png"),
+    label: "Surface",
+    labelColor: color.dry,
+    title: "Can You Use Ceramic Coating on a Windshield? (And How to Prep the Glass)",
+  },
 };
 
 // items: array of CARDS keys, in display order.
