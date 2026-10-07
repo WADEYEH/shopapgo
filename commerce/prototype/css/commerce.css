@@ -275,6 +275,12 @@ img { max-width: 100%; }
   white-space: nowrap;
 }
 .shop-header__nav a:hover, .shop-header__nav a[aria-current="page"] { color: var(--text-primary); }
+/* Phones: the header stays on one line. The link to the page you are on gives way (the cart page keeps Shop and
+   Checkout) and the gaps tighten. */
+@media (max-width: 480px) {
+  .shop-header__inner { gap: 12px; }
+  .shop-header__nav a[aria-current="page"] { display: none; }
+}
 
 .shop-footer { border-top: 1px solid var(--border-hairline); }
 .shop-footer__inner {

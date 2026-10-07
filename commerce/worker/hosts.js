@@ -12,6 +12,7 @@ const ADMIN_HOST_ASSETS = new Set([
   "/css/admin.css",
   "/js/admin.js",
   "/js/commerce/shared.js",
+  "/js/commerce/product-data.js", // imported by shared.js
   "/assets/brand/apgo-logo.png",
 ]);
 

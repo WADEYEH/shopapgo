@@ -14,7 +14,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
 // The legacy Amazon landing pages (index, v2) are not part of this repo; "/" serves v3 (ROOT_PAGE).
-const PIXEL_PAGES = ["cart", "checkout", "v3", "contact", "privacy", "returns", "terms", "product", "products/d204", "products/d215"];
+const PIXEL_PAGES = ["cart", "checkout", "v3", "contact", "privacy", "returns", "terms", "product", "products", "products/atomic-colored-glaze", "products/atomic-glaze-coating"];
 
 const head = (html) => html.slice(html.indexOf("<head"), html.indexOf("</head>"));
 

@@ -6,7 +6,7 @@
 //   guarantee) are not on the page at all. Reviews and before/after photos come from
 //   product-reviews.js and stay hidden until real.
 import { MAX_LINE_QTY, api, cart, el, money, renderCartCount, track } from "./shared.js";
-import { BRAND, PRODUCTS, QUIZ, SEO, SKUS, productFile, productPath } from "./product-data.js";
+import { BRAND, PRODUCT_SLUGS, PRODUCTS, QUIZ, SEO, SKUS, productFile, productPath } from "./product-data.js";
 import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, REVIEWS } from "./product-reviews.js";
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
@@ -26,8 +26,9 @@ const state = {
 function skuFromLocation() {
   const fixed = document.body.dataset.sku;
   if (SKUS.includes(fixed)) return fixed;
-  const fromPath = location.pathname.match(/\/products\/(d204|d215)(?:\.html)?\/?$/i);
-  if (fromPath) return fromPath[1].toLowerCase();
+  const slug = location.pathname.match(/\/products\/([a-z0-9-]+?)(?:\.html)?\/?$/i)?.[1].toLowerCase();
+  const fromPath = SKUS.find((sku) => PRODUCT_SLUGS[sku] === slug);
+  if (fromPath) return fromPath;
   const query = (new URLSearchParams(location.search).get("sku") || "").toLowerCase();
   if (SKUS.includes(query)) return query;
   const hash = location.hash.replace("#", "").toLowerCase();
@@ -478,7 +479,8 @@ function switchTo(sku, { push = true } = {}) {
   if (push) {
     const fixed = document.body.dataset.sku;
     if (fixed || /\/products\//.test(location.pathname)) {
-      history.replaceState(null, "", location.pathname.replace(/d2(?:04|15)(\.html)?$/i, (_, ext = "") => sku + ext) + location.search);
+      // Same form as the current URL: /products/<name> (Cloudflare) or /products/<name>.html (plain static server).
+      history.replaceState(null, "", (/\.html$/i.test(location.pathname) ? productFile(sku) : productPath(sku)) + location.search);
       document.body.dataset.sku = sku;
     } else {
       history.replaceState(null, "", `${location.pathname}${location.search}#${PRODUCTS[sku].routine}`);

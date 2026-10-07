@@ -3,7 +3,7 @@
 // neither side can silently replace the other. Pages-only files are left out (_redirects: the Worker answers /us itself).
 //
 //   node scripts/build-site.mjs                 copy ../out + prototype -> site
-//   node scripts/build-site.mjs --build-brand   first run the brand build with analytics forced off (test sites)
+//   node scripts/build-site.mjs --build-brand   first run the brand build for a test site (TEST_SITE_BRAND_ENV)
 //   node scripts/build-site.mjs --brand <dir> --store <dir> --out <dir>
 import { spawnSync } from "node:child_process";
 import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
@@ -15,12 +15,16 @@ const COMMERCE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 // Brand-export files that only Cloudflare Pages understands; the Worker handles their job.
 export const BRAND_SKIP = new Set(["_redirects"]);
 
-// A test-site build must never report to the production GA4, GTM or Meta Pixel: NEXT_PUBLIC_* values are inlined at
-// build time, and values already in the environment win over a developer's .env.local.
+// The brand build for a test site. NEXT_PUBLIC_* values are inlined at build time, and values already in the
+// environment win over a developer's .env.local.
+// - It must never report to the production GA4, GTM or Meta Pixel.
+// - It turns on the single-site links (lib/us/routes.js): Shop, the cart, the policy pages and the named product
+//   URLs, which only exist where the store pages are on the same host.
 export const TEST_SITE_BRAND_ENV = {
   NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false",
   NEXT_PUBLIC_APGO_US_GTM_ID: "",
   NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "",
+  NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true",
 };
 
 async function files(root, base = root) {

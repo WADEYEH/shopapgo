@@ -4,10 +4,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { asset, routes } from "@/lib/us/routes";
+import { asset, routes, singleSite } from "@/lib/us/routes";
 import { guideGroups, homeLink } from "@/lib/us/navigation";
+import CartLink, { CartRow } from "@/components/us/CartLink";
 
-import { cartUrl, storeEnabled } from "@/lib/us/store";
+// The orange call to action. On the single site it is Shop, the product overview (D39), next to the cart; elsewhere
+// it scrolls to the comparison on the home page. Store pages are not Next routes, so they get plain links.
+function Cta({ onClick }) {
+  if (singleSite) return <a href={routes.shop} className="us-site-cta" onClick={onClick}>Shop <span aria-hidden="true">→</span></a>;
+  return <Link href={routes.compare} className="us-site-cta" onClick={onClick}>View products <span aria-hidden="true">→</span></Link>;
+}
 
 const MenuContext = createContext(false);
 export const useSiteMenuOpen = () => useContext(MenuContext);
@@ -107,12 +113,15 @@ export default function SiteChrome({ children, footer }) {
                 <NavigationGroups pathname={pathname} onNavigate={() => setGuidesOpen(false)} />
               </div>}
             </div>
-            {storeEnabled && <a href={cartUrl} className="us-store-cart">Cart</a>}
-            <Link href={routes.compare} className="us-site-cta">View products <span aria-hidden="true">→</span></Link>
+            <Cta />
+            {singleSite && <CartLink />}
           </nav>
           <nav aria-label="Mobile site" className="us-header-mobile">
-            {storeEnabled && <a href={cartUrl} className="us-store-cart">Cart</a>}
-            <Link href={routes.guides} className={inGuides ? "is-active" : undefined} aria-current={pathname === routes.guides ? "page" : undefined}>Guides</Link>
+            {/* Phones have room for three items: on the single site Shop and the cart; the guides stay in the menu. */}
+            {singleSite
+              ? <a href={routes.shop}>Shop</a>
+              : <Link href={routes.guides} className={inGuides ? "is-active" : undefined} aria-current={pathname === routes.guides ? "page" : undefined}>Guides</Link>}
+            {singleSite && <CartLink />}
             <button ref={menuButton} type="button" aria-expanded={menuOpen} aria-controls="us-mobile-menu" onClick={() => setMenuOpen(true)}>Menu <span aria-hidden="true">☰</span></button>
           </nav>
         </div>
@@ -137,10 +146,10 @@ export default function SiteChrome({ children, footer }) {
       }}>
         <div className="us-drawer-top"><span id="us-menu-title">Explore APGO</span><button type="button" autoFocus onClick={() => setMenuOpen(false)} aria-label="Close menu">✕</button></div>
         <nav aria-label="All pages">
-          {storeEnabled && <a className="us-drawer-home" href={cartUrl} onClick={() => setMenuOpen(false)}>Cart <span aria-hidden="true">→</span></a>}
+          {singleSite && <CartRow onClick={() => setMenuOpen(false)} />}
           <Link className="us-drawer-home" href={homeLink.href} aria-current={pathname === routes.home ? "page" : undefined} onClick={() => setMenuOpen(false)}>Home <span aria-hidden="true">→</span></Link>
           {menuOpen && <NavigationGroups pathname={pathname} onNavigate={() => setMenuOpen(false)} />}
-          <Link className="us-site-cta" href={routes.compare} onClick={() => setMenuOpen(false)}>View products <span aria-hidden="true">→</span></Link>
+          <Cta onClick={() => setMenuOpen(false)} />
         </nav>
       </dialog>
       {children}

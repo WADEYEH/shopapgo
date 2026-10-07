@@ -5,9 +5,9 @@ import { config } from "@/lib/us/config";
 import { homeLink, guideGroups } from "@/lib/us/navigation";
 import { company } from "@/lib/us/company";
 
-import { storeUrl, cartUrl, storeEnabled } from "@/lib/us/store";
-
 const productHowToRoutes = new Set([routes.coloredGlaze, routes.glazeCoating]);
+// Store pages (routes.js): plain links, they are not Next routes. "#" means "not on this host" and drops the link.
+const onHost = (href) => href && href !== "#";
 
 export default function SiteFooter() {
   const supportEmail = config.supportEmail.trim() || company.email;
@@ -18,9 +18,10 @@ export default function SiteFooter() {
   const applicationGuides = guideGroups.flatMap((g) => g.items).filter((item) => productHowToRoutes.has(item.href));
   const legal = [
     { label: "Privacy Policy", href: routes.privacy },
-    { label: "Terms", href: routes.terms },
+    { label: "Terms of Sale", href: routes.terms },
+    { label: "Returns & Refunds", href: routes.returns },
     { label: "Contact", href: routes.contact },
-  ].filter(({ href }) => href && href !== "#");
+  ].filter(({ href }) => onHost(href));
   return (
     <footer className="us-site-footer" id="site-footer">
       <div className="us-shell">
@@ -46,8 +47,8 @@ export default function SiteFooter() {
               <p>{company.hours}<br />{company.timezone}</p>
             </div>
             <nav aria-label="Support"><ul>
-              {storeEnabled && <li><a href={storeUrl}>Shop APGO</a></li>}
-              {storeEnabled && <li><a href={cartUrl}>Cart</a></li>}
+              {onHost(routes.shop) && <li><a href={routes.shop}>Shop APGO</a></li>}
+              {onHost(routes.cart) && <li><a href={routes.cart}>Cart</a></li>}
               <li><Link href={routes.faq}>Product FAQ</Link></li>
               <li><a href="https://www.amazon.com/gp/your-account/order-history" target="_blank" rel="noopener noreferrer">Amazon order support <span aria-hidden="true">↗</span></a></li>
             </ul></nav>
@@ -56,7 +57,7 @@ export default function SiteFooter() {
         </div>
         <div className="us-footer-bottom">
           <p>© {new Date().getFullYear()} APGO. Amazon.com is an independent retailer.</p>
-          {legal.length > 0 && <nav aria-label="Legal">{legal.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav>}
+          {legal.length > 0 && <nav aria-label="Legal">{legal.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}</nav>}
         </div>
       </div>
     </footer>

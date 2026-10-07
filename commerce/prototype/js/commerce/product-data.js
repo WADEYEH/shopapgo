@@ -68,10 +68,16 @@ export const QUIZ = [
   { q: "Is the longest time between applications most important?", yes: "d204", no: "d215" },
 ];
 
-// Clean URL (production, Cloudflare serves products/d204.html at /products/d204) and the file form
-// that also works on a plain static server.
-export const productPath = (sku) => `/products/${sku}`;
-export const productFile = (sku) => `/products/${sku}.html`;
+// Product page URLs are named, not SKU-based (owner decision D39, 2026-10-07). The Worker answers the earlier
+// /products/d204 and /products/d215 with a 301 to these (worker/root-page.js), so old links and ads keep working.
+// Clean URL (Cloudflare serves products/atomic-colored-glaze.html at /products/atomic-colored-glaze) and the file
+// form that also works on a plain static server.
+export const PRODUCT_SLUGS = { d204: "atomic-colored-glaze", d215: "atomic-glaze-coating" };
+export const productPath = (sku) => `/products/${PRODUCT_SLUGS[sku]}`;
+export const productFile = (sku) => `/products/${PRODUCT_SLUGS[sku]}.html`;
+// The overview of every product on sale (D39): products.html, served at /products.
+export const SHOP_PATH = "/products";
+export const SHOP_FILE = "/products.html";
 
 // Head content, used by scripts/build-product-pages.mjs for the static HTML and by product.js when
 // the shopper switches routine in place. Descriptions only reuse the design copy above.
@@ -92,6 +98,12 @@ export const SEO = {
     title: "APGO Atomic Glaze · Choose DRY or WET",
     description: "Two APGO paint coatings built around your routine: DRY after you dry the car, or WET while the paint is still wet.",
     path: "/product",
+    image: "/assets/products/d204-packshot.webp",
+  },
+  shop: {
+    title: "Shop APGO Atomic Glaze · DRY and WET | APGO",
+    description: "Two APGO paint coatings built around your routine: DRY after you dry the car, or WET while the paint is still wet.",
+    path: SHOP_PATH,
     image: "/assets/products/d204-packshot.webp",
   },
 };

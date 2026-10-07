@@ -43,9 +43,9 @@ test("staging: wrong user or password -> 401", async () => {
 });
 
 test("staging: correct credentials reach pages and the API, every response has X-Robots-Tag", async () => {
-  const page = await call("/v3.html", { headers: { Authorization: basic() } });
+  const page = await call("/cart.html", { headers: { Authorization: basic() } });
   assert.equal(page.status, 200);
-  assert.equal(await page.text(), "asset:/v3.html");
+  assert.equal(await page.text(), "asset:/cart.html");
   assert.equal(page.headers.get("x-robots-tag"), NOINDEX);
   const cfg = await call("/api/store/config", { headers: { Authorization: basic() } });
   assert.equal(cfg.status, 200);
@@ -114,7 +114,7 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
 test("non-staging (prod / local dev): pass-through, no gate, no robots override, no forced header", async () => {
   for (const extra of [{ SITE_ENV: undefined }, { SITE_ENV: "production" }, { SITE_ENV: "" }]) {
     const e = env(extra);
-    const page = await call("/v3.html", { e });
+    const page = await call("/cart.html", { e });
     assert.equal(page.status, 200);
     assert.equal(page.headers.get("x-robots-tag"), null);
     const robots = await call("/robots.txt", { e });

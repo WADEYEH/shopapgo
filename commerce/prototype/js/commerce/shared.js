@@ -2,6 +2,9 @@
 // The cart in localStorage holds only { sku, qty }; every price shown comes from
 // the Worker's /api/cart/quote response.
 
+// The admin page imports this module too, so the admin host must serve product-data.js (worker/hosts.js).
+import { PRODUCT_SLUGS } from "./product-data.js";
+
 const STORAGE_KEY = "apgo_us_cart_v1";
 const MAX_QTY = 10;
 let memory = null;
@@ -128,8 +131,8 @@ export function routineWord(routine) {
   return el("span", { class: `routine routine--${routine}` }, routine === "dry" ? "DRY" : "WET");
 }
 
-// Product page for a cart line (products/d204.html; Cloudflare serves it at /products/d204).
-export const productUrl = (id) => (PRODUCT_IMAGES[id] ? `products/${id}.html` : null);
+// Product page for a cart line (products/atomic-colored-glaze.html; Cloudflare serves it without ".html").
+export const productUrl = (id) => (PRODUCT_IMAGES[id] && PRODUCT_SLUGS[id] ? `products/${PRODUCT_SLUGS[id]}.html` : null);
 
 // The product name links to its product page. `newTab` keeps a shopper who is mid-checkout on this page.
 export function productName(line, { newTab = false } = {}) {
