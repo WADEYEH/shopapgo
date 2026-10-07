@@ -84,27 +84,35 @@ async function withWorld({ amazon = createFakeAmazon(), airwallex = true } = {},
   }
 }
 
-const checkoutBody = (method = "express") => ({
+// Express is not on sale (D31), but the MCF tier map still knows it: the tier test adds it with PRICING_JSON.
+const WITH_EXPRESS = JSON.stringify({
+  shippingMethods: {
+    standard: { label: "Standard shipping", detail: "Most orders arrive in 3–5 business days", amountCents: 799 },
+    express: { label: "Express", detail: "2 business days", amountCents: 900 },
+  },
+});
+
+const checkoutBody = (method = "standard") => ({
   items: [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }],
-  contact: { email: "ada@example.com", marketingOptIn: false },
+  contact: { email: "ada@example.com", phone: "(512) 555-0134", marketingOptIn: false },
   shipping: { firstName: "Ada", lastName: "Lee", street: "100 Example Ave", street2: "Apt 4", city: "Austin", state: "TX", zip: "78701" },
   method,
 });
 
-function signedWebhook(orderId, total = 128.97) {
+function signedWebhook(orderId, total = 127.96) {
   const body = JSON.stringify({ id: `evt_${Math.random().toString(36).slice(2)}`, name: "payment_intent.succeeded", data: { object: { id: "int_123", merchant_order_id: orderId, status: "SUCCEEDED", currency: "USD", amount: total } } });
   const timestamp = String(Date.now());
   return { method: "POST", headers: { "x-timestamp": timestamp, "x-signature": createHmac("sha256", WEBHOOK_SECRET).update(`${timestamp}${body}`).digest("hex") }, body };
 }
 
 // Creates an order through the real checkout endpoint and (optionally) pays it through the real webhook path.
-async function placeOrder(env, { pay = true, method = "express" } = {}) {
+async function placeOrder(env, { pay = true, method = "standard" } = {}) {
   resetAirwallexTokenCache();
   const session = await (await call(env, "/api/checkout/session", post(checkoutBody(method)))).json();
-  if (pay) await payOrder(env, session.orderId, method === "express" ? 128.97 : 119.97);
+  if (pay) await payOrder(env, session.orderId, method === "express" ? 128.97 : 127.96);
   return session.orderId;
 }
-async function payOrder(env, orderId, total = 128.97) {
+async function payOrder(env, orderId, total = 127.96) {
   const ctx = ctxStub();
   const response = await call(env, "/api/webhooks/airwallex", signedWebhook(orderId, total), ctx);
   assert.equal(response.status, 200);
@@ -199,7 +207,7 @@ test("enabled with an empty or partial SKU map: nothing is sent", { skip }, asyn
 test("paid order is submitted once to MCF with our order id, mapped SKUs, the right ship speed, the address and no Amazon email", { skip }, async () => {
   for (const [method, tier] of [["express", "EXPEDITED"], ["standard", "STANDARD"]]) {
     const db = await createD1();
-    const env = mcfEnv(db);
+    const env = { ...mcfEnv(db), PRICING_JSON: WITH_EXPRESS };
     await withWorld({}, async ({ amazon }) => {
       const orderId = await placeOrder(env, { method });
       assert.equal(amazon.count("create"), 1);
@@ -213,7 +221,7 @@ test("paid order is submitted once to MCF with our order id, mapped SKUs, the ri
       assert.equal(create.body.fulfillment_action, "Ship");
       assert.match(create.body.displayable_order_date, /^\d{4}-\d\d-\d\dT/);
       assert.deepEqual(create.body.items.map((l) => [l.sellerSku, l.quantity, l.sellerFulfillmentOrderItemId]).sort(), [["AMZ-SKU-D204", 1, "L1"], ["AMZ-SKU-D215", 2, "L2"]]);
-      assert.deepEqual(create.body.destination_address, { name: "Ada Lee", addressLine1: "100 Example Ave", addressLine2: "Apt 4", city: "Austin", stateOrRegion: "TX", postalCode: "78701", countryCode: "US" });
+      assert.deepEqual(create.body.destination_address, { name: "Ada Lee", addressLine1: "100 Example Ave", addressLine2: "Apt 4", city: "Austin", stateOrRegion: "TX", postalCode: "78701", countryCode: "US", phone: "+15125550134" });
       assert.equal(create.body.notification_emails, undefined, "Amazon sends no email of its own by default");
       assert.ok(!JSON.stringify(create.body).includes("ada@example.com"), "the shopper's email is not sent by default");
 

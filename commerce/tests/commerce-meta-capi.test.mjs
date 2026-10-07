@@ -89,9 +89,9 @@ async function withWorld({ meta = createFakeMeta() } = {}, run) {
 
 const checkoutBody = (extra = {}) => ({
   items: [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }],
-  contact: { email: "Ada.Lee@Example.com ", marketingOptIn: false },
+  contact: { email: "Ada.Lee@Example.com ", phone: "(512) 555-0134", marketingOptIn: false },
   shipping: { firstName: "Ada", lastName: "O'Lee", street: "100 Example Ave", street2: "Apt 4", city: "Austin", state: "TX", zip: "78701" },
-  method: "express",
+  method: "standard",
   ...extra,
 });
 
@@ -108,7 +108,7 @@ async function startCheckout(env, body = checkoutBody(), headers = {}) {
   return (await response.json()).orderId;
 }
 
-function signedWebhook(orderId, total = 128.97, { secret = WEBHOOK_SECRET } = {}) {
+function signedWebhook(orderId, total = 127.96, { secret = WEBHOOK_SECRET } = {}) {
   const body = JSON.stringify({ id: `evt_${Math.random().toString(36).slice(2)}`, name: "payment_intent.succeeded", data: { object: { id: "int_123", merchant_order_id: orderId, status: "SUCCEEDED", currency: "USD", amount: total } } });
   const timestamp = String(Date.now());
   return { method: "POST", headers: { "x-timestamp": timestamp, "x-signature": createHmac("sha256", secret).update(`${timestamp}${body}`).digest("hex") }, body };
@@ -261,7 +261,7 @@ test("flow: InitiateCheckout at intent creation and Purchase once at paid, with 
     // Airwallex metadata carries the attribution and never loses source / order_id
     assert.deepEqual(intents[0].metadata, { fbc: FBC, fbp: FBP, event_source_url: SOURCE_URL, source: "apgo-us-store", order_id: orderId });
     assert.equal(intents[0].request_id, orderId);
-    assert.equal(intents[0].amount, 128.97, "Airwallex gets dollars");
+    assert.equal(intents[0].amount, 127.96, "Airwallex gets dollars");
 
     // InitiateCheckout
     assert.equal(meta.calls.length, 1);
@@ -275,7 +275,7 @@ test("flow: InitiateCheckout at intent creation and Purchase once at paid, with 
     const icEvent = ic.body.data[0];
     assert.deepEqual({ name: icEvent.event_name, id: icEvent.event_id, src: icEvent.action_source, url: icEvent.event_source_url }, { name: "InitiateCheckout", id: `ic_${orderId}`, src: "website", url: SOURCE_URL });
     assert.equal(icEvent.event_time, Math.floor(Date.parse(orderRow(db, orderId).created_at) / 1000));
-    assert.equal(icEvent.custom_data.value, 128.97);
+    assert.equal(icEvent.custom_data.value, 127.96);
     assert.deepEqual(icEvent.user_data.em, [sha("ada.lee@example.com")]);
     assert.deepEqual({ ip: icEvent.user_data.client_ip_address, ua: icEvent.user_data.client_user_agent, fbc: icEvent.user_data.fbc, fbp: icEvent.user_data.fbp }, { ip: "203.0.113.9", ua: "Mozilla/5.0 Test Browser", fbc: FBC, fbp: FBP });
     assert.deepEqual(attributionRow(db, orderId), { order_id: orderId, fbp: FBP, fbc: FBC, fbclid: "AbCdEf", source_url: SOURCE_URL, client_ip: "203.0.113.9", client_user_agent: "Mozilla/5.0 Test Browser", created_at: attributionRow(db, orderId).created_at });
@@ -291,7 +291,7 @@ test("flow: InitiateCheckout at intent creation and Purchase once at paid, with 
     assert.equal(purchase.event_time, Math.floor(Date.parse(paidAt) / 1000), "event_time = paid_at");
     assert.equal(purchase.event_source_url, SOURCE_URL);
     assert.deepEqual(purchase.custom_data, {
-      value: 128.97, currency: "USD", content_type: "product", content_ids: ["D204", "D215"],
+      value: 127.96, currency: "USD", content_type: "product", content_ids: ["D204", "D215"],
       contents: [{ id: "D204", quantity: 1, item_price: 59.99 }, { id: "D215", quantity: 2, item_price: 29.99 }], order_id: orderId,
     });
     assert.equal(purchase.custom_data.value, orderRow(db, orderId).total_cents / 100, "value = D1 total_cents / 100");
@@ -317,7 +317,7 @@ test("flow: the confirmation-page poll (Retrieve path) sends Purchase too, and e
     const orderId = await startCheckout(env);
     const original = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
-      if (/payment_intents\/int_123$/.test(String(url))) return jsonResponse(200, { id: "int_123", status: "SUCCEEDED", currency: "USD", amount: 128.97, merchant_order_id: orderId });
+      if (/payment_intents\/int_123$/.test(String(url))) return jsonResponse(200, { id: "int_123", status: "SUCCEEDED", currency: "USD", amount: 127.96, merchant_order_id: orderId });
       return original(url, init);
     };
     const ctx = ctxStub();

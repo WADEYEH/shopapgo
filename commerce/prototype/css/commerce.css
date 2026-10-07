@@ -751,3 +751,21 @@ mark[data-to-confirm] {
 .legal__facts a { display: inline-flex; align-items: center; min-height: 44px; }
 /* the whole label is the tap target: keep it at least 44px tall, content centered */
 .check { min-height: 44px; align-content: center; }
+
+/* ---------- Checkout: address check and inline text buttons (M3) ---------- */
+
+.address-check:empty { display: none; }
+.address-check .notice { gap: 10px; }
+.address-check__options { display: grid; gap: 12px; margin-top: 4px; }
+.address-check .check__label { color: var(--text-primary); }
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-button:hover, .link-button:focus-visible { color: var(--accent); }

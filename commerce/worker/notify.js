@@ -42,7 +42,15 @@ export function buildNotification(order, { adminUrl } = {}) {
   const total = money(order.total_cents, order.currency);
   const link = adminUrl ? `${adminUrl}#${encodeURIComponent(order.id)}` : undefined;
   const subject = `New paid order ${order.id} · ${total}`;
-  const text = [`${subject}`, `${itemText} → ${shipping.state}`, link].filter(Boolean).join("\n");
+  // The address check could not run (no Google key, no answer, or an address PayPal supplied): someone looks at the
+  // address before the order goes to Amazon (M3 §4).
+  const addressUnverified = shipping.addressCheck?.status === "unverified";
+  const text = [
+    `${subject}`,
+    `${itemText} → ${shipping.state}`,
+    addressUnverified ? "Address not verified: check it before the order ships." : "",
+    link,
+  ].filter(Boolean).join("\n");
   return {
     subject,
     text,
@@ -55,6 +63,7 @@ export function buildNotification(order, { adminUrl } = {}) {
         totalCents: order.total_cents,
         items,
         shippingState: shipping.state,
+        addressVerified: !addressUnverified,
         shippingMethod: order.shipping_method,
         createdAt: order.created_at,
         paidAt: order.paid_at,

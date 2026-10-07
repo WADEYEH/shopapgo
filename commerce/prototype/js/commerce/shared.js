@@ -66,11 +66,13 @@ export const cart = {
 
 export const MAX_LINE_QTY = MAX_QTY;
 
+// field: the checkout field the Worker says to fix, when it names one.
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, field) {
     super(message);
     this.status = status;
     this.code = code;
+    if (field) this.field = field;
   }
 }
 
@@ -96,6 +98,7 @@ export async function api(path, { method = "GET", body } = {}) {
       response.status,
       data?.error?.code ?? "unavailable",
       data?.error?.message ?? "The store is unavailable right now. Please try again shortly.",
+      data?.error?.field,
     );
   }
   return data;

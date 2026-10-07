@@ -24,8 +24,8 @@ test.describe("[TO CONFIRM] markers", () => {
     await expect(marks(summary)).toHaveCount(2);
     await expect(summary.locator(".price-row", { hasText: "Shipping" })).toContainText("[TO CONFIRM]");
     await expect(summary.locator(".price-row", { hasText: "Tax" })).toContainText("[TO CONFIRM]");
-    // The total row is untouched.
-    await expect(summary.locator(".price-row--total dd")).toHaveText("$59.99");
+    // The total row is untouched: D204 $59.99 + $7.99 shipping.
+    await expect(summary.locator(".price-row--total dd")).toHaveText("$67.98");
     await expect(page.locator("[data-checkout-button]")).toBeEnabled();
   });
 
@@ -40,10 +40,11 @@ test.describe("[TO CONFIRM] markers", () => {
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
     await page.goto("/checkout.html");
     await page.locator("#email").fill("test.shopper@example.com");
+    await page.locator("#phone").fill("(512) 555-0134");
     await page.getByRole("button", { name: /Continue to shipping/ }).click();
     const options = page.locator("[data-ship-options]");
     await expect(options).toBeVisible();
-    await expect(marks(options)).toHaveCount(2); // one per shipping method
+    await expect(marks(options)).toHaveCount(1); // one per shipping method (standard only)
     await expect(marks(page.locator("[data-summary-rows]"))).toHaveCount(2);
     const scan = await new AxeBuilder({ page }).analyze();
     expect(scan.violations.filter((v) => ["serious", "critical"].includes(v.impact))).toEqual([]);

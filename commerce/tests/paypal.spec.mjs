@@ -78,7 +78,7 @@ test.describe("PayPal checkout button", () => {
     await expect(page.locator("[data-place-order]")).toBeVisible();
 
     await choosePaypal(page);
-    const total = usd(DEFAULT_PRICING.products.d204.priceCents + 2 * DEFAULT_PRICING.products.d215.priceCents);
+    const total = usd(DEFAULT_PRICING.products.d204.priceCents + 2 * DEFAULT_PRICING.products.d215.priceCents + DEFAULT_PRICING.shippingMethods.standard.amountCents);
     await expect(page.locator(".price-row--total")).toContainText(total);
     await expect(page.locator("[data-place-order]")).toBeHidden();
 

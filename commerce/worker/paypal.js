@@ -11,6 +11,7 @@
 
 import { US_STATES } from "./states.js";
 import { toMajor } from "./catalog.js";
+import { checkShipping } from "../prototype/js/commerce/address-rules.js";
 
 const API_BASE = {
   live: "https://api-m.paypal.com",
@@ -283,19 +284,12 @@ export function shippingFromPaypalOrder(paypalOrder) {
   };
 }
 
-const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
-
+// The checkout page's rules (48 states and DC, no PO boxes or military mail, ZIP matching the state, Amazon's lengths):
+// an address PayPal hands back must pass them before the order is captured or shipped (M3-12).
 export function isUsableUsShipping(shipping) {
   if (!shipping || typeof shipping !== "object") return false;
   if (shipping.country && shipping.country !== "US") return false;
-  return Boolean(
-    shipping.firstName &&
-      shipping.lastName &&
-      shipping.street &&
-      shipping.city &&
-      US_STATES[shipping.state] &&
-      ZIP_PATTERN.test(String(shipping.zip ?? "")),
-  );
+  return Object.keys(checkShipping(shipping).errors).length === 0;
 }
 
 export function inspectPaypalOrder(paypalOrder) {

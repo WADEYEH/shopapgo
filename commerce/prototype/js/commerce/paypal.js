@@ -16,10 +16,11 @@ export function paypalSdkUrl(clientId) {
 
 // Same shape as POST /api/checkout/session (items + contact + optional shipping /
 // method / attribution). Never include prices — the Worker re-quotes.
-export function paypalOrderPayload({ items, contact, shipping, method, attribution }) {
+export function paypalOrderPayload({ items, contact, shipping, method, addressReview, attribution }) {
   const body = { items, contact };
   if (shipping) body.shipping = shipping;
   if (method) body.method = method;
+  if (addressReview && Object.keys(addressReview).length) body.addressReview = addressReview;
   if (attribution && Object.keys(attribution).length) body.attribution = attribution;
   return body;
 }

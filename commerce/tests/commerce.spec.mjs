@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { DEFAULT_PRICING } from "../worker/pricing.js";
-import { ORDER_ID, fillCard, fillToPayment, mockStore, seedCart, selectPayMethod } from "./helpers/store-mock.mjs";
+import { ORDER_ID, TEST_PHONE, fillCard, fillToPayment, mockStore, seedCart, selectPayMethod } from "./helpers/store-mock.mjs";
 
 const usd = (cents) => `$${(cents / 100).toFixed(2)}`;
 const { d204, d215 } = DEFAULT_PRICING.products;
@@ -20,7 +20,8 @@ test.describe("cart", () => {
 
     await line.getByRole("button", { name: "Increase quantity" }).click();
     await expect(line).toContainText(usd(d204.priceCents * 2));
-    await expect(page.locator(".price-row--total")).toContainText(usd(d204.priceCents * 2));
+    // $7.99 per order, however many items (D31).
+    await expect(page.locator(".price-row--total")).toContainText(usd(d204.priceCents * 2 + DEFAULT_PRICING.shippingMethods.standard.amountCents));
 
     await line.getByRole("button", { name: "Remove" }).click();
     await expect(page.locator("[data-cart-title]")).toHaveText("Your cart is empty.");
@@ -43,12 +44,15 @@ test.describe("checkout", () => {
 
     await page.getByRole("button", { name: /Continue to shipping/ }).click();
     await expect(page.locator('[data-field="email"] [data-error]')).toHaveText("Enter a valid email address.");
+    await expect(page.locator('[data-field="phone"] [data-error]')).toHaveText("Enter a 10-digit US phone number.");
 
     await page.locator("#email").fill("test.shopper@example.com");
+    await page.locator("#phone").fill("512 555 0134");
     await page.getByRole("button", { name: /Continue to shipping/ }).click();
+    await expect(page.locator("#phone")).toHaveValue("(512) 555-0134");
     await page.getByLabel("ZIP code").fill("787");
     await page.getByRole("button", { name: /Continue to payment/ }).click();
-    await expect(page.locator('[data-field="zip"] [data-error]')).toHaveText("Enter a 5-digit ZIP.");
+    await expect(page.locator('[data-field="zip"] [data-error]')).toHaveText("Enter a 5-digit ZIP code.");
 
     await page.getByLabel("First name").fill("Test");
     await page.getByLabel("Last name").fill("Shopper");
@@ -56,11 +60,11 @@ test.describe("checkout", () => {
     await page.getByLabel("City").fill("Austin");
     await page.getByLabel("State").selectOption("TX");
     await page.getByLabel("ZIP code").fill("78701");
-    await page.getByText("Express", { exact: true }).click();
+    await expect(page.locator("[data-ship-options]")).toContainText("Most orders arrive in 3–5 business days · $7.99");
     await page.getByRole("button", { name: /Continue to payment/ }).click();
 
-    // D204 + 2 × D215 + express, from the single pricing source
-    const total = usd(d204.priceCents + 2 * d215.priceCents + DEFAULT_PRICING.shippingMethods.express.amountCents);
+    // D204 + 2 × D215 + $7.99 shipping, from the single pricing source
+    const total = usd(d204.priceCents + 2 * d215.priceCents + DEFAULT_PRICING.shippingMethods.standard.amountCents);
     await expect(page.locator(".price-row--total")).toContainText(total);
     await expect(page.locator("[data-place-order]")).toHaveText(`Place order · ${total}`);
 
@@ -77,8 +81,9 @@ test.describe("checkout", () => {
 
     expect(calls.session).toHaveLength(1);
     const sent = calls.session[0];
-    expect(sent.method).toBe("express");
+    expect(sent.method).toBe("standard");
     expect(sent.shipping).toMatchObject({ state: "TX", zip: "78701" });
+    expect(sent.contact).toEqual({ email: "test.shopper@example.com", phone: "+15125550134", marketingOptIn: false });
     expect(JSON.stringify(sent)).not.toMatch(/price|cents|total/i);
 
     const browser = await page.evaluate(() => ({
@@ -120,11 +125,13 @@ test.describe("checkout", () => {
     await page.goto("/checkout.html");
 
     await page.locator("#email").fill("ada@example.com");
+    await page.locator("#phone").fill(TEST_PHONE);
     await page.getByText("Email me when new application guides go live").click();
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem("apgo_us_checkout_draft"))).toContain("ada@example.com");
 
     await page.reload();
     await expect(page.locator("#email")).toHaveValue("ada@example.com");
+    await expect(page.locator("#phone")).toHaveValue(TEST_PHONE);
     await expect(page.locator('input[name="marketingOptIn"]')).toBeChecked();
     await expect(page.locator('[data-step="contact"]')).toBeVisible();
 
@@ -145,7 +152,7 @@ test.describe("checkout", () => {
     await expect(page.getByLabel("ZIP code")).toHaveValue("78701");
     const draft = await page.evaluate(() => JSON.parse(sessionStorage.getItem("apgo_us_checkout_draft")));
     expect(draft.step).toBe("payment");
-    expect(draft.contact).toEqual({ email: "ada@example.com", marketingOptIn: true });
+    expect(draft.contact).toEqual({ email: "ada@example.com", phone: TEST_PHONE, marketingOptIn: true });
     expect(draft.shipping).toMatchObject({ firstName: "Ada", state: "TX", zip: "78701" });
   });
 

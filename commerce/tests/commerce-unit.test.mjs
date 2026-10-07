@@ -8,17 +8,18 @@ import { verifyWebhookSignature } from "../worker/airwallex.js";
 import { applyIntentStatus, publicOrder } from "../worker/orders.js";
 
 const validBody = {
-  contact: { email: "Shopper@Example.com", marketingOptIn: true },
+  contact: { email: "Shopper@Example.com", phone: "(512) 555-0134", marketingOptIn: true },
   shipping: { firstName: "Ada", lastName: "Lee", street: "1 Main St", city: "Austin", state: "tx", zip: "78701" },
-  method: "express",
+  method: "standard",
 };
 
 test("quote prices lines, shipping and totals on the server in cents", () => {
-  const result = quote([{ sku: "d204", qty: 2 }, { sku: "D215", qty: 1 }], { method: "express" });
+  const result = quote([{ sku: "d204", qty: 2 }, { sku: "D215", qty: 1 }], { method: "standard" });
   assert.equal(result.subtotalCents, PRODUCTS.d204.priceCents * 2 + PRODUCTS.d215.priceCents);
-  assert.equal(result.shippingCents, 900);
+  assert.equal(result.shippingCents, 799, "$7.99 per order (D31)");
   assert.equal(result.taxCents, null, "tax is unknown until a state is supplied");
-  assert.equal(result.totalCents, result.subtotalCents + 900);
+  assert.equal(result.totalCents, result.subtotalCents + 799);
+  assert.equal(quote([{ sku: "d204", qty: 10 }]).shippingCents, 799, "the same fee however many items");
   assert.deepEqual(result.lines.map((l) => [l.id, l.qty]), [["d204", 2], ["d215", 1]]);
 });
 
@@ -37,6 +38,8 @@ test("quote rejects empty carts, unknown SKUs and bad quantities", () => {
   assert.throws(() => quote([{ sku: "d204", qty: 6 }, { sku: "d204", qty: 5 }]), { code: "invalid_qty" });
   assert.throws(() => quote([{ sku: "d204", qty: 1 }], { method: "drone" }), { code: "invalid_shipping" });
   assert.throws(() => quote([{ sku: "d204", qty: 1 }], { state: "ZZ" }), { code: "invalid_state" });
+  assert.throws(() => quote([{ sku: "d204", qty: 1 }], { method: "express" }), { code: "invalid_shipping" }, "no express option (D31)");
+  for (const state of ["AK", "HI", "PR"]) assert.throws(() => quote([{ sku: "d204", qty: 1 }], { state }), { code: "invalid_state" }, state);
 });
 
 test("tax applies the configured state rate and rounds to the cent", () => {
@@ -57,19 +60,30 @@ test("toMajor converts cents to Airwallex major units without float drift", () =
   assert.equal(toMajor(1999), 19.99);
 });
 
-test("validateCheckout normalizes input and rejects bad addresses", () => {
+test("validateCheckout normalizes input and rejects bad addresses with the shared checkout rules", () => {
   const result = validateCheckout(validBody);
   assert.equal(result.email, "shopper@example.com");
   assert.equal(result.shipping.state, "TX");
+  assert.equal(result.shipping.phone, "+15125550134", "the phone travels with the address");
   assert.equal(result.marketingOptIn, true);
-  assert.equal(result.method, "express");
+  assert.equal(result.method, "standard");
+  assert.deepEqual(result.addressReview, { choice: undefined, noUnit: false });
+  assert.deepEqual(validateCheckout({ ...validBody, addressReview: { choice: "suggested", noUnit: "yes" } }).addressReview, { choice: "suggested", noUnit: false });
 
-  const bad = (patch, code) =>
-    assert.throws(() => validateCheckout({ ...validBody, shipping: { ...validBody.shipping, ...patch } }), { code });
-  bad({ zip: "7870" }, "invalid_zip");
-  bad({ state: "ZZ" }, "invalid_state");
-  bad({ street: " " }, "invalid_address");
-  assert.throws(() => validateCheckout({ ...validBody, contact: { email: "nope" } }), { code: "invalid_email" });
+  const bad = (patch, code, field) =>
+    assert.throws(() => validateCheckout({ ...validBody, shipping: { ...validBody.shipping, ...patch } }), (error) => error.code === code && error.field === field);
+  bad({ zip: "7870" }, "invalid_zip", "zip");
+  bad({ zip: "10001" }, "invalid_zip", "zip");
+  bad({ state: "ZZ" }, "invalid_state", "state");
+  bad({ state: "AK", zip: "99501" }, "invalid_state", "state");
+  bad({ street: " " }, "invalid_address", "street");
+  bad({ street: "PO Box 12" }, "invalid_address", "street");
+  bad({ street2: "P.O. Box 5" }, "invalid_address", "street2");
+  bad({ city: "APO" }, "invalid_city", "city");
+  bad({ street: `1 ${"A".repeat(59)}` }, "invalid_address", "street");
+  bad({ firstName: "李" }, "invalid_name", "firstName");
+  assert.throws(() => validateCheckout({ ...validBody, contact: { email: "nope", phone: "5125550134" } }), { code: "invalid_email" });
+  assert.throws(() => validateCheckout({ ...validBody, contact: { email: "ada@example.com" } }), (error) => error.code === "invalid_phone" && error.field === "phone");
 });
 
 test("order ids are unguessable and match the public pattern", () => {

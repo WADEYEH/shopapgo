@@ -372,6 +372,16 @@ function renderPaymentFailures(order) {
   );
 }
 
+// How the checkout checked the address (worker/address-check.js). Orders from before the check have none.
+const ADDRESS_CHECK = {
+  verified: "Verified",
+  corrected: "Verified · shopper chose the corrected spelling",
+  kept_original: "Deliverable · shopper kept their own spelling",
+  no_unit_confirmed: "Verified · shopper confirmed there is no unit number",
+  unverified: "Not verified · check the address before it ships",
+};
+const usPhone = (value) => (/^\+1\d{10}$/.test(value ?? "") ? `(${value.slice(2, 5)}) ${value.slice(5, 8)}-${value.slice(8)}` : value || "—");
+
 function renderDetail(order) {
   const { shipping } = order;
   const address = el(
@@ -400,6 +410,8 @@ function renderDetail(order) {
       el("dt", {}, "Intent"), el("dd", {}, order.paymentIntentId || "—"),
       el("dt", {}, "Created"), el("dd", {}, formatDate(order.createdAt)),
       el("dt", {}, "Email"), el("dd", {}, el("a", { href: `mailto:${order.email}` }, order.email)),
+      el("dt", {}, "Phone"), el("dd", {}, shipping.phone ? el("a", { href: `tel:${shipping.phone}` }, usPhone(shipping.phone)) : "—"),
+      el("dt", {}, "Address check"), el("dd", {}, ADDRESS_CHECK[shipping.addressCheck?.status] ?? "—"),
       el("dt", {}, "Marketing"), el("dd", {}, order.marketingOptIn ? "Opted in" : "No"),
       el("dt", {}, "Notification"), el("dd", {}, notification),
     ),

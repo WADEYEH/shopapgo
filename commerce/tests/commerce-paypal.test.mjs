@@ -34,9 +34,9 @@ const WEBHOOK_ID = "WH-TEST-ID";
 
 const checkoutBody = {
   items: [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }],
-  contact: { email: "ada@example.com", marketingOptIn: false },
+  contact: { email: "ada@example.com", phone: "(512) 555-0134", marketingOptIn: false },
   shipping: { firstName: "Ada", lastName: "Lee", street: "100 Example Ave", street2: "Apt 4", city: "Austin", state: "TX", zip: "78701" },
-  method: "express",
+  method: "standard",
 };
 
 const baseEnv = (db, extra = {}) => ({
@@ -145,7 +145,7 @@ test("validatePaypalCheckout allows email-only when tax is undecided", () => {
   assert.equal(result.shipping.street, "");
   assert.throws(() => validatePaypalCheckout({ contact: { email: "nope" } }), (e) => e instanceof QuoteError && e.code === "invalid_email");
   assert.throws(
-    () => validatePaypalCheckout({ contact: { email: "ada@example.com" }, shipping: { firstName: "Ada" } }),
+    () => validatePaypalCheckout({ contact: { email: "ada@example.com", phone: "(512) 555-0134" }, shipping: { firstName: "Ada" } }),
     { code: "invalid_name" },
   );
   const full = validatePaypalCheckout(checkoutBody);
@@ -243,15 +243,15 @@ test("PayPal create stores a pending APGO-US order and returns the PayPal order 
   const { session } = await createPaypalStoreOrder(baseEnv(db), fake);
   assert.match(session.orderId, /^APGO-US-[0-9A-HJKMNP-TV-Z]{12}$/);
   assert.equal(session.paypal.id, "5O190127TN364715T");
-  assert.equal(session.quote.totalCents, 12897);
+  assert.equal(session.quote.totalCents, 12796);
   assert.equal(session.eventIds.initiateCheckout, metaEventId("InitiateCheckout", session.orderId));
   assert.equal(session.eventIds.purchase, `purchase_${session.orderId}`);
-  assert.equal(sent.payload.purchase_units[0].amount.value, "128.97");
+  assert.equal(sent.payload.purchase_units[0].amount.value, "127.96");
   assert.equal(sent.payload.purchase_units[0].custom_id, session.orderId);
   assert.equal(sent.requestId, session.orderId);
   assert.match(sent.payload.application_context.return_url, /store\.shopapgo\.com\/checkout\.html\?order=/);
   const row = await db.prepare("SELECT status, payment_intent_id, total_cents FROM orders WHERE id = ?").bind(session.orderId).first();
-  assert.deepEqual(row, { status: "pending", payment_intent_id: "5O190127TN364715T", total_cents: 12897 });
+  assert.deepEqual(row, { status: "pending", payment_intent_id: "5O190127TN364715T", total_cents: 12796 });
   const payment = await db.prepare("SELECT provider, provider_ref FROM order_payments WHERE order_id = ?").bind(session.orderId).first();
   assert.deepEqual(payment, { provider: "paypal", provider_ref: "5O190127TN364715T" });
 });
@@ -264,7 +264,7 @@ test("PayPal create without shipping still prices from the catalog and asks PayP
     items: checkoutBody.items,
     contact: { email: "ada@example.com" },
   });
-  assert.equal(session.quote.totalCents, 11997, "default (free) shipping when method is omitted");
+  assert.equal(session.quote.totalCents, 12796, "default shipping ($7.99 standard) when method is omitted");
   assert.equal(sent.application_context.shipping_preference, "GET_FROM_FILE");
 });
 
@@ -311,7 +311,8 @@ test("capture writes the PayPal shipping address and marks the order paid", { sk
   const row = await db.prepare("SELECT status, shipping_json, paid_at FROM orders WHERE id = ?").bind(session.orderId).first();
   assert.equal(row.status, "paid");
   assert.ok(row.paid_at);
-  assert.deepEqual(JSON.parse(row.shipping_json), {
+  const { addressCheck, ...stored } = JSON.parse(row.shipping_json);
+  assert.deepEqual(stored, {
     firstName: "Ada",
     lastName: "Lee",
     street: "100 Example Ave",
@@ -319,7 +320,10 @@ test("capture writes the PayPal shipping address and marks the order paid", { sk
     city: "Austin",
     state: "TX",
     zip: "78701",
+    phone: "+15125550134",
   });
+  // Same address as our checkout, so its check result stays (no Google key in tests: "unverified").
+  assert.deepEqual({ status: addressCheck.status, reason: addressCheck.reason }, { status: "unverified", reason: "not_configured" });
 });
 
 test("capture refuses to take payment when PayPal has no usable US address", { skip }, async () => {
@@ -353,7 +357,7 @@ test("webhook PAYMENT.CAPTURE.COMPLETED is idempotent and stores the PayPal addr
       id: "CAP-1",
       status: "COMPLETED",
       custom_id: session.orderId,
-      amount: { currency_code: "USD", value: "128.97" },
+      amount: { currency_code: "USD", value: "127.96" },
       supplementary_data: { related_ids: { order_id: session.paypal.id } },
     },
   };
@@ -477,7 +481,7 @@ test("PayPal InitiateCheckout and Purchase share ic_/purchase_ event ids and kee
     const purchases = meta.events().filter((e) => e.event_name === "Purchase");
     assert.equal(purchases.length, 1);
     assert.equal(purchases[0].event_id, `purchase_${session.orderId}`);
-    assert.equal(purchases[0].custom_data.value, 128.97);
+    assert.equal(purchases[0].custom_data.value, 127.96);
     assert.equal(purchases[0].custom_data.order_id, session.orderId);
     assert.equal(meta.calls[1].body.test_event_code, "TEST27938");
     assert.ok(meta.calls.every((c) => c.url.includes(FAKE_DATASET_ID)));
