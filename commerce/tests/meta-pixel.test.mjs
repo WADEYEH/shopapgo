@@ -13,8 +13,9 @@ import { DEFAULT_PRICING } from "../worker/pricing.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
-// The legacy Amazon landing pages (index, v2) are not part of this repo; "/" serves v3 (ROOT_PAGE).
-const PIXEL_PAGES = ["cart", "checkout", "v3", "contact", "privacy", "returns", "terms", "product", "products", "products/atomic-colored-glaze", "products/atomic-glaze-coating"];
+// The store pages that are still plain HTML. The legacy Amazon landing pages (index, v2) are not part of this repo;
+// "/" serves v3 (ROOT_PAGE). The overview and the product pages are Next.js pages (D41): see the shop layout test below.
+const PIXEL_PAGES = ["cart", "checkout", "v3", "contact", "privacy", "returns", "terms"];
 
 const head = (html) => html.slice(html.indexOf("<head"), html.indexOf("</head>"));
 
@@ -26,6 +27,15 @@ test("every public store page loads js/meta-pixel.js (deferred, in <head>) plus 
     assert.ok(h.includes(`facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`), `${page}.html: noscript pixel in head`);
     assert.match(h, /<noscript><img [^>]*alt=""[^>]*><\/noscript>/, `${page}.html: noscript image has an empty alt`);
   }
+});
+
+test("the Next.js store pages (/products and the product pages) load it once, from the shop layout, and the brand pages do not", async () => {
+  const layout = await read("../app/(us)/(shop)/layout.js");
+  assert.equal(layout.split('<Script src="/js/meta-pixel.js" strategy="afterInteractive" />').length - 1, 1, "one pixel script");
+  assert.ok(layout.includes(`src="https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1"`), "noscript pixel");
+  assert.match(layout, /<noscript>\s*\{[^}]*\}\s*<img [^>]*alt=""[^>]*\/>\s*<\/noscript>/, "noscript image has an empty alt");
+  // The brand pages have their own, env-gated pixel (components/us/MetaPixel.js); unifying the two is M10.
+  assert.ok(!(await read("../app/(us)/layout.js")).includes("meta-pixel.js"));
 });
 
 test("pages that must not load the pixel do not", async () => {
@@ -297,6 +307,22 @@ test("product pages: view_item -> ViewContent and add_to_cart(items[]) -> AddToC
   assert.equal(calls[2][2].value, 59.99);
   assert.equal(h.sandbox.fetchCalls.length, 0, "items[] events need no extra /api/store/config call");
   for (const call of calls) assert.ok(call.length === 3, "no eventID on ViewContent/AddToCart");
+});
+
+test("events the page sent before the file ran (the Next.js pages load it late) are read from dataLayer, once", async () => {
+  const h = run({ config: CONFIG });
+  const item = { item_id: "D215", item_name: "x", quantity: 1, price: 29.99 };
+  h.sandbox.dataLayer = [
+    { "gtm.start": 1, event: "gtm.js" },
+    { event: "view_item", sku: "d215", placement: "pdp", currency: "USD", value: 29.99, items: [item] },
+    { event: "scroll_depth", percent: 25 },
+  ];
+  await h.load();
+  h.emit({ event: "add_to_cart", sku: "d215", quantity: 1, currency: "USD", value: 29.99, items: [item] });
+  await tick();
+  const calls = h.calls().slice(2);
+  assert.deepEqual(calls.map((c) => c[1]), ["ViewContent", "AddToCart"], "the earlier view_item once, then the live add");
+  assert.deepEqual(calls[0][2], { content_type: "product", content_ids: ["D215"], contents: [{ id: "D215", quantity: 1, item_price: 29.99 }], currency: "USD", value: 29.99 });
 });
 
 test("product pages: without prices (config failed) the events still go out, without value", async () => {

@@ -18,8 +18,6 @@
     "smoke:airwallex:browser": "node scripts/airwallex-browser-smoke.mjs",
     "capture:v3-cart": "node scripts/capture-v3-cart.mjs",
     "capture:wallets": "node scripts/capture-wallets.mjs",
-    "capture:product-pages": "node scripts/capture-product-pages.mjs",
-    "build:product-pages": "node scripts/build-product-pages.mjs",
     "capture:admin-fulfillment": "node scripts/capture-admin-fulfillment.mjs",
     "capture:admin-mcf": "node scripts/capture-admin-mcf.mjs",
     "test:e2e": "playwright test --workers=1",

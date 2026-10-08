@@ -1,6 +1,6 @@
 // The single site (scripts/build-site.mjs + worker/root-page.js): the brand export and the store pages share one asset
 // directory without overriding each other, Pages-only files stay out, test-site builds never load analytics and turn
-// on the single-site links, and URLs that moved (/us, /v3, /products/d204|d215) answer 301.
+// on the single-site links, and URLs that moved (/us, /v3, /product, /products/d204|d215) answer 301.
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -95,13 +95,17 @@ test("the old product URLs and the old store home answer 301 to their new URL, q
     "/products/d215.html": "/products/atomic-glaze-coating",
     "/v3": "/",
     "/v3.html": "/",
+    // The one-page-for-both product page (?sku=, #dry / #wet) is gone with the Next.js pages (D41): the overview.
+    "/product": "/products",
+    "/product.html": "/products",
+    "/Product/": "/products",
   };
   for (const [from, to] of Object.entries(moved)) {
     const response = siteRedirect(new Request(`https://shop.example${from}?utm_source=ads&fbclid=X`, { method: "HEAD" }));
     assert.equal(response?.status, 301, from);
     assert.equal(response.headers.get("Location"), `https://shop.example${to}?utm_source=ads&fbclid=X`, from);
   }
-  for (const pathname of ["/products", "/products.html", "/products/atomic-colored-glaze", "/products/d204x", "/product.html", "/v3-style.html"]) {
+  for (const pathname of ["/products", "/products.html", "/products/atomic-colored-glaze", "/products/d204x", "/productx", "/product/d204", "/v3-style.html"]) {
     assert.equal(siteRedirect(new Request(`https://shop.example${pathname}`)), null, pathname);
   }
   assert.equal(siteRedirect(new Request("https://shop.example/products/d204", { method: "POST" })), null);

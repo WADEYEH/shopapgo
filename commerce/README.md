@@ -42,8 +42,12 @@ drafts, email/password admin login and the live production settings. The legacy 
   `/products/atomic-colored-glaze` and `/products/atomic-glaze-coating` (D39). Off, the
   brand pages keep `/products/d204` and `/products/d215`; the Worker answers those, and
   `/v3`, with a 301 to the new URLs (`worker/root-page.js`).
-- `/products` is the overview of every product on sale (`prototype/products.html`,
-  generated with the product pages by `scripts/build-product-pages.mjs`).
+- Every page shoppers see is moving into the Next.js site (D41, `docs/commerce-plan.md` §6). Done:
+  `/products`, the overview of every product on sale, and the two product pages
+  (`app/(us)/(shop)/products`, components in `components/shop`, shared store code in `lib/shop`),
+  in the site's own header and footer. The cart, checkout and policy pages are still the plain HTML
+  pages in `prototype/` until they move. Because the store pages now come from the Next.js build,
+  do not deploy `main` to production before the cutover moves all of www to this Worker.
 - Store footers link back to the brand site and guides. `SITE_HOME_URL` selects
   the destination, defaulting to `https://www.shopapgo.com/us` (which now redirects to `/`).
 
@@ -58,14 +62,16 @@ From the repository root:
 npm ci
 npm run commerce:install
 npm run commerce:test
+npm --prefix commerce run build:site
 npm run commerce:test:e2e
 npm run commerce:verify
 ```
 
-The single-site checks (`tests/brand-store.spec.mjs`) run against a served single
-site; the header of that file has the commands (`npm run build:site`, then
-`wrangler dev` on `./site`, then Playwright with `APGO_SITE_URL`). They are skipped
-in the standalone store suite.
+The browser tests run against the built single site (`commerce/site`: the Next.js export plus
+the store pages), so run `build:site` again after changing either. The single-site checks
+(`tests/brand-store.spec.mjs`) also need the Worker in front of it; the header of that file has
+the commands (`wrangler dev` on `./site`, then Playwright with `APGO_SITE_URL`). They are skipped
+in the standalone suite.
 
 Start the Worker with `npm run commerce:dev` (port 8799). Initialize only its
 local D1 with `npm --prefix commerce run db:migrate:local`. Copy

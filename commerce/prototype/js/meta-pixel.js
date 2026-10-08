@@ -2,7 +2,8 @@
  * APGO US store: Meta Pixel (browser side).
  *
  * Loaded with <script src="js/meta-pixel.js" defer></script> on the public store pages only
- * (never on /admin). It does nothing unless the page is served from an allowed store host
+ * (never on /admin), and by app/(us)/(shop)/layout.js on the Next.js store pages (/products and
+ * the product pages). It does nothing unless the page is served from an allowed store host
  * (store.shopapgo.com, shopapgo.com, www.shopapgo.com), so staging, localhost, admin and
  * preview hosts never talk to Meta.
  *
@@ -282,9 +283,8 @@
     send("Purchase", commerceParams(detail), "purchase_" + orderId);
   }
 
-  window.addEventListener("apgo:analytics", function (event) {
-    var detail = event && event.detail;
-    if (!detail || typeof detail.event !== "string") return;
+  function onAnalytics(detail) {
+    if (!detail || typeof detail.event !== "string") return undefined;
     switch (detail.event) {
       case "view_item": return onViewItem(detail);
       case "add_to_cart": return onAddToCart(detail);
@@ -293,6 +293,15 @@
       case "purchase": return onPurchase(detail);
       default: return undefined;
     }
+  }
+
+  // Events the page announced before this file ran: the Next.js store pages load it once the page is interactive
+  // (app/(us)/(shop)/layout.js), and a product page may already have sent view_item by then. track() also pushes
+  // every event to window.dataLayer, so those are read from there, once; the listener takes every later one.
+  var earlier = Array.isArray(window.dataLayer) ? window.dataLayer.slice() : [];
+  for (var e = 0; e < earlier.length; e += 1) onAnalytics(earlier[e]);
+  window.addEventListener("apgo:analytics", function (event) {
+    onAnalytics(event && event.detail);
   });
 
   onViewContent();

@@ -11,13 +11,16 @@ const SITE = "https://www.shopapgo.com";
 
 // Every page.js under app/, converted to the URL it is actually served at.
 // Route groups are parenthesised, so they contribute nothing to the path.
+// Pages that tell search engines not to index them (robots index: false) stay out of the sitemap: the store pages
+// until indexing opens at the cutover (docs/commerce-plan.md, M1). Once they turn indexing on they must be listed.
+const NOINDEX = /robots:\s*\{\s*index:\s*false\b/;
 function routesOnDisk(dir = path.join(ROOT, "app"), segments = []) {
   const found = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       const isGroup = entry.name.startsWith("(") && entry.name.endsWith(")");
       found.push(...routesOnDisk(path.join(dir, entry.name), isGroup ? segments : [...segments, entry.name]));
-    } else if (entry.name === "page.js") {
+    } else if (entry.name === "page.js" && !NOINDEX.test(fs.readFileSync(path.join(dir, entry.name), "utf8"))) {
       found.push("/" + segments.join("/"));
     }
   }

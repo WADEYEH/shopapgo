@@ -1,118 +1,147 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { PRODUCT_SLUGS, PRODUCTS, QUIZ, SEO, SHOP_FILE, SKUS, productFile } from "../prototype/js/commerce/product-data.js";
+import { PRODUCT_SLUGS, PRODUCTS, QUIZ, SEO, SHOP_PATH, SKUS, productPath } from "../prototype/js/commerce/product-data.js";
 import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, REVIEWS } from "../prototype/js/commerce/product-reviews.js";
 
-const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
-const proto = (path) => join(repo, "prototype", path);
-const read = (path) => readFileSync(proto(path), "utf8");
-const PAGES = { "product.html": null, ...Object.fromEntries(SKUS.map((sku) => [productFile(sku).slice(1), sku])) };
-const OVERVIEW = "products.html";
-const SOURCES = ["js/commerce/product.js", "js/commerce/product-data.js", "js/commerce/product-reviews.js", "js/commerce/products-overview.js", "css/product.css"];
+// The store's Next.js pages (D41): the /products overview and the two product pages, in app/(us)/(shop) with their
+// components in components/shop and the shared store code in lib/shop. What they do in a browser is in
+// product-pages.spec.mjs; the cart and the review rules have unit tests in the site's tests/us-store.test.cjs.
 
-test("the product pages are in sync with scripts/build-product-pages.mjs", () => {
-  const result = spawnSync(process.execPath, [join(repo, "scripts/build-product-pages.mjs"), "--check"], { encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
+const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
+const site = join(repo, "..");
+const read = (path) => readFileSync(join(site, path), "utf8");
+const proto = (path) => join(repo, "prototype", path);
+const readProto = (path) => readFileSync(proto(path), "utf8");
+
+const LAYOUT = "app/(us)/(shop)/layout.js";
+const OVERVIEW = "app/(us)/(shop)/products/page.js";
+const PRODUCT = "app/(us)/(shop)/products/[slug]/page.js";
+const PAGE = "components/shop/ProductPage.js";
+const CARD = "components/shop/CatalogCard.js";
+const SOURCES = [LAYOUT, OVERVIEW, PRODUCT, PAGE, CARD, "components/shop/ReadyFlag.js", "lib/shop/catalog.js", "lib/shop/cart.js", "lib/shop/store-config.js", "lib/shop/reviews.js"];
+const DATA = ["commerce/prototype/js/commerce/product-data.js", "commerce/prototype/js/commerce/product-reviews.js"];
+// What shoppers read: the code without its comments.
+const visible = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+test("named product URLs (D39): one exported page per product, the overview at /products, the old HTML pages gone", () => {
+  assert.deepEqual(PRODUCT_SLUGS, { d204: "atomic-colored-glaze", d215: "atomic-glaze-coating" });
+  assert.equal(productPath("d204"), "/products/atomic-colored-glaze");
+  assert.equal(SEO.d204.path, productPath("d204"));
+  assert.equal(SEO.d215.path, productPath("d215"));
+  assert.equal(SEO.shop.path, SHOP_PATH);
+  assert.equal(SHOP_PATH, "/products");
+  const page = read(PRODUCT);
+  assert.match(page, /export const dynamicParams = false;/, "no product URL beyond the list");
+  assert.match(page, /return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
+  // The plain HTML versions would collide with the export (scripts/build-site.mjs stops on a duplicate path).
+  for (const file of ["product.html", "products.html", ...SKUS.map((sku) => `products/${PRODUCT_SLUGS[sku]}.html`), "js/commerce/product.js", "js/commerce/products-overview.js", "css/product.css"]) {
+    assert.equal(existsSync(proto(file)), false, `prototype/${file} is gone`);
+  }
+  assert.equal(existsSync(join(repo, "scripts/build-product-pages.mjs")), false);
 });
 
-test("each page has a title, description, canonical, og tags, noindex and a price-free Product JSON-LD", () => {
-  for (const [file, sku] of Object.entries(PAGES)) {
-    const html = read(file);
-    const seo = SEO[sku ?? "default"];
-    assert.match(html, new RegExp(`<title>${seo.title.replace(/[()|·]/g, "\\$&")}</title>`), file);
-    assert.match(html, /<meta name="description" content="[^"]{40,}">/, file);
-    assert.match(html, new RegExp(`<link rel="canonical" href="${seo.path}">`), file);
-    for (const property of ["og:title", "og:description", "og:image", "og:url", "og:type"]) {
-      assert.ok(html.includes(`property="${property}"`), `${file} ${property}`);
-    }
-    assert.match(html, /<meta name="robots" content="noindex,nofollow">/, `${file} follows the other store pages until launch`);
-    assert.equal((html.match(/<h1\b/g) || []).length, 1, `${file} has exactly one h1`);
-    const ld = /<script type="application\/ld\+json" id="pdp-jsonld">(.*?)<\/script>/s.exec(html);
-    assert.ok(ld, `${file} JSON-LD`);
-    const data = JSON.parse(ld[1]);
-    if (sku) {
-      assert.equal(data["@type"], "Product");
-      assert.equal(data.sku, PRODUCTS[sku].sku);
-      assert.equal(data.offers, undefined, "no price in the static markup: it is injected from /api/store/config once approved");
-      assert.equal(html.includes(`data-sku="${sku}"`), true);
+test("each page: its own title, description, canonical and og tags, not indexable until launch, and a price-free Product JSON-LD", () => {
+  for (const key of [...SKUS, "shop"]) {
+    const seo = SEO[key];
+    assert.ok(seo.title.endsWith("| APGO"), `${key}: title`);
+    assert.ok(seo.description.length >= 40, `${key}: description`);
+    assert.ok(existsSync(proto(seo.image.slice(1))), `${key}: ${seo.image}`);
+  }
+  assert.equal(SEO.default, undefined, "the one-page-for-both /product is gone (301 to /products)");
+  for (const file of [OVERVIEW, PRODUCT]) {
+    const source = read(file);
+    for (const field of ["title: { absolute: seo.title }", "description: seo.description", "alternates: { canonical: seo.path }", "robots: { index: false, follow: false }", "openGraph: { title: seo.title, description: seo.description, url: seo.path, images: [seo.image], type: \"website\" }"]) {
+      assert.ok(source.includes(field), `${file}: ${field}`);
     }
   }
-  // Named product URLs (D39); the old /products/d204|d215 answer 301 (worker/root-page.js, tests/single-site.test.mjs).
-  assert.deepEqual(PRODUCT_SLUGS, { d204: "atomic-colored-glaze", d215: "atomic-glaze-coating" });
-  assert.equal(SEO.d204.path, "/products/atomic-colored-glaze");
-  assert.equal(SEO.d215.path, "/products/atomic-glaze-coating");
-  assert.deepEqual(Object.keys(PAGES).sort(), ["product.html", "products/atomic-colored-glaze.html", "products/atomic-glaze-coating.html"]);
+  assert.match(read(OVERVIEW), /const seo = SEO\.shop;/);
+  assert.match(read(PRODUCT), /const seo = SEO\[skuFor\(slug\)\];/);
+  // One h1 per page.
+  assert.equal((read(OVERVIEW).match(/<h1\b/g) || []).length, 1);
+  assert.equal((read(PAGE).match(/<h1\b/g) || []).length, 1);
+  // JSON-LD: a price only from the live config, and only once pricing is approved.
+  const page = read(PAGE);
+  assert.match(page, /if \(config\?\.estimate === false && cents !== null\) \{\n\s+data\.offers = /);
+  assert.equal(read(OVERVIEW).includes("pdp-jsonld"), false, "no Product JSON-LD on a list page");
 });
 
-test("no prices are hard-coded in the product page markup, data or script", () => {
-  for (const file of [...Object.keys(PAGES), OVERVIEW, "js/commerce/product.js", "js/commerce/product-data.js", "js/commerce/products-overview.js"]) {
+test("no prices are hard-coded in the store pages, their code or the product data", () => {
+  for (const file of [...SOURCES, ...DATA, "app/(us)/(shop)/shop.css"]) {
     const text = read(file).replace(/\$\{[^}]*\}/g, "");
     assert.equal(/\$\s?\d/.test(text), false, `${file} must not contain a dollar amount`);
     assert.equal(/priceCents\s*[:=]\s*\d/.test(text), false, `${file} must not define a price`);
   }
-  assert.match(read("js/commerce/product.js"), /\/api\/store\/config/);
-  assert.match(read("js/commerce/products-overview.js"), /\/api\/store\/config/);
+  assert.match(read("lib/shop/store-config.js"), /fetch\("\/api\/store\/config"\)/);
+  for (const file of [PAGE, CARD]) assert.match(read(file), /useStoreConfig\(\)/, `${file} reads the Worker's prices`);
 });
 
 test("no runtime leftovers from the design export", () => {
-  const banned = [/support\.js/, /\{\{/, /\bsc-if\b/, /\bx-dc\b/, /<x-dc/, /unpkg\.com/, /babel/i, /react(-dom)?\b/i, /\.dc\.html/, /design-import/, /ds-loader/];
-  for (const file of [...Object.keys(PAGES), OVERVIEW, ...SOURCES]) {
+  const banned = [/support\.js/, /\{\{\s*[\w.]+\s*\}\}/, /\bsc-if\b/, /\bx-dc\b/, /<x-dc/, /unpkg\.com/, /babel/i, /\.dc\.html/, /design-import/, /ds-loader/];
+  for (const file of [...SOURCES, ...DATA]) {
     const text = read(file);
     for (const pattern of banned) assert.equal(pattern.test(text), false, `${file} matches ${pattern}`);
   }
 });
 
-test("every local link, script, stylesheet and image on the pages exists", () => {
+test("every image, video and caption file the pages use exists", () => {
+  const page = read(PAGE);
+  // The paths ProductPage.js builds, expanded for both products. Served from commerce/prototype/assets until the
+  // assets move with the cleanup (D41 step 7).
+  for (const pattern of ["`/assets/application/${file}.webp`", "`/assets/video/${sku}-poster.webp`", "`/assets/video/${sku}-application.mp4`", "`/assets/video/${sku}-v3-captions-en.vtt`"]) {
+    assert.ok(page.includes(pattern), pattern);
+  }
   const missing = [];
-  const check = (from, ref) => {
-    if (/^(https?:|mailto:|#|data:)/.test(ref)) return;
-    const path = ref.split("#")[0].split("?")[0];
-    if (!path || path === "/") return;
-    const target = path.startsWith("/") ? path.slice(1) : join(dirname(from), path);
-    if (!existsSync(proto(target))) missing.push(`${from} -> ${ref}`);
-  };
-  for (const file of [...Object.keys(PAGES), OVERVIEW]) {
-    const html = read(file);
-    for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
-      if (Object.values(SEO).some((seo) => seo.path === match[1])) continue; // canonical / og:url: the clean URL
-      check(file, match[1]);
-    }
-  }
-  // Assets the script builds at runtime, expanded for both products.
   for (const sku of SKUS) {
-    for (const [step] of PRODUCTS[sku].steps) check("product.js", `/assets/application/${step}.webp`);
-    for (const ref of [`/assets/video/${sku}-poster.webp`, `/assets/video/${sku}-application.mp4`, `/assets/video/${sku}-v3-captions-en.vtt`, SEO[sku].image]) check("product.js", ref);
-    check("product-data.js", productFile(sku));
+    const refs = [
+      ...PRODUCTS[sku].steps.map(([file]) => `/assets/application/${file}.webp`),
+      `/assets/video/${sku}-poster.webp`, `/assets/video/${sku}-application.mp4`, `/assets/video/${sku}-v3-captions-en.vtt`, SEO[sku].image,
+    ];
+    for (const ref of refs) if (!existsSync(proto(ref.slice(1)))) missing.push(ref);
   }
+  assert.ok(existsSync(proto("js/meta-pixel.js")), "the shop layout's pixel script");
   assert.deepEqual(missing, []);
 });
 
-test("the pages reuse the shop header (cart badge), the policy footer and keep Amazon out of the buy flow", () => {
-  for (const file of Object.keys(PAGES)) {
-    const html = read(file);
-    assert.match(html, /data-cart-count/, `${file} cart badge`);
-    assert.match(html, /href="\/cart\.html"/, `${file} cart link`);
-    for (const policy of ["privacy", "terms", "returns", "contact"]) assert.ok(html.includes(`href="/${policy}.html"`), `${file} ${policy}`);
-    assert.equal(/amazon\./i.test(html), false, `${file} must not push Amazon`);
-    assert.match(html, /data-sticky/, `${file} sticky add-to-cart bar`);
+test("the store pages use the site's own header and footer (Shop, cart count) and keep Amazon out of the buy flow", () => {
+  for (const file of [LAYOUT, OVERVIEW, PAGE, CARD]) {
+    const source = read(file);
+    assert.equal(/<header\b|<footer\b/.test(source), false, `${file}: no header or footer of its own`);
+    assert.equal(/amazon\./i.test(source), false, `${file} must not push Amazon`);
   }
+  const root = read("app/(us)/layout.js");
+  assert.ok(root.includes("<SiteChrome footer={<SiteFooter />}>{children}</SiteChrome>"), "the site layout brings the header and footer");
+  const chrome = read("components/us/SiteChrome.js");
+  assert.equal((chrome.match(/\{singleSite && <CartLink \/>\}/g) || []).length, 2, "the cart in the desktop and the phone header");
+  assert.match(chrome, /<a href=\{routes\.shop\}/, "Shop");
+  assert.match(read("components/us/CartLink.js"), /import \{ useCartCount \} from "@\/lib\/shop\/cart";/, "the header count is the store's own cart");
+  const page = read(PAGE);
+  assert.match(page, /data-sticky=""/, "sticky add-to-cart bar");
+  // Same-host links in their clean form.
+  for (const href of ['href="/products"', 'href="/cart"', 'href="/returns"']) assert.ok(page.includes(href), href);
+  assert.match(read(CARD), /<a href="\/cart">View cart/);
+  // Store styles stay on the store pages: everything in shop.css is under .shop, apart from the footer room for the
+  // sticky bar.
+  const css = read("app/(us)/(shop)/shop.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const unscoped = [];
+  for (const [, selectors] of css.matchAll(/(?:^|[{}])\s*([^{}@]+?)\s*\{/g)) { // rules, also inside @media
+    for (const selector of selectors.split(",").map((s) => s.trim())) {
+      if (!selector || /^(from|to|\d+%)$/.test(selector)) continue;
+      if (!selector.startsWith(".shop") && selector !== 'body[data-sticky-bar="on"] .us-site-footer') unscoped.push(selector);
+    }
+  }
+  assert.deepEqual(unscoped, []);
 });
 
 test("no unconfirmed promises or [TO CONFIRM] copy reach shoppers; nothing is invented", () => {
   // The store is live (PRICING_APPROVED): unconfirmed terms are left out, not shown with a marker.
-  const unconfirmed = [/data-to-confirm/, /TO CONFIRM/i, /pair price/i, /free (us )?shipping/i, /30[- ]day/i, /30 days/i, /full refund/i, /pending brand confirmation/i, /placeholder/i, /data-placement="guarantee"/];
-  for (const file of [...Object.keys(PAGES), OVERVIEW]) {
-    const visible = read(file).replace(/<!--.*?-->/gs, "");
-    for (const pattern of unconfirmed) assert.doesNotMatch(visible, pattern, `${file}: ${pattern}`);
-  }
-  const js = read("js/commerce/product.js");
-  for (const pattern of [/toConfirm/, /TO CONFIRM/, /Price shown is a placeholder/, /real photo pending/]) {
-    assert.doesNotMatch(js, pattern, `product.js: ${pattern}`);
+  const unconfirmed = [/data-to-confirm/, /TO CONFIRM/i, /pair price/i, /free (us )?shipping/i, /30[- ]day/i, /30 days/i, /full refund/i, /pending brand confirmation/i, /placeholder/i, /data-placement="guarantee"/, /toConfirm/, /real photo pending/];
+  for (const file of [OVERVIEW, PAGE, CARD, "commerce/prototype/js/commerce/product-data.js"]) {
+    const text = visible(read(file));
+    for (const pattern of unconfirmed) assert.doesNotMatch(text, pattern, `${file}: ${pattern}`);
   }
   for (const sku of SKUS) {
     assert.ok(REVIEWS[sku].every((review) => review.verified === true), "only verified reviews may ever be listed");
@@ -121,11 +150,14 @@ test("no unconfirmed promises or [TO CONFIRM] copy reach shoppers; nothing is in
     }
   }
   assert.equal(MIN_VERIFIED_REVIEWS, 3);
-  assert.match(js, /MIN_VERIFIED_REVIEWS/);
-  assert.match(js, /verified === true/);
+  const page = read(PAGE);
+  assert.match(page, /const reviews = reviewsToShow\(REVIEWS\[sku\], MIN_VERIFIED_REVIEWS\);/);
+  assert.match(page, /\{reviews\.length > 0 && \(/, "no reviews, no section and no rating");
+  assert.match(read("lib/shop/reviews.js"), /review\?\.verified === true/);
+  assert.match(page, /\{photos\?\.before\?\.src && photos\?\.after\?\.src && \(/, "before/after only with a real photo pair");
 });
 
-test("design copy is kept: routine-first names, quiz, steps", () => {
+test("design copy is kept: routine-first names, quiz, steps, section titles", () => {
   assert.equal(PRODUCTS.d204.name, "Atomic Colored Glaze");
   assert.equal(PRODUCTS.d215.name, "Atomic Glaze Coating");
   assert.equal(PRODUCTS.d204.routine, "dry");
@@ -133,64 +165,51 @@ test("design copy is kept: routine-first names, quiz, steps", () => {
   assert.equal(QUIZ.length, 3);
   assert.deepEqual(PRODUCTS.d204.steps.map((s) => s[1]), ["Spray", "Spread", "Buff"]);
   assert.deepEqual(PRODUCTS.d215.steps.map((s) => s[1]), ["Wash", "Keep wet", "Spray", "Dry"]);
-  const html = read(productFile("d215").slice(1));
+  const page = read(PAGE);
   for (const section of ["Under 15 minutes. No machine.", "Three questions. Your routine.", "Same finish. Pick your moment.", "Straight answers.", "Keep reading"]) {
-    assert.ok(html.includes(section), section);
+    assert.ok(page.includes(section), section);
   }
+  assert.ok(read(OVERVIEW).includes("Same finish. Pick your moment."));
 });
 
 test("the landing page, cart lines and checkout summary link to the product pages", () => {
-  const v3 = read("v3.html");
+  const v3 = readProto("v3.html");
   for (const sku of SKUS) {
-    assert.ok(v3.includes(`href="${productFile(sku).slice(1)}"`), `v3 links to ${sku}`);
+    assert.ok(v3.includes(`href="products/${PRODUCT_SLUGS[sku]}.html"`), `v3 links to ${sku}`);
     assert.equal((v3.match(new RegExp(`data-product-link="${sku}"`, "g")) || []).length, 2, `${sku}: selected panel + final choice`);
   }
   assert.ok(v3.includes('<a href="products.html">Shop</a>'), "header link to the overview");
-  const shared = read("js/commerce/shared.js");
+  const shared = readProto("js/commerce/shared.js");
   assert.match(shared, /products\/\$\{PRODUCT_SLUGS\[id\]\}\.html/);
-  assert.match(read("js/commerce/checkout.js"), /productName\(line, \{ newTab: true \}\)/);
-  assert.match(read("js/commerce/cart.js"), /productTitle\(line\)/);
+  assert.match(readProto("js/commerce/checkout.js"), /productName\(line, \{ newTab: true \}\)/);
+  assert.match(readProto("js/commerce/cart.js"), /productTitle\(line\)/);
 });
 
-test("package.json runs the new tests", () => {
+test("package.json runs these tests; the page generator and its screenshots script are gone", () => {
   const scripts = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts;
   assert.match(scripts["test:static"], /tests\/product-pages\.test\.mjs/);
-  assert.match(scripts["capture:product-pages"] || "", /capture-product-pages\.mjs/);
+  assert.equal(scripts["build:product-pages"], undefined);
+  assert.equal(scripts["capture:product-pages"], undefined);
 });
 
 test("the overview lists every product with its own Add to cart, price slot and product link, and no price", () => {
-  const html = read(OVERVIEW);
-  assert.ok(html.includes(`<title>${SEO.shop.title}</title>`));
-  assert.match(html, /<link rel="canonical" href="\/products">/);
-  assert.match(html, /<meta name="robots" content="noindex,nofollow">/, "not indexable until launch, like the product pages");
-  assert.equal((html.match(/<h1\b/g) || []).length, 1);
-  assert.equal(html.includes("pdp-jsonld"), false, "no Product JSON-LD on a list page");
-  assert.match(html, /<script type="module" src="\/js\/commerce\/products-overview\.js"><\/script>/);
-  for (const sku of SKUS) {
-    assert.equal(html.split(`data-add-to-cart="${sku}"`).length - 1, 1, `${sku}: one Add to cart`);
-    assert.ok(html.includes(`data-price-sku="${sku}"`), `${sku}: price slot`);
-    assert.ok(html.includes(`data-shop-card="${sku}"`), `${sku}: card the script can hide`);
-    assert.ok(html.includes(`href="${productFile(sku)}"`), `${sku}: links to its page`);
-    assert.ok(html.includes(PRODUCTS[sku].name) && html.includes(PRODUCTS[sku].promise), `${sku}: design copy`);
+  const overview = read(OVERVIEW);
+  assert.match(overview, /\{SKUS\.map\(\(sku\) => <CatalogCard key=\{sku\} sku=\{sku\} \/>\)\}/);
+  assert.match(overview, /<ReadyFlag name="shopReady" \/>/);
+  const card = read(CARD);
+  for (const marker of ["data-shop-card={sku}", "data-add-to-cart={sku}", "data-price-sku={sku}", "data-shop-added={sku}", "href={productPath(sku)}", "{p.name}", "{p.promise}"]) {
+    assert.ok(card.includes(marker), marker);
   }
-  for (const policy of ["privacy", "terms", "returns", "contact"]) assert.ok(html.includes(`href="/${policy}.html"`), policy);
-  const js = read("js/commerce/products-overview.js");
-  assert.ok(js.includes("card.hidden = !config.products[card.dataset.shopCard]"), "a product the store no longer sells is hidden");
-  assert.equal(js.includes("cart.add("), false, "adding stays in shared.js (one add per click)");
+  assert.ok(card.includes("if (status === \"ready\" && !config.products?.[sku]) return null;"), "a product the store no longer sells is hidden");
+  assert.equal((card.match(/addToCart\(/g) || []).length, 1, "one add per click");
 });
 
-test("store headers link to the overview (Shop) next to the cart; checkout stays focused", () => {
-  for (const file of [...Object.keys(PAGES), OVERVIEW]) {
-    assert.ok(read(file).includes(`<a href="${SHOP_FILE}" data-nav-shop`), `${file}: Shop`);
-  }
-  assert.ok(read(OVERVIEW).includes(`<a href="${SHOP_FILE}" data-nav-shop aria-current="page">Shop</a>`));
+test("store pages that are still plain HTML link to the overview (Shop) next to the cart; checkout stays focused", () => {
   for (const file of ["cart.html", "privacy.html", "terms.html", "returns.html", "contact.html"]) {
-    const header = read(file).split("</header>")[0];
+    const header = readProto(file).split("</header>")[0];
     assert.ok(header.includes('<a href="products.html">Shop</a>'), `${file}: Shop`);
     assert.ok(header.includes("data-cart-count"), `${file}: cart count`);
   }
-  assert.equal(read("checkout.html").split("</header>")[0].includes("products.html"), false, "no Shop link in the checkout header");
-  assert.ok(read("cart.html").includes('<a class="btn btn--sm" href="products.html">Choose Dry or Wet'), "an empty cart leads to the overview");
-  // Phones keep Shop: only the Dry / Wet links hide.
-  assert.ok(read("css/product.css").includes("@media (max-width: 480px) { .pdp-nav [data-nav-sku] { display: none; } }"));
+  assert.equal(readProto("checkout.html").split("</header>")[0].includes("products.html"), false, "no Shop link in the checkout header");
+  assert.ok(readProto("cart.html").includes('<a class="btn btn--sm" href="products.html">Choose Dry or Wet'), "an empty cart leads to the overview");
 });

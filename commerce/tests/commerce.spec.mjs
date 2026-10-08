@@ -127,7 +127,9 @@ test.describe("checkout", () => {
     await page.locator("#email").fill("ada@example.com");
     await page.locator("#phone").fill(TEST_PHONE);
     await page.getByText("Email me when new application guides go live").click();
-    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("apgo_us_checkout_draft"))).toContain("ada@example.com");
+    // The draft is saved 200 ms after the last change: wait for the last one (the checkbox), not just the email.
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("apgo_us_checkout_draft"))).toContain('"marketingOptIn":true');
+    expect(await page.evaluate(() => sessionStorage.getItem("apgo_us_checkout_draft"))).toContain("ada@example.com");
 
     await page.reload();
     await expect(page.locator("#email")).toHaveValue("ada@example.com");

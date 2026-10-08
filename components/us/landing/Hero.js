@@ -1,5 +1,5 @@
 import { asset } from "@/lib/us/routes";
-import { color, CONDENSED } from "@/lib/us/tokens";
+import { color, CONDENSED, products } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
 import ProductCta from "./ProductCta";
 import Eyebrow from "./Eyebrow";
@@ -66,7 +66,7 @@ export default function Hero() {
                 whiteSpace: "nowrap",
               }}
             >
-              Shop D204
+              Shop {products.d204.tag}
             </ProductCta>
             <a
               href="#compare"
@@ -120,7 +120,7 @@ export default function Hero() {
           />
           <img
             src={asset("products/d204-packshot.png")}
-            alt="APGO Atomic Colored Glaze, 300 mL bottle and box"
+            alt={`APGO ${products.d204.name}, ${products.d204.size} bottle and box`}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
           />
         </div>
@@ -141,14 +141,14 @@ export default function Hero() {
             <span style={specLabel}>Apply after drying</span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span style={{ ...specNum, textTransform: "uppercase" }}>Atomic Colored Glaze</span>
+            <span style={{ ...specNum, textTransform: "uppercase" }}>{products.d204.name}</span>
             <span style={{ fontSize: 12, letterSpacing: ".14em", color: color.quiet, border: `1px solid ${color.border}`, padding: "3px 8px", borderRadius: 4 }}>
-              D204
+              {products.d204.tag}
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span style={specNum}>300 mL</span>
-            <span style={specLabel}>10.1 fl oz</span>
+            <span style={specNum}>{products.d204.size}</span>
+            <span style={specLabel}>{products.d204.oz}</span>
           </div>
         </div>
       </div>

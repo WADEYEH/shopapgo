@@ -3,24 +3,33 @@
 import { useState } from "react";
 import Link from "next/link";
 import { asset, routes } from "@/lib/us/routes";
-import { color, CONDENSED } from "@/lib/us/tokens";
+import { color, CONDENSED, products } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
 import { track } from "@/lib/us/analytics";
 import ProductCta from "./ProductCta";
 import RoutineSelector from "./RoutineSelector";
+
+// The product facts (name, SKU, contents, how long it lasts) come from the store's product data via lib/us/tokens.js.
+const fact = (sku) => {
+  const p = products[sku];
+  return {
+    name: p.name,
+    tag: p.tag,
+    lasts: p.lasts,
+    contents: `${p.size} / ${p.oz}`,
+    meta: `${p.name} · ${p.tag} · ${p.size} · Up to ${p.lasts}`,
+    cta: `Shop ${p.tag}`,
+  };
+};
 
 // Per-product content for the routine section. Copy is FTC-reviewed; do not edit.
 const PANEL = {
   d204: {
     word: "DRY",
     accent: color.dry,
-    name: "Atomic Colored Glaze",
-    tag: "D204",
+    ...fact("d204"),
     when: "After drying",
-    lasts: "6 months",
-    contents: "300 mL / 10.1 fl oz",
     footageLabel: "Real footage · Dry-surface application",
-    meta: "Atomic Colored Glaze · D204 · 300 mL · Up to 6 months",
     heading: "The finishing step, on your terms.",
     body: "Wash, dry fully, then in the shade: spray one panel, spread, buff with a clean microfiber. A separate finish—without the hours a wax used to ask for.",
     steps: [
@@ -28,20 +37,15 @@ const PANEL = {
       { img: "application/d204-step-2.webp", alt: "Spreading with an applicator cloth", cap: "Spread" },
       { img: "application/d204-step-3.webp", alt: "Buffing with a clean microfiber towel", cap: "Buff" },
     ],
-    cta: "Shop D204",
     playLabel: "Play Dry application video",
     pendingLabel: "Dry application video pending approval",
   },
   d215: {
     word: "WET",
     accent: color.wet,
-    name: "Atomic Glaze Coating",
-    tag: "D215",
+    ...fact("d215"),
     when: "Before final drying",
-    lasts: "4 months",
-    contents: "200 mL / 6.8 fl oz",
     footageLabel: "Real footage · Wet-surface application",
-    meta: "Atomic Glaze Coating · D215 · 200 mL · Up to 4 months",
     heading: "Finish while the water is still on the paint.",
     body: "Rinse, then while the paint is still wet: spray, spread with a wet cloth, and dry the car as usual. No extra step—the finish goes on the way to the towel.",
     steps: [
@@ -50,7 +54,6 @@ const PANEL = {
       { img: "application/d215-step-3.webp", alt: "Spraying Atomic Glaze Coating onto wet paint", cap: "Spray" },
       { img: "application/d215-step-4.webp", alt: "Drying the hood with a clean towel", cap: "Dry" },
     ],
-    cta: "Shop D215",
     playLabel: "Play Wet application video",
     pendingLabel: "Wet application video pending approval",
   },

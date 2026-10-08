@@ -131,7 +131,9 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   .us-footer-grid { grid-template-columns: 1fr; gap: 28px; }
   .us-site-footer { padding-top: 36px; }
   .us-footer-grid h2 { margin-bottom: 8px; }
-  .us-footer-grid a:not(.us-site-logo) { min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; }
+  .us-footer-grid a:not(.us-site-logo) { min-height: 44px; min-width: 44px; box-sizing: border-box; display: inline-flex; align-items: center; }
+  .us-footer-bottom nav { flex-wrap: wrap; row-gap: 0; }
+  .us-footer-bottom nav a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; white-space: nowrap; }
   .us-routine-selector button { flex-direction: column; gap: 4px !important; text-align: center !important; }
   .us-routine-selector { height: 86px !important; }
 }
@@ -161,7 +163,8 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   html { scroll-behavior: auto; }
 }
 
-/* Cart in the header (components/us/CartLink.js); single site only (lib/us/routes.js). */
+/* Shop and the cart in the header (components/us/CartLink.js); single site only (lib/us/routes.js). */
+.us-header-shop { justify-content: center; min-width: 44px; }
 .us-cart-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; white-space: nowrap; }
 .us-cart-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: #f08417; color: #080a0c; font-size: 12px; font-weight: 700; line-height: 1; }
 .us-cart-count[hidden] { display: none; }
