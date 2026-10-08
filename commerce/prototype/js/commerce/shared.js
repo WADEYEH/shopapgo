@@ -1,25 +1,20 @@
-// Shared cart state and helpers for cart.html and checkout.html.
-// The cart in localStorage holds only { sku, qty }; every price shown comes from
-// the Worker's /api/cart/quote response.
+// Helpers for the store pages that are still plain HTML: the v3 landing page (Add to cart buttons, landing-cart.js),
+// the policy pages (cart count) and the back office (admin.js: el, money, notice, priceRows). The cart, checkout and
+// product pages are Next.js pages (D41) with their own copy of the cart rules in lib/shop/cart.js: same key, same rules.
 
-// The admin page imports this module too, so the admin host must serve product-data.js (worker/hosts.js).
-import { PRODUCT_SLUGS } from "./product-data.js";
+// The back office imports this module too, so the admin host must serve product-data.js (worker/hosts.js).
+import { SKUS as PRODUCT_SKUS } from "./product-data.js";
 
 const STORAGE_KEY = "apgo_us_cart_v1";
 const MAX_QTY = 10;
+// A line for anything that is not a product is dropped.
+const SKUS = new Set(PRODUCT_SKUS);
 let memory = null;
-
-export const PRODUCT_IMAGES = {
-  d204: "assets/products/d204-packshot.webp",
-  d215: "assets/products/d215-packshot.webp",
-};
 
 function readItems() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(parsed)
-      ? parsed.filter((i) => PRODUCT_IMAGES[i?.sku] && Number.isInteger(i.qty) && i.qty > 0)
-      : [];
+    return Array.isArray(parsed) ? parsed.filter((i) => SKUS.has(i?.sku) && Number.isInteger(i.qty) && i.qty > 0) : [];
   } catch {
     return [];
   }
@@ -43,7 +38,7 @@ export const cart = {
     return cart.items().reduce((sum, i) => sum + i.qty, 0);
   },
   add(sku, qty = 1, extra = {}) {
-    if (!PRODUCT_IMAGES[sku]) return;
+    if (!SKUS.has(sku)) return;
     const items = cart.items().map((i) => ({ ...i }));
     const line = items.find((i) => i.sku === sku);
     if (line) line.qty = Math.min(MAX_QTY, line.qty + qty);
@@ -51,58 +46,7 @@ export const cart = {
     writeItems(items);
     track("add_to_cart", { sku, quantity: qty, ...extra });
   },
-  setQty(sku, qty) {
-    const clamped = Math.max(1, Math.min(MAX_QTY, qty));
-    writeItems(cart.items().map((i) => (i.sku === sku ? { ...i, qty: clamped } : i)));
-  },
-  remove(sku) {
-    writeItems(cart.items().filter((i) => i.sku !== sku));
-    track("remove_from_cart", { sku });
-  },
-  clear() {
-    writeItems([]);
-  },
 };
-
-export const MAX_LINE_QTY = MAX_QTY;
-
-// field: the checkout field the Worker says to fix, when it names one.
-export class ApiError extends Error {
-  constructor(status, code, message, field) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    if (field) this.field = field;
-  }
-}
-
-export async function api(path, { method = "GET", body } = {}) {
-  let response;
-  try {
-    response = await fetch(path, {
-      method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new ApiError(0, "network_error", "We couldn't reach the store. Check your connection and try again.");
-  }
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    // Non-JSON response (e.g. static server without the Worker).
-  }
-  if (!response.ok || !data) {
-    throw new ApiError(
-      response.status,
-      data?.error?.code ?? "unavailable",
-      data?.error?.message ?? "The store is unavailable right now. Please try again shortly.",
-      data?.error?.field,
-    );
-  }
-  return data;
-}
 
 export const money = (cents) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -130,31 +74,6 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-export function routineWord(routine) {
-  return el("span", { class: `routine routine--${routine}` }, routine === "dry" ? "DRY" : "WET");
-}
-
-// Product page for a cart line (products/atomic-colored-glaze.html; Cloudflare serves it without ".html").
-export const productUrl = (id) => (PRODUCT_IMAGES[id] && PRODUCT_SLUGS[id] ? `products/${PRODUCT_SLUGS[id]}.html` : null);
-
-// The product name links to its product page. `newTab` keeps a shopper who is mid-checkout on this page.
-export function productName(line, { newTab = false } = {}) {
-  const text = line.name.replace(/^APGO /, "");
-  const href = productUrl(line.id);
-  if (!href) return el("span", { class: "product-name" }, text);
-  return el("a", { class: "product-name product-link", href, ...(newTab ? { target: "_blank", rel: "noopener" } : {}) }, text);
-}
-
-export function productTitle(line, options) {
-  return el(
-    "span",
-    { class: "line-item__title" },
-    routineWord(line.routine),
-    productName(line, options),
-    el("span", { class: "sku-tag" }, line.sku),
-  );
-}
-
 // rows: [{ label, value, free? }]
 export function priceRows(rows, total, totalLabel = "Total") {
   const dl = el("dl", { class: "price-rows" });
@@ -166,21 +85,6 @@ export function priceRows(rows, total, totalLabel = "Total") {
 }
 
 for (const node of document.querySelectorAll("[data-year]")) node.textContent = String(new Date().getFullYear());
-
-// "[TO CONFIRM]" marker for placeholder business terms (same look as the policy pages).
-// Shown only while /api/store/config says `estimate: true`, i.e. PRICING_APPROVED is not set.
-export const isEstimate = (config) => config?.estimate === true;
-
-export function toConfirm(label = "TO CONFIRM") {
-  const mark = el("mark", { "data-to-confirm": "" }, `[${label}]`);
-  mark.setAttribute("data-estimate-mark", "");
-  return mark;
-}
-
-// A value followed by the marker when `estimate` is on; plain text otherwise.
-export function withEstimate(value, estimate) {
-  return estimate ? el("span", {}, value, " ", toConfirm()) : value;
-}
 
 export function notice(tone, title, body) {
   return el(
@@ -201,7 +105,7 @@ document.addEventListener("click", (event) => {
   if (!trigger) return;
   event.preventDefault();
   cart.add(trigger.getAttribute("data-add-to-cart"), 1, trigger.dataset.placement ? { placement: trigger.dataset.placement } : {});
-  if (trigger.hasAttribute("data-go-to-cart")) window.location.href = "cart.html";
+  if (trigger.hasAttribute("data-go-to-cart")) window.location.href = "/cart";
 });
 
 window.addEventListener("apgo:cart-updated", renderCartCount);

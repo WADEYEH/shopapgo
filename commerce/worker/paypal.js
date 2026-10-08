@@ -354,7 +354,7 @@ export function storefrontOrigin(request, env = {}) {
 }
 
 export function checkoutReturnUrls(origin, orderId) {
-  const base = `${origin}/checkout.html?order=${encodeURIComponent(orderId)}`;
+  const base = `${origin}/checkout?order=${encodeURIComponent(orderId)}`;
   return { returnUrl: `${base}&paypal=return`, cancelUrl: `${base}&paypal=cancel` };
 }
 

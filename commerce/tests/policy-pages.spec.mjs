@@ -17,11 +17,11 @@ for (const slug of pages) {
   });
 }
 
-test("cart footer reaches every policy page", async ({ page }) => {
-  await page.goto("/cart.html");
+test("the cart page footer (the site footer) reaches every policy page", async ({ page }) => {
   for (const [label, slug] of [["Privacy Policy", "privacy"], ["Terms of Sale", "terms"], ["Returns & Refunds", "returns"], ["Contact", "contact"]]) {
-    await page.goto("/cart.html");
-    await page.locator(".shop-footer__links").getByRole("link", { name: label }).click();
-    await expect(page).toHaveURL(new RegExp(`${slug}\\.html$`));
+    await page.goto("/cart");
+    await page.locator("#site-footer").getByRole("navigation", { name: "Legal" }).getByRole("link", { name: label }).click();
+    await expect(page).toHaveURL(new RegExp(`/${slug}(\\.html)?$`));
+    await expect(page.locator("h1")).toBeVisible();
   }
 });

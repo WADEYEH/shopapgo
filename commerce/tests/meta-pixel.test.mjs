@@ -14,8 +14,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
 // The store pages that are still plain HTML. The legacy Amazon landing pages (index, v2) are not part of this repo;
-// "/" serves v3 (ROOT_PAGE). The overview and the product pages are Next.js pages (D41): see the shop layout test below.
-const PIXEL_PAGES = ["cart", "checkout", "v3", "contact", "privacy", "returns", "terms"];
+// "/" serves v3 (ROOT_PAGE). The overview, the product pages, the cart and the checkout are Next.js pages (D41): see the
+// shop layout test below.
+const PIXEL_PAGES = ["v3", "contact", "privacy", "returns", "terms"];
 
 const head = (html) => html.slice(html.indexOf("<head"), html.indexOf("</head>"));
 
@@ -29,7 +30,7 @@ test("every public store page loads js/meta-pixel.js (deferred, in <head>) plus 
   }
 });
 
-test("the Next.js store pages (/products and the product pages) load it once, from the shop layout, and the brand pages do not", async () => {
+test("the Next.js store pages (/products, the product pages, /cart, /checkout) load it once, from the shop layout, and the brand pages do not", async () => {
   const layout = await read("../app/(us)/(shop)/layout.js");
   assert.equal(layout.split('<Script src="/js/meta-pixel.js" strategy="afterInteractive" />').length - 1, 1, "one pixel script");
   assert.ok(layout.includes(`src="https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1"`), "noscript pixel");
@@ -84,8 +85,8 @@ test("meta-pixel.js: fixed ids, hostname gate, event ids, and no hard-coded pric
   assert.ok(!/\b\d+\.\d{2}\b/.test(source.replace(/"2\.0"/g, "")), "no decimal money literals");
 });
 
-test("checkout.js: attribution goes into the request body but never into the session cache key", async () => {
-  const source = await read("prototype/js/commerce/checkout.js");
+test("the checkout: attribution goes into the request body but never into the session cache key", async () => {
+  const source = await read("../components/shop/checkout/CheckoutPage.js");
   assert.ok(/body:\s*\{\s*\.\.\.payload,\s*attribution:\s*readAttribution\(\)\s*\}/.test(source));
   assert.ok(/const key = JSON\.stringify\(payload\);/.test(source), "cache key is built from payload only");
   assert.ok(!/payload\s*=\s*\{[^}]*attribution/.test(source), "attribution is not part of payload");

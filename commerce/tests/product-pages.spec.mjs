@@ -114,8 +114,8 @@ for (const sku of SKUS) {
       expect(event.items).toEqual([expect.objectContaining({ item_id: sku.toUpperCase(), quantity: 3, price: unit })]);
 
       // The same cart on the cart page, with a link back to this product.
-      await page.goto("/cart.html");
-      await expect(page.locator(`[data-line="${sku}"] .product-link`)).toHaveAttribute("href", `products/${PRODUCT_SLUGS[sku]}.html`);
+      await page.goto("/cart");
+      await expect(page.locator(`[data-line="${sku}"] .product-link`)).toHaveAttribute("href", pathOf(sku));
     });
 
     test("pair upsell: ticking it adds the other routine too, with a price that is the sum of the config prices", async ({ page }) => {
@@ -391,10 +391,10 @@ test.describe("entry points", () => {
   test("checkout summary names link to the product page in a new tab", async ({ page }) => {
     await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     const links = page.locator("[data-summary-lines] .product-link");
     await expect(links).toHaveCount(2);
-    await expect(links.first()).toHaveAttribute("href", "products/atomic-colored-glaze.html");
+    await expect(links.first()).toHaveAttribute("href", pathOf("d204"));
     await expect(links.first()).toHaveAttribute("target", "_blank");
     await expect(links.first()).toHaveAttribute("rel", "noopener");
   });

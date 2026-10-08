@@ -141,7 +141,7 @@ async function handleCheckoutSession(request, env, services) {
       amount: toMajor(priced.totalCents),
       currency: priced.currency,
       merchant_order_id: orderId,
-      return_url: `${origin}/checkout.html?order=${orderId}`,
+      return_url: `${origin}/checkout?order=${orderId}`,
       customer: {
         email: checkout.email,
         first_name: checkout.shipping.firstName,
@@ -303,7 +303,7 @@ async function handlePaypalCapture(request, env, services) {
 async function captureAttribution(env, request, body, orderId, origin) {
   if (!metaEnabled(env)) return null;
   try {
-    const attribution = readAttribution(body, request, { fallbackUrl: `${origin}/checkout.html?order=${orderId}` });
+    const attribution = readAttribution(body, request, { fallbackUrl: `${origin}/checkout?order=${orderId}` });
     await saveAttribution(env.DB, orderId, attribution);
     return attribution;
   } catch (error) {

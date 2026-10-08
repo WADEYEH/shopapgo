@@ -5,11 +5,11 @@ Browser half of APGO US Meta tracking. The server half (Conversions API) lives i
 **attribution contract** below.
 
 - Pixel (dataset) ID: `2606879866471418` (public value, written in `prototype/js/meta-pixel.js`)
-- Code: `prototype/js/meta-pixel.js` (new), `prototype/js/commerce/checkout.js` (attribution +
+- Code: `prototype/js/meta-pixel.js` (new), `components/shop/checkout/CheckoutPage.js` (attribution +
   `checkout_session_created` event + order items on `purchase`)
 - Pages that load it (`<script src="js/meta-pixel.js" defer>` + `<noscript>` image in `<head>`):
-  `index`, `v2`, `v3`, `cart`, `checkout`, `contact`, `privacy`, `returns`, `terms`. The Next.js store pages (`/products` and
-  the product pages, D41) load it from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is
+  `index`, `v2`, `v3`, `contact`, `privacy`, `returns`, `terms`. The Next.js store pages (`/products`, the product pages,
+  `/cart` and `/checkout`, D41) load it from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is
   interactive, plus the `<noscript>` image); events those pages sent before it ran are read from `window.dataLayer`.
   Policy pages come from `scripts/build-policy-pages.py`; change the template and re-run it.
   **Not** loaded on `/admin/` and `v3-style.html`. The pixel is deliberately not in `shared.js`
@@ -56,7 +56,7 @@ still sent without `value` / `item_price`.
 
 `begin_checkout` fires when the checkout page opens, before any order exists. The CAPI side sends
 `InitiateCheckout` when the Worker creates the order and PaymentIntent, with `event_id =
-ic_<orderId>`. The browser therefore waits for the same moment: `ensureSession()` in `checkout.js`
+ic_<orderId>`. The browser therefore waits for the same moment: `ensureSession()` in the checkout page
 now calls
 
 ```js
@@ -77,7 +77,7 @@ additional event (and `purchase` gained an `items` array). It is not mapped in G
 
 ### Purchase and refresh safety
 
-`checkout.js` `trackPurchaseOnce` still fires `purchase` once per order per tab session
+The checkout page's `trackPurchaseOnce` still fires `purchase` once per order per tab session
 (`apgo_us_purchase_tracked_<id>`). `meta-pixel.js` adds its own guard
 (`sessionStorage["apgo_meta_purchase_<orderId>"]`), and the shared `eventID` also lets Meta
 deduplicate against the server event. `value` and `items` come from the server order
@@ -95,7 +95,7 @@ so `item_price = lineCents / qty / 100`.
     "fbp": "fb.1.1700000000000.1234567890",
     "fbc": "fb.1.1700000000001.IwAR...",
     "fbclid": "IwAR...",
-    "sourceUrl": "https://store.shopapgo.com/checkout.html"
+    "sourceUrl": "https://store.shopapgo.com/checkout"
   }
 }
 ```

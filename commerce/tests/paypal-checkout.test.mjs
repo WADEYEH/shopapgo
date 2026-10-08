@@ -1,5 +1,5 @@
 // PayPal Checkout front-end contract (docs/paypal.md on PR #7). DOM-free helpers
-// plus a static read of checkout.js so the JS SDK wiring cannot drift.
+// plus a static read of the checkout page (components/shop/checkout/CheckoutPage.js) so the JS SDK wiring cannot drift.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -78,8 +78,8 @@ test("sessionStorage helper remembers the create-order response", () => {
   assert.equal(readPaypalOrder({ getItem: () => "{not-json" }), null);
 });
 
-test("checkout.js wires the documented PayPal create / capture / return / cancel contract", async () => {
-  const source = await read("prototype/js/commerce/checkout.js");
+test("the checkout wires the documented PayPal create / capture / return / cancel contract", async () => {
+  const source = await read("../components/shop/checkout/CheckoutPage.js");
   assert.ok(source.includes("/api/checkout/paypal/order"));
   assert.ok(source.includes("/api/checkout/paypal/capture"));
   assert.ok(source.includes("paypalOrderId"));
@@ -100,30 +100,29 @@ test("checkout.js wires the documented PayPal create / capture / return / cancel
   assert.ok(!/eventIds\.(initiateCheckout|purchase)/.test(source) || source.includes("ic_<orderId>"));
 });
 
-test("checkout.html hides the PayPal slot until JS enables it", async () => {
-  const html = await read("prototype/checkout.html");
+test("the checkout hides the PayPal slot until the buttons are ready", async () => {
+  const html = await read("../components/shop/checkout/CheckoutPage.js");
   assert.ok(html.includes('id="paypal-button"'));
-  assert.ok(html.includes("data-paypal hidden"));
+  assert.ok(html.includes('data-paypal="" hidden={!paypalShown}'));
   assert.ok(html.includes("data-payment-intro"));
   assert.ok(html.includes("data-pay-methods"));
   assert.ok(html.includes('data-pay-panel="paypal"'));
   assert.ok(html.includes('data-pay-panel="card"'));
-  assert.ok(!html.includes("www.paypal.com/sdk/js"), "SDK is loaded from config.clientId, not hard-coded in HTML");
+  assert.ok(!html.includes("www.paypal.com/sdk/js"), "SDK is loaded from config.clientId (paypalSdkUrl), not hard-coded");
 });
 
-test("checkout.js persists the draft in sessionStorage and treats PayPal vs card as choose-one", async () => {
-  const source = await read("prototype/js/commerce/checkout.js");
-  assert.ok(source.includes("checkout-draft.js"));
+test("the checkout persists the draft in sessionStorage and treats PayPal vs card as choose-one", async () => {
+  const source = await read("../components/shop/checkout/CheckoutPage.js");
+  assert.ok((await read("../lib/shop/checkout.js")).includes("checkout-draft.js"));
   assert.ok(source.includes("readCheckoutDraft"));
   assert.ok(source.includes("writeCheckoutDraft"));
   assert.ok(source.includes("clearCheckoutDraft"));
   assert.ok(source.includes("restoreDraft"));
   assert.ok(source.includes("clearCheckoutDraft"));
   assert.ok(!source.includes("localStorage"));
-  assert.ok(source.includes("applyPayMethod"));
-  assert.ok(source.includes("renderPayMethods"));
-  assert.ok(source.includes('state.payMethod !== "paypal"'));
-  assert.ok(source.includes('state.payMethod !== "card"'));
-  assert.ok(source.includes("[data-pay-panel]"));
-  assert.ok(source.includes("[data-pay-methods]"));
+  assert.ok(source.includes('s.payMethod !== "paypal"'));
+  assert.ok(source.includes('s.payMethod !== "card"'));
+  assert.ok(source.includes('data-pay-panel="card" hidden={payMethod !== "card"}'));
+  assert.ok(source.includes('data-pay-panel="paypal" hidden={payMethod !== "paypal" || !paypalShown}'));
+  assert.ok(source.includes('data-pay-methods="" hidden={choices.length < 2}'));
 });

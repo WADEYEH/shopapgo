@@ -169,3 +169,5 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
 .us-cart-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: #f08417; color: #080a0c; font-size: 12px; font-weight: 700; line-height: 1; }
 .us-cart-count[hidden] { display: none; }
 @media (max-width: 900px) { .us-cart-label { display: none; } }
+/* Smallest phones: room for the logo, Shop, the cart with a two-digit count and Menu. */
+@media (max-width: 360px) { .us-cart-link { gap: 4px; } }

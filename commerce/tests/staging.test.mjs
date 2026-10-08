@@ -27,7 +27,7 @@ const call = (path, { method = "GET", headers = {}, e = env() } = {}) =>
 const NOINDEX = "noindex, nofollow, noarchive";
 
 test("staging: no credentials -> 401 with a Basic challenge and the noindex header", async () => {
-  for (const path of ["/", "/v3.html", "/cart.html", "/checkout.html", "/privacy.html", "/api/store/config"]) {
+  for (const path of ["/", "/v3.html", "/cart", "/checkout", "/privacy.html", "/api/store/config"]) {
     const res = await call(path);
     assert.equal(res.status, 401, path);
     assert.match(res.headers.get("www-authenticate"), /^Basic /);
@@ -43,9 +43,9 @@ test("staging: wrong user or password -> 401", async () => {
 });
 
 test("staging: correct credentials reach pages and the API, every response has X-Robots-Tag", async () => {
-  const page = await call("/cart.html", { headers: { Authorization: basic() } });
+  const page = await call("/cart", { headers: { Authorization: basic() } });
   assert.equal(page.status, 200);
-  assert.equal(await page.text(), "asset:/cart.html");
+  assert.equal(await page.text(), "asset:/cart");
   assert.equal(page.headers.get("x-robots-tag"), NOINDEX);
   const cfg = await call("/api/store/config", { headers: { Authorization: basic() } });
   assert.equal(cfg.status, 200);
@@ -114,7 +114,7 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
 test("non-staging (prod / local dev): pass-through, no gate, no robots override, no forced header", async () => {
   for (const extra of [{ SITE_ENV: undefined }, { SITE_ENV: "production" }, { SITE_ENV: "" }]) {
     const e = env(extra);
-    const page = await call("/cart.html", { e });
+    const page = await call("/cart", { e });
     assert.equal(page.status, 200);
     assert.equal(page.headers.get("x-robots-tag"), null);
     const robots = await call("/robots.txt", { e });
@@ -131,7 +131,7 @@ test("ROOT_PAGE: '/' serves that page only for GET/HEAD on '/', everything else 
   assert.equal(await home.text(), "asset:/v3");
   assert.equal(home.headers.get("x-robots-tag"), NOINDEX);
   assert.equal(await (await call("/", { headers: auth, e: env() })).text(), "asset:/");
-  assert.equal(await (await call("/cart.html", { headers: auth, e })).text(), "asset:/cart.html");
+  assert.equal(await (await call("/cart", { headers: auth, e })).text(), "asset:/cart");
   assert.equal(await (await call("/v2.html", { headers: auth, e })).text(), "asset:/v2.html");
   assert.equal((await call("/", { e })).status, 401); // still behind the gate
   for (const bad of ["v3", "/a/b", "//evil.example", "/v3?x", ""]) {

@@ -22,7 +22,14 @@ const OVERVIEW = "app/(us)/(shop)/products/page.js";
 const PRODUCT = "app/(us)/(shop)/products/[slug]/page.js";
 const PAGE = "components/shop/ProductPage.js";
 const CARD = "components/shop/CatalogCard.js";
-const SOURCES = [LAYOUT, OVERVIEW, PRODUCT, PAGE, CARD, "components/shop/ReadyFlag.js", "lib/shop/catalog.js", "lib/shop/cart.js", "lib/shop/store-config.js", "lib/shop/reviews.js"];
+const CART = "components/shop/CartPage.js";
+const CHECKOUT = ["components/shop/checkout/CheckoutPage.js", "components/shop/checkout/parts.js"];
+const SOURCES = [
+  LAYOUT, OVERVIEW, PRODUCT, PAGE, CARD, CART, ...CHECKOUT, "components/shop/ReadyFlag.js", "components/shop/ui.js",
+  "app/(us)/(shop)/cart/page.js", "app/(us)/(shop)/checkout/page.js",
+  "lib/shop/catalog.js", "lib/shop/cart.js", "lib/shop/store-config.js", "lib/shop/reviews.js", "lib/shop/api.js",
+  "lib/shop/checkout.js", "lib/shop/payment-sdk.js", "lib/shop/attribution.js",
+];
 const DATA = ["commerce/prototype/js/commerce/product-data.js", "commerce/prototype/js/commerce/product-reviews.js"];
 // What shoppers read: the code without its comments.
 const visible = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -75,8 +82,12 @@ test("no prices are hard-coded in the store pages, their code or the product dat
     assert.equal(/\$\s?\d/.test(text), false, `${file} must not contain a dollar amount`);
     assert.equal(/priceCents\s*[:=]\s*\d/.test(text), false, `${file} must not define a price`);
   }
-  assert.match(read("lib/shop/store-config.js"), /fetch\("\/api\/store\/config"\)/);
+  assert.match(read("lib/shop/store-config.js"), /api\("\/api\/store\/config"\)/);
   for (const file of [PAGE, CARD]) assert.match(read(file), /useStoreConfig\(\)/, `${file} reads the Worker's prices`);
+  // The cart and checkout show the Worker's quote: POST /api/cart/quote, then the checkout session.
+  assert.match(read(CART), /api\("\/api\/cart\/quote"/);
+  assert.match(read(CHECKOUT[0]), /api\("\/api\/cart\/quote"/);
+  assert.match(read(CHECKOUT[0]), /api\("\/api\/checkout\/session"/);
 });
 
 test("no runtime leftovers from the design export", () => {
@@ -179,10 +190,10 @@ test("the landing page, cart lines and checkout summary link to the product page
     assert.equal((v3.match(new RegExp(`data-product-link="${sku}"`, "g")) || []).length, 2, `${sku}: selected panel + final choice`);
   }
   assert.ok(v3.includes('<a href="products.html">Shop</a>'), "header link to the overview");
-  const shared = readProto("js/commerce/shared.js");
-  assert.match(shared, /products\/\$\{PRODUCT_SLUGS\[id\]\}\.html/);
-  assert.match(readProto("js/commerce/checkout.js"), /productName\(line, \{ newTab: true \}\)/);
-  assert.match(readProto("js/commerce/cart.js"), /productTitle\(line\)/);
+  // Cart lines and the checkout summary (new tab there) link each product name to its page.
+  assert.match(read("components/shop/ui.js"), /href=\{productPath\(line\.id\)\}/);
+  assert.match(read(CART), /<ProductName line=\{line\} \/>/);
+  assert.match(read(CHECKOUT[1]), /<ProductName line=\{line\} newTab \/>/);
 });
 
 test("package.json runs these tests; the page generator and its screenshots script are gone", () => {
@@ -205,11 +216,12 @@ test("the overview lists every product with its own Add to cart, price slot and 
 });
 
 test("store pages that are still plain HTML link to the overview (Shop) next to the cart; checkout stays focused", () => {
-  for (const file of ["cart.html", "privacy.html", "terms.html", "returns.html", "contact.html"]) {
+  for (const file of ["privacy.html", "terms.html", "returns.html", "contact.html"]) {
     const header = readProto(file).split("</header>")[0];
     assert.ok(header.includes('<a href="products.html">Shop</a>'), `${file}: Shop`);
     assert.ok(header.includes("data-cart-count"), `${file}: cart count`);
   }
-  assert.equal(readProto("checkout.html").split("</header>")[0].includes("products.html"), false, "no Shop link in the checkout header");
-  assert.ok(readProto("cart.html").includes('<a class="btn btn--sm" href="products.html">Choose Dry or Wet'), "an empty cart leads to the overview");
+  // The checkout keeps the site header with only the logo and the cart (components/us/SiteChrome.js).
+  assert.match(read("components/us/SiteChrome.js"), /const focused = singleSite && pathname === routes\.checkout;/);
+  assert.ok(read(CART).includes('<a className="btn btn--sm" href="/products">Choose Dry or Wet'), "an empty cart leads to the overview");
 });

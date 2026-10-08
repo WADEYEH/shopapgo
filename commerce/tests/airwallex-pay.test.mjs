@@ -1,5 +1,5 @@
 // Airwallex Pay front-end contract. DOM-free helpers plus a static read of
-// checkout.js / checkout.html so the Drop-in wiring cannot drift.
+// the checkout page (components/shop/checkout/CheckoutPage.js) so the Drop-in wiring cannot drift.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -72,27 +72,27 @@ test("dropInOptions restrict Drop-in to airwallex_pay on the existing PaymentInt
   assert.throws(() => dropInOptions({ quote: session.quote }), /airwallex_pay_session_required/);
 });
 
-test("checkout.js mounts Drop-in restricted to airwallex_pay and keeps the card path", async () => {
-  const source = await read("prototype/js/commerce/checkout.js");
+test("the checkout mounts Drop-in restricted to airwallex_pay and keeps the card path", async () => {
+  const source = await read("../components/shop/checkout/CheckoutPage.js");
   assert.ok(source.includes("createElement("));
   assert.ok(source.includes("AIRWALLEX_PAY_ELEMENT"));
   assert.ok(source.includes("dropInOptions"));
   assert.ok(source.includes("airwallexPayEnabled"));
   assert.ok(source.includes('payment_type: "airwallex_pay"'));
-  assert.ok(source.includes("onWalletSuccess"));
-  assert.ok(source.includes('state.payMethod !== "card"'));
+  assert.ok(source.includes("onPaymentSucceeded"));
+  assert.ok(source.includes('s.payMethod !== "card"'));
   // Card session path stays on the Airwallex endpoint.
   assert.ok(source.includes('"/api/checkout/session"'));
   assert.ok(source.includes("cardNumber.confirm"));
 });
 
-test("checkout.html offers a choose-one payment method group", async () => {
-  const html = await read("prototype/checkout.html");
-  assert.ok(html.includes('data-pay-methods'));
+test("the checkout offers a choose-one payment method group", async () => {
+  const html = await read("../components/shop/checkout/CheckoutPage.js");
+  assert.ok(html.includes('data-pay-methods=""'));
   assert.ok(html.includes('data-pay-panel="airwallex_pay"'));
   assert.ok(html.includes('data-pay-panel="card"'));
   assert.ok(html.includes('data-pay-panel="paypal"'));
-  assert.ok(html.includes('id="airwallex-pay"'));
-  assert.ok(html.includes('id="card-number"'), "card fields stay in the markup");
-  assert.ok(html.includes("data-paypal hidden"));
+  assert.ok(html.includes("id={AIRWALLEX_PAY_CONTAINER_ID}"));
+  assert.ok(html.includes('containerId="card-number"'), "card fields stay in the markup");
+  assert.ok(html.includes('data-paypal="" hidden={!paypalShown}'));
 });

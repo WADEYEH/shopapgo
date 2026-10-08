@@ -184,8 +184,8 @@ test("paypalOrderPayload uses server totals and GET_FROM_FILE when no address", 
     orderId: "APGO-US-AAAAAAAAAAAA",
     quote,
     checkout: { shipping: { firstName: "", lastName: "", street: "", city: "", state: "", zip: "" } },
-    returnUrl: "https://www.shopapgo.com/checkout.html?order=APGO-US-AAAAAAAAAAAA&paypal=return",
-    cancelUrl: "https://www.shopapgo.com/checkout.html?order=APGO-US-AAAAAAAAAAAA&paypal=cancel",
+    returnUrl: "https://www.shopapgo.com/checkout?order=APGO-US-AAAAAAAAAAAA&paypal=return",
+    cancelUrl: "https://www.shopapgo.com/checkout?order=APGO-US-AAAAAAAAAAAA&paypal=cancel",
   });
   assert.equal(empty.intent, "CAPTURE");
   assert.equal(empty.purchase_units[0].amount.value, "128.97");
@@ -196,8 +196,8 @@ test("paypalOrderPayload uses server totals and GET_FROM_FILE when no address", 
     orderId: "APGO-US-AAAAAAAAAAAA",
     quote,
     checkout: { shipping: checkoutBody.shipping },
-    returnUrl: "https://store.shopapgo.com/checkout.html?order=APGO-US-AAAAAAAAAAAA&paypal=return",
-    cancelUrl: "https://store.shopapgo.com/checkout.html?order=APGO-US-AAAAAAAAAAAA&paypal=cancel",
+    returnUrl: "https://store.shopapgo.com/checkout?order=APGO-US-AAAAAAAAAAAA&paypal=return",
+    cancelUrl: "https://store.shopapgo.com/checkout?order=APGO-US-AAAAAAAAAAAA&paypal=cancel",
   });
   assert.equal(withAddr.application_context.shipping_preference, "SET_PROVIDED_ADDRESS");
   assert.equal(withAddr.purchase_units[0].shipping.address.admin_area_1, "TX");
@@ -249,7 +249,7 @@ test("PayPal create stores a pending APGO-US order and returns the PayPal order 
   assert.equal(sent.payload.purchase_units[0].amount.value, "127.96");
   assert.equal(sent.payload.purchase_units[0].custom_id, session.orderId);
   assert.equal(sent.requestId, session.orderId);
-  assert.match(sent.payload.application_context.return_url, /store\.shopapgo\.com\/checkout\.html\?order=/);
+  assert.match(sent.payload.application_context.return_url, /store\.shopapgo\.com\/checkout\?order=/);
   const row = await db.prepare("SELECT status, payment_intent_id, total_cents FROM orders WHERE id = ?").bind(session.orderId).first();
   assert.deepEqual(row, { status: "pending", payment_intent_id: "5O190127TN364715T", total_cents: 12796 });
   const payment = await db.prepare("SELECT provider, provider_ref FROM order_payments WHERE order_id = ?").bind(session.orderId).first();

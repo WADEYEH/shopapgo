@@ -58,7 +58,7 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` | PayPal Orders v2 (sandbox on staging, live on prod) | set |
 | `PAYPAL_WEBHOOK_ID` | PayPal webhook verify | **not set** until the Dashboard URL is registered (capture + order poll still settle) |
 
-Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `EXPRESS_CHECKOUT`, `PRICING_APPROVED`, `PRICING_JSON`,
+Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `PRICING_APPROVED`, `PRICING_JSON`,
 `PAYMENT_AUTO_CAPTURE`, `APPLE_PAY_ENABLED`, `GOOGLE_PAY_ENABLED`, `WALLET_MERCHANT_NAME`, `CUSTOMER_EMAIL_FROM`, `CUSTOMER_EMAIL_REPLY_TO`, `CUSTOMER_EMAIL_POLICY_NOTE`,
 `CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`, `PAYPAL_ENV`.
 PayPal secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
@@ -81,7 +81,7 @@ whether Amazon also sends its own shipment notice (`MCF_NOTIFY_AMAZON_EMAIL`, de
 
 Follow "Go-live checklist for production" under "Environments: staging and production" and "Before switching `AIRWALLEX_ENV` to `prod`". In short: create the production D1 and
 run the schema, set production secrets, register the Airwallex production webhook, bind `store.shopapgo.com` and `admin.shopapgo.com`, set `ADMIN_HOST`, approve the numbers and only then set
-`PRICING_APPROVED = "true"` (until then production answers 503 on checkout by design), then one real low-value order. Do **not** set `EXPRESS_CHECKOUT` in production.
+`PRICING_APPROVED = "true"` (until then production answers 503 on checkout by design), then one real low-value order.
 
 ### Amazon MCF automatic shipping
 
@@ -100,20 +100,20 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
 - A shipment cannot be cancelled or edited once saved (a wrong tracking number needs a database fix); no partial shipments or multiple parcels; no refunds or post-payment cancellations in the back office.
 - A failed customer email is recorded and shown but **not retried automatically**.
 - The audit trail's actor is always the literal `admin` (one shared token). Named users need Cloudflare Access or similar.
-- **Cart-page express checkout** (wallet block on the cart page) exists as front end only and is **off by default**: clicking the wallet button does **not** complete a payment yet. `EXPRESS_CHECKOUT`
-  is set to `"false"` on staging and production and **must not be enabled** until the express payment flow is built.
+- **No express checkout on the cart page.** The unfinished cart-page Apple Pay / Google Pay block (it could not complete a payment) and its
+  `EXPRESS_CHECKOUT` flag were removed with the Next.js cart (D41). Apple Pay and Google Pay are offered on the checkout's payment step.
 - Apple Pay and Google Pay have **not been verified on real devices** (needs Safari with a card in Wallet, a registered Apple Pay domain, and Chrome with a Google account); automated tests mock feature detection.
 - Staging has a sandbox Airwallex webhook registered; genuine success and authentication-failure delivery and same-order retry are verified. Production still needs its own webhook. PayPal capture + `GET /api/orders/:id` settle without a webhook; register `PAYMENT.CAPTURE.COMPLETED` and set `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
 
 ## How it fits together
 
 ```text
-prototype/cart.html ─┐                    ┌─ worker/pricing.js   THE pricing source (prices · shipping · tax, cents)
+/cart (Next.js)     ─┐                    ┌─ worker/pricing.js   THE pricing source (prices · shipping · tax, cents)
                      │                    ├─ worker/catalog.js   quote engine that applies pricing.js
                      │                    ├─ worker/wallets.js   Apple Pay / Google Pay config + domain file route
-prototype/checkout.html ─ /api/* ─ worker/index.js ─ worker/checkout.js  input validation · order ids
-  js/commerce/*.js   │                    ├─ worker/orders.js    D1 orders + webhook idempotency
-  css/commerce.css   │                    ├─ worker/airwallex.js token · PaymentIntent · webhook HMAC
+/checkout (Next.js)     ─ /api/* ─ worker/index.js ─ worker/checkout.js  input validation · order ids
+  components/shop    │                    ├─ worker/orders.js    D1 orders + webhook idempotency
+  lib/shop           │                    ├─ worker/airwallex.js token · PaymentIntent · webhook HMAC
                      │                    ├─ worker/paypal.js    Orders v2 create · capture · webhook verify
                      │                    ├─ worker/notify.js    new paid-order notification (opt-in)
 prototype/admin/ ────┘                    ├─ worker/admin.js     admin-auth gate + /admin/api/*
@@ -164,9 +164,14 @@ The checkout engineer contract (create / capture / webhook, address mapping, Met
 `event_id`s, Dashboard webhook URL) is in [paypal.md](paypal.md). Apple/Google Pay
 are not re-enabled by that work; MCF stays off.
 
-Adding to the cart from any page: link to `cart.html?add=d204`, or use
-`<button data-add-to-cart="d215" data-placement="hero">` (add `data-go-to-cart`
-to jump to the cart) on a page that loads `js/commerce/shared.js`.
+The cart and checkout are Next.js pages (D41): `app/(us)/(shop)/cart` and `app/(us)/(shop)/checkout` (the order page is
+`/checkout?order=<id>`), built in `components/shop/CartPage.js` and `components/shop/checkout/`, on the field rules and
+payment helpers in `lib/shop/` (the rules are the Worker's own, `address-rules.js`). `/cart.html` and `/checkout.html`
+answer 301 to them with the query string kept, so payment returns registered earlier still land on the order page.
+
+Adding to the cart from any page: link to `/cart?add=d204`; Next.js pages call `addToCart()` from `lib/shop/cart.js`; a
+plain HTML page that loads `js/commerce/shared.js` can use `<button data-add-to-cart="d215" data-placement="hero">`
+(add `data-go-to-cart` to jump to the cart).
 
 ## Landing entry points (v3 only)
 
@@ -329,27 +334,10 @@ Other optional settings: `WALLET_MERCHANT_NAME` (label on the wallet sheet, defa
 it at element creation; only use it if a wallet refuses to report `ready` without an
 intent).
 
-**Cart-page express checkout: front end exists, default off (flag-gated, payment not wired).** The front end
-has an express block on the cart page (`prototype/js/commerce/cart-wallets.js`, the
-`[data-express]` section of `cart.html`). The Worker switches it with
-`EXPRESS_CHECKOUT` through `/api/store/config` → `expressCheckout`:
-
-* `EXPRESS_CHECKOUT = "true"` (exactly that string) turns it on; unset or anything else
-  is off and the block never loads Airwallex. **Staging sets it** (`[env.staging.vars]`);
-  **production does not**.
-* It only mounts the wallet buttons the same way the checkout step does (no
-  intent/order is created) and shows them when the device supports a wallet and
-  Airwallex reports `ready`; otherwise it stays collapsed. It reads `airwallexEnv` and
-  the `wallets` object (`countryCode`, `merchantName`, `autoCapture`, `applePay`,
-  `googlePay`) from the same config; the amount comes from the server quote, never from
-  the browser.
-* **Clicking the wallet button does not complete a payment yet.** The true express flow
-  (Airwallex collects the address in the wallet sheet, so the intent must be created
-  *after* the address is known and shipping/tax recomputed in the sheet via
-  `shippingAddressChange` / `shippingMethodChange`; Google Pay's express element also
-  needs `gatewayMerchantId`) is a separate server flow and is not built. Keep
-  `EXPRESS_CHECKOUT` off in production until it is, and until shipping/tax are approved.
-  The checkout-step buttons above already give one-tap payment after the address step.
+**No cart-page express checkout.** The cart page used to have an Apple Pay / Google Pay block behind `EXPRESS_CHECKOUT`
+that could not complete a payment (a real express flow needs the address from the wallet sheet and shipping/tax
+recomputed in the sheet, a separate server flow). It was removed with the Next.js cart (D41), flag included. The
+checkout-step buttons above give one-tap payment after the address step.
 
 **Estimate / `[TO CONFIRM]` markers.** While `PRICING_APPROVED` is not `"true"`,
 `/api/store/config` returns `pricingApproved: false` and `estimate: true`. The cart
@@ -428,7 +416,7 @@ express block above the chooser.
 `GET /api/store/config` includes `airwallexPay: { enabled }`. Honour `storeReady`.
 
 Code: `prototype/js/commerce/airwallex-pay.js`, wiring in
-`prototype/js/commerce/checkout.js`. Tests: `tests/airwallex-pay.test.mjs`.
+`components/shop/checkout/CheckoutPage.js`. Tests: `tests/airwallex-pay.test.mjs`.
 
 ## Go-live decisions ("needs your decision before prod")
 
@@ -454,7 +442,9 @@ Nothing below is decided; the store refuses production traffic until
 npm install
 cp .dev.vars.example .dev.vars    # fill in Airwallex SANDBOX credentials (+ admin login / ADMIN_TOKEN)
 npm run db:migrate:local           # re-run after pulling: schema.sql is additive/idempotent
-npm run dev                        # http://127.0.0.1:8799/v3.html  ·  /cart.html?add=d204  ·  /admin/
+npm run dev                        # http://127.0.0.1:8799/v3.html  ·  /admin/  (the plain HTML store pages only)
+# The cart, checkout and product pages are Next.js pages: build the single site and serve it instead
+npm run build:site && npx wrangler dev --port 8799 --assets ./site --var ROOT_PAGE:off   # /cart?add=d204
 ```
 
 Sandbox test card: `4035 5010 0000 0008`, any future expiry, any CVC.
@@ -866,7 +856,7 @@ back office. It prints only set/EMPTY per variable, never values, refuses
 
 Caveats: the script confirms with raw card data from the server, which some
 Airwallex accounts restrict; if the sandbox rejects it the script says so, and
-the browser flow (`/checkout.html`, Airwallex.js) is the authoritative test. 3DS
+the browser flow (`/checkout`, Airwallex.js) is the authoritative test. 3DS
 cards cannot be completed by a script. The webhook check is signed by the script
 with the same secret, so it does not prove the secret matches the web app: for
 that, register a tunnel URL (see above) and pay in the browser once.
@@ -890,7 +880,6 @@ Wrangler does not inherit bindings/vars/assets into `[env.*]`, and secrets are s
 | `SITE_ENV` | unset | `staging` | unset |
 | `ROOT_PAGE` | unset | `/v3`: `/` serves the v3 store entry (cart badge + Add to cart); `prototype/index.html` is the older Amazon-referral landing without a cart (`worker/root-page.js`) | unset |
 | `PRICING_APPROVED` | unset | unset (only matters for prod) | **unset**: checkout answers 503 (payments closed) until the owner approves prices/shipping/tax |
-| `EXPRESS_CHECKOUT` | unset (off) | `"true"`: cart-page Apple Pay / Google Pay block on (UI only) | **unset** (off) |
 | Airwallex keys | sandbox (`.dev.vars`) | sandbox only | production keys, set by the owner |
 
 ### Staging protections (`worker/staging.js`, active only when `SITE_ENV=staging`)
@@ -988,7 +977,6 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 - [ ] Meta CAPI (production only; see `docs/meta-tracking.md`): the owner sets `META_CAPI_ACCESS_TOKEN` (and `META_TEST_EVENT_CODE` while testing) with `--env production`; run `worker/schema.sql` on the production D1 first (adds `order_attribution`, `order_meta_events`).
 - [ ] Approve prices / shipping / tax (see "Before switching `AIRWALLEX_ENV` to `prod`"), then set `PRICING_APPROVED = "true"` (until then prod takes no payments).
 - [ ] Decide MCF, emails, Apple Pay domain verification for `store.shopapgo.com`.
-- [ ] Leave `EXPRESS_CHECKOUT` unset in production until the cart-page express payment flow is built (today it is UI only).
 - [ ] `npx wrangler deploy --env production`, then one real low-value order end to end.
 
 ## Deploy (Cloudflare): single-environment reference
@@ -1198,7 +1186,7 @@ not establish a real provider refund: record sandbox acceptance separately in
 - `tests/commerce-pricing.test.mjs` (node:test): pricing defaults, `PRICING_JSON`
   overrides and validation, configurable tax, prod gate, no price in front-end code.
 - `tests/airwallex-pay.test.mjs` (node:test): Airwallex Pay Drop-in options (`airwallex_pay`),
-  config flag, checkout.js / checkout.html wiring.
+  config flag, the checkout page's wiring.
 - `tests/commerce-wallets.test.mjs` (node:test): Apple/Google Pay detection, Airwallex.js
   element options, `payment_method_options`, flags, Apple domain-file route, wrangler routing.
 - `tests/wallets.spec.mjs` (Playwright, feature-detection mocks): no-wallet device shows

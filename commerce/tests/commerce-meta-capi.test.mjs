@@ -231,9 +231,9 @@ test("attribution: formats are validated, lengths capped, cookies and headers re
 
   // missing / wrong-typed attribution never throws
   for (const body of [undefined, null, {}, { attribution: null }, { attribution: "x" }, { attribution: [1] }, { attribution: { fbp: 5, fbc: {}, fbclid: [], sourceUrl: 7 } }]) {
-    const out = readAttribution(body, bare, { fallbackUrl: "https://store.example/checkout.html?order=A" });
+    const out = readAttribution(body, bare, { fallbackUrl: "https://store.example/checkout?order=A" });
     assert.deepEqual({ fbp: out.fbp, fbc: out.fbc, fbclid: out.fbclid, ip: out.clientIp, ua: out.clientUserAgent }, { fbp: "", fbc: "", fbclid: "", ip: "", ua: "" });
-    assert.equal(out.sourceUrl, "https://store.example/checkout.html?order=A", "falls back to the checkout url");
+    assert.equal(out.sourceUrl, "https://store.example/checkout?order=A", "falls back to the checkout url");
   }
 
   // hostile / oversized values are dropped, not stored
@@ -387,7 +387,7 @@ test("no attribution at all (older front end, curl): checkout works and events s
   const env = prodEnv(db);
   await withWorld({}, async ({ meta, intents }) => {
     const orderId = await startCheckout(env, checkoutBody()); // no attribution key, no cookie
-    assert.deepEqual(intents[0].metadata.event_source_url, `${ORIGIN}/checkout.html?order=${orderId}`, "falls back to the checkout url");
+    assert.deepEqual(intents[0].metadata.event_source_url, `${ORIGIN}/checkout?order=${orderId}`, "falls back to the checkout url");
     assert.ok(!("fbc" in intents[0].metadata) && !("fbp" in intents[0].metadata));
     const row = attributionRow(db, orderId);
     assert.deepEqual({ fbp: row.fbp, fbc: row.fbc, fbclid: row.fbclid, ip: row.client_ip, ua: row.client_user_agent }, { fbp: "", fbc: "", fbclid: "", ip: "", ua: "" });
@@ -409,7 +409,7 @@ test("attribution hostile values are dropped before they reach D1, Airwallex or 
     const row = attributionRow(db, orderId);
     assert.equal(row.fbp, "");
     assert.match(row.fbc, /^fb\.1\.\d{13}\.Iw-AR_0abc$/);
-    assert.equal(row.source_url, `${ORIGIN}/checkout.html?order=${orderId}`, "an over-long url is dropped, the fallback is used");
+    assert.equal(row.source_url, `${ORIGIN}/checkout?order=${orderId}`, "an over-long url is dropped, the fallback is used");
     assert.equal(orderRow(db, orderId).status, "pending", "orders table untouched");
     assert.equal(intents[0].metadata.fbc, row.fbc);
     assert.ok(Object.entries(intents[0].metadata).every(([k, v]) => k.length <= 50 && String(v).length <= 500));
