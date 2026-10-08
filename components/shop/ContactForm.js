@@ -134,7 +134,7 @@ export default function ContactForm() {
           {status === "sending" ? "Sending…" : <>Send message <span aria-hidden="true">→</span></>}
         </button>
       </div>
-      <p className="label contact-form__privacy">
+      <p className="contact-form__privacy">
         We use your details only to answer you. See our <a href="/privacy">Privacy Policy</a>.
       </p>
     </form>
