@@ -42,7 +42,8 @@ jobs:
       - run: npm ci --prefix ..
       - run: npm ci
       - run: npm run test:static
-      - run: npm run verify:bundle
+      # The Worker serves the site build (../out), so the bundle check needs it first.
       - run: npm run build:site
+      - run: npm run verify:bundle
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
