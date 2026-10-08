@@ -97,7 +97,7 @@
 | 项目 | 现在 | 要做的 |
 |---|---|---|
 | 首页、22 篇指南、SEO | ✓ 品牌站（www） | 沿用；按钮改成连到商品 |
-| 产品页内容 | ✓ staging：商品总览和两个商品页是网站本身的 Next.js 页面（D41），内容读商品资料（`commerce/prototype/js/commerce/product-data.js`，经 `lib/shop/catalog.js`）；首页的商品名称、SKU、容量、持久时间也读同一份 | 首页和商品页「使用时机」的写法不一样（Dry：首页「After drying」、商品页「After washing & fully drying」；Wet：首页「Before final drying」、商品页「While paint is still wet」），待你决定用哪一种 |
+| 产品页内容 | ✓ staging：商品总览和两个商品页是网站本身的 Next.js 页面（D41），内容读商品资料（`commerce/prototype/js/commerce/product-data.js`，经 `lib/shop/catalog.js`）；首页的商品名称、SKU、容量、使用时机、持久时间也读同一份（使用时机统一用商品页的写法，10/8） | — |
 | 产品结构化资料 | △ 商品页有 Product（名称、SKU、品牌、图片）；价格（Offer）只在价格核准后才加上 | 补库存状态、运费、退货资讯 |
 | 订单状态页 | △ 结账完成页有基本版 | 补上追踪号、遮蔽规则 |
 | 政策页 | △ landing 有草稿，内容跟新决定不一致；品牌站没有政策页 | 依 M11 重写 |
@@ -118,3 +118,4 @@
 | 3 | 要不要商品总览页 | 要，`/products`（10/7，D39） |
 | 4 | store.shopapgo.com 的旧网址 | 301 转到 www，保留到你删除 store 为止；删除前先完成第 4 节的检查清单（10/7，D39） |
 | 5 | 什么时候开放 Google 收录 | 正式上线时；之前没收录没关系（10/7） |
+| 6 | 首页和商品页「使用时机」的写法不一样 | 用商品页的写法：DRY「After washing & fully drying」、WET「While paint is still wet」；首页改读商品资料（10/8） |
