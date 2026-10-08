@@ -72,13 +72,19 @@ test("admin host: only the back office (its own files behind the login) and the 
     assert.equal(res.status, 200, path);
     assert.ok(res.headers.get("x-robots-tag").includes("noindex"), path);
   }
-  for (const path of ["/", "/products", "/cart", "/checkout", "/privacy", "/js/meta-pixel.js", "/css/commerce.css", "/js/admin.js", "/api/store/config", "/api/orders/APGO-US-0123456789AB", "/api/webhooks/airwallex", "/adminx", "/.well-known/apple-developer-merchantid-domain-association"]) {
+  for (const path of ["/products", "/cart", "/checkout", "/privacy", "/js/meta-pixel.js", "/css/commerce.css", "/js/admin.js", "/api/store/config", "/api/orders/APGO-US-0123456789AB", "/api/webhooks/airwallex", "/adminx", "/.well-known/apple-developer-merchantid-domain-association"]) {
     for (const headers of [{}, bearer, { Authorization: BASIC }]) {
       const res = await call(ADMIN, path, { headers, method: path.startsWith("/api/webhooks") ? "POST" : "GET" });
       assert.equal(res.status, 404, path);
       assert.ok(res.headers.get("x-robots-tag").includes("noindex"), path);
     }
   }
+  // The bare hostname opens the back office (still behind its login).
+  const home = await call(ADMIN, "/");
+  assert.equal(home.status, 302);
+  assert.equal(home.headers.get("location"), `https://${ADMIN}/admin/`);
+  assert.ok(home.headers.get("x-robots-tag").includes("noindex"));
+  assert.equal((await call(ADMIN, "/", { method: "POST" })).status, 404);
   const robots = await call(ADMIN, "/robots.txt");
   assert.equal(robots.status, 200);
   assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");

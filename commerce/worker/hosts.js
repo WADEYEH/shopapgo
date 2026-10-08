@@ -2,7 +2,7 @@
 //
 // With the plain var ADMIN_HOST set (e.g. "admin-staging.shopapgo.com"; prod plan: "admin.shopapgo.com"):
 //   * requests whose Host is ADMIN_HOST only get /admin, /admin/* (admin-auth, see admin.js; the back office's own files
-//     are there too: public/admin/), /robots.txt and the site logo; everything else is 404. Every response there carries X-Robots-Tag noindex.
+//     are there too: public/admin/), /robots.txt and the site logo, and "/" redirects to /admin/; everything else is 404. Every response there carries X-Robots-Tag noindex.
 //   * every other host (the store domain, workers.dev) answers 404 for /admin and /admin/* - the back office is not
 //     served there any more.
 // With ADMIN_HOST unset (local `npm run dev`, tests) nothing changes: one host serves both, as before.
@@ -47,6 +47,13 @@ export function hostSplit(request, env) {
     return new Response(request.method === "HEAD" ? null : "User-agent: *\nDisallow: /\n", {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": ADMIN_ROBOTS_TAG },
+    });
+  }
+  // The bare hostname opens the back office: people type the host without /admin/.
+  if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: new URL("/admin/", request.url).href, "Cache-Control": "no-store", "X-Robots-Tag": ADMIN_ROBOTS_TAG },
     });
   }
   return adminHostAllows(pathname) ? null : notFound({ "X-Robots-Tag": ADMIN_ROBOTS_TAG });

@@ -938,7 +938,7 @@ hostnames, nothing else changes.
 The back office no longer shares the store's domain. With the plain var `ADMIN_HOST` set, the Worker splits by the request `Host`:
 
 - Host = `ADMIN_HOST`: only `/admin`, `/admin/*` (still the admin-auth gate, see above; the page's own files are there too, `public/admin/`), `/robots.txt` and the
-  site logo (`/us/assets/brand/apgo-logo.png`) are served; any other path (store pages, `/api/*`, webhook, Apple Pay file) is 404. Every response
+  site logo (`/us/assets/brand/apgo-logo.png`) are served, and `/` redirects to `/admin/`; any other path (store pages, `/api/*`, webhook, Apple Pay file) is 404. Every response
   carries `X-Robots-Tag: noindex, nofollow`. It is exempt from the staging Basic gate (no double prompt). Login there is `ADMIN_LOGIN_EMAIL` + `ADMIN_LOGIN_PASSWORD`
   (HTTP Basic; same secret names on production and staging, no `SITE_ENV=staging` required), or `ADMIN_TOKEN` (Bearer, or Basic with any username and the token as password), or,
   when the plain var `ADMIN_ACCEPT_SITE_BASIC = "true"` (set on staging) and `SITE_ENV=staging`, the **same Basic user + password as the website**
