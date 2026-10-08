@@ -16,7 +16,7 @@ const usd = (cents) => `$${(cents / 100).toFixed(2)}`;
 
 async function toPaypalPayment(page, items = [{ sku: "d204", qty: 1 }]) {
   await seedCart(page, items);
-  await page.goto("/checkout.html");
+  await page.goto("/checkout");
   await fillToPayment(page);
 }
 
@@ -86,7 +86,7 @@ test.describe("PayPal checkout button", () => {
 
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
     await expect(page.locator("[data-confirmation]")).toContainText(ORDER_ID);
-    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`/checkout\\?order=${ORDER_ID}$`));
 
     expect(calls.paypalOrder).toHaveLength(1);
     expect(calls.paypalCapture).toHaveLength(1);
@@ -97,7 +97,7 @@ test.describe("PayPal checkout button", () => {
     expect(created.contact).toMatchObject({ email: "test.shopper@example.com" });
     expect(created.shipping).toMatchObject({ state: "TX", zip: "78701" });
     expect(created.method).toBeTruthy();
-    expect(created.attribution).toMatchObject({ sourceUrl: expect.stringMatching(/\/checkout\.html$/) });
+    expect(created.attribution).toMatchObject({ sourceUrl: expect.stringMatching(/\/checkout$/) });
     expect(JSON.stringify(created)).not.toMatch(/price|cents|total/i);
 
     expect(calls.paypalCapture[0]).toEqual({ paypalOrderId: PAYPAL_ID });
@@ -153,12 +153,12 @@ test.describe("PayPal checkout button", () => {
   test("?paypal=cancel stays on checkout with a gentle message", async ({ page }) => {
     await mockStore(page, { paypal: ENABLED_PAYPAL });
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto(`/checkout.html?order=${ORDER_ID}&paypal=cancel`);
+    await page.goto(`/checkout?order=${ORDER_ID}&paypal=cancel`);
 
     await expect(page.locator("[data-checkout-flow]")).toBeVisible();
     await expect(page.locator("[data-checkout-message]")).toContainText("PayPal checkout cancelled");
     await expect(page.locator("[data-confirmation]")).toBeHidden();
-    await expect(page).toHaveURL(/\/checkout\.html$/);
+    await expect(page).toHaveURL(/\/checkout$/);
   });
 
   test("?order=&paypal=return captures then confirms when paid", async ({ page }) => {
@@ -171,10 +171,10 @@ test.describe("PayPal checkout button", () => {
         eventIds: { initiateCheckout: `ic_${order}`, purchase: `purchase_${order}` },
       }));
     }, ORDER_ID);
-    await page.goto(`/checkout.html?order=${ORDER_ID}&paypal=return`);
+    await page.goto(`/checkout?order=${ORDER_ID}&paypal=return`);
 
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
-    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`/checkout\\?order=${ORDER_ID}$`));
     expect(calls.paypalCapture).toEqual([{ orderId: ORDER_ID }]);
     const events = await page.evaluate(() => (window.dataLayer || []).map((e) => e.event));
     expect(events.filter((e) => e === "purchase")).toHaveLength(1);
@@ -183,7 +183,7 @@ test.describe("PayPal checkout button", () => {
   test("return URL that stays pending shows a processing state, not Purchase", async ({ page }) => {
     await mockStore(page, { paypal: ENABLED_PAYPAL, paypalCaptureError: { status: 400, error: { code: "invalid_request", message: "Not yet approved." } }, orderStatus: "pending" });
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto(`/checkout.html?order=${ORDER_ID}&paypal=return`);
+    await page.goto(`/checkout?order=${ORDER_ID}&paypal=return`);
 
     await expect(page.locator("[data-confirmation]")).toContainText("Payment processing", { timeout: 20_000 });
     const events = await page.evaluate(() => (window.dataLayer || []).map((e) => e.event));

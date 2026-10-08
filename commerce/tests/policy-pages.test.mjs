@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");
 const pages = ["privacy", "terms", "returns", "contact"];
-const storePages = ["cart", "checkout", "v3", ...pages];
+const storePages = ["v3", ...pages]; // the cart and checkout are Next.js pages with the site footer (D41)
 
 test("policy pages exist, are noindex and show the operator and support contact", async () => {
   for (const slug of pages) {

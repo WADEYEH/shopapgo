@@ -1,6 +1,6 @@
 // The single site (scripts/build-site.mjs + worker/root-page.js): the brand export and the store pages share one asset
 // directory without overriding each other, Pages-only files stay out, test-site builds never load analytics and turn
-// on the single-site links, and URLs that moved (/us, /v3, /product, /products/d204|d215) answer 301.
+// on the single-site links, and URLs that moved (/us, /v3, /product, /products/d204|d215, /cart.html, /checkout.html) answer 301.
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -99,13 +99,16 @@ test("the old product URLs and the old store home answer 301 to their new URL, q
     "/product": "/products",
     "/product.html": "/products",
     "/Product/": "/products",
+    // The plain HTML cart and checkout became /cart and /checkout; payment returns keep their order and PayPal flags.
+    "/cart.html": "/cart",
+    "/checkout.html": "/checkout",
   };
   for (const [from, to] of Object.entries(moved)) {
     const response = siteRedirect(new Request(`https://shop.example${from}?utm_source=ads&fbclid=X`, { method: "HEAD" }));
     assert.equal(response?.status, 301, from);
     assert.equal(response.headers.get("Location"), `https://shop.example${to}?utm_source=ads&fbclid=X`, from);
   }
-  for (const pathname of ["/products", "/products.html", "/products/atomic-colored-glaze", "/products/d204x", "/productx", "/product/d204", "/v3-style.html"]) {
+  for (const pathname of ["/products", "/products.html", "/products/atomic-colored-glaze", "/products/d204x", "/productx", "/product/d204", "/cart", "/checkout", "/v3-style.html"]) {
     assert.equal(siteRedirect(new Request(`https://shop.example${pathname}`)), null, pathname);
   }
   assert.equal(siteRedirect(new Request("https://shop.example/products/d204", { method: "POST" })), null);

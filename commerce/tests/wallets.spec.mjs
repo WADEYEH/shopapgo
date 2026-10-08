@@ -21,7 +21,7 @@ const creates = (page) => page.evaluate(() => (window.__awxWalletCreates || []).
 
 async function toPayment(page, items = [{ sku: "d204", qty: 1 }]) {
   await seedCart(page, items);
-  await page.goto("/checkout.html");
+  await page.goto("/checkout");
   await fillToPayment(page);
 }
 
@@ -77,7 +77,7 @@ test.describe("Apple Pay / Google Pay", () => {
     await page.locator('[data-stub-wallet="googlePayButton"]').click();
     await page.evaluate(() => window.__awxWalletElements.googlePayButton.fire("success", {}));
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
-    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`/checkout\\?order=${ORDER_ID}$`));
     const browser = await page.evaluate(() => ({ cart: localStorage.getItem("apgo_us_cart_v1"), events: window.dataLayer.map((e) => [e.event, e.payment_type]) }));
     expect(browser.cart).toBe("[]");
     expect(browser.events).toEqual(expect.arrayContaining([["add_payment_info", "google_pay"], ["purchase", undefined]]));

@@ -125,8 +125,6 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
     // "[TO CONFIRM]" (they show nothing extra once approved).
     pricingApproved: pricingApproved(env),
     estimate: !pricingApproved(env),
-    // Cart-page Apple Pay / Google Pay block. Off unless EXPRESS_CHECKOUT is exactly "true".
-    expressCheckout: env.EXPRESS_CHECKOUT === "true",
     wallets: walletConfig(env),
     // Airwallex Pay (e-wallet) on the payment step. Default on — production Cards
     // are not enabled yet, so this is the working Airwallex method. Set

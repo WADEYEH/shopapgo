@@ -9,7 +9,7 @@ import { TEST_PHONE, fillCard, fillContact, mockStore, seedCart } from "./helper
 async function openCheckout(page, options = {}) {
   const calls = await mockStore(page, options);
   await seedCart(page, [{ sku: "d204", qty: 1 }]);
-  await page.goto("/checkout.html");
+  await page.goto("/checkout");
   return calls;
 }
 
@@ -33,7 +33,7 @@ test("a slow first quote never sends a shopper who has already moved on back to 
   const held = new Promise((resolve) => { release = resolve; });
   await page.route("**/api/cart/quote", async (route) => { await held; await route.fallback(); });
   await seedCart(page, [{ sku: "d204", qty: 1 }]);
-  await page.goto("/checkout.html");
+  await page.goto("/checkout");
   await fillContact(page);
   await expect(page.locator('[data-step="shipping"]')).toBeVisible();
   release();

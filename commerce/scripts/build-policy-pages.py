@@ -183,12 +183,4 @@ for slug, (title, eyebrow, cur, body) in pages.items():
     (ROOT / f"{slug}.html").write_text(PAGE.format(
         title=title, eyebrow=eyebrow, slug=slug, updated=UPDATED, body=(LEGEND + body if "data-to-confirm" in body else body), footer=footer(cur)), encoding="utf-8", newline="\n")
     print("wrote", slug + ".html")
-
-# Keep the store pages' footer in step with the policy pages.
-import re
-for name in ("cart", "checkout"):
-    f = ROOT / f"{name}.html"
-    s = f.read_text(encoding="utf-8")
-    new = re.sub(r'    <footer class="shop-footer">.*?</footer>', lambda m: footer(), s, flags=re.S)
-    if new != s:
-        f.write_text(new, encoding="utf-8", newline="\n"); print("footer updated", name + ".html")
+# The cart and checkout are Next.js pages with the site's own footer (D41), so there is no other footer to keep in step.

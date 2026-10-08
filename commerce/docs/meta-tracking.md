@@ -14,7 +14,7 @@ no Graph request, no attribution rows, Airwallex metadata unchanged. (The Pixel 
 | `Purchase` | `afterSettle`: the one call that moves the order pending → paid (Airwallex webhook / Retrieve poll **or** PayPal capture / `PAYMENT.CAPTURE.COMPLETED` / order poll) | `purchase_<merchant_order_id>` | `paid_at` (seconds) | D1 `total_cents / 100` |
 
 `merchant_order_id` is the `APGO-US-…` order id. Both events: `action_source = website`, `event_source_url` = the attributed `sourceUrl` (falls back to
-`<origin>/checkout.html?order=<id>`), `custom_data = { value, currency: "USD", content_type: "product", content_ids: [SKU…], contents: [{id, quantity, item_price}], order_id }`.
+`<origin>/checkout?order=<id>`), `custom_data = { value, currency: "USD", content_type: "product", content_ids: [SKU…], contents: [{id, quantity, item_price}], order_id }`.
 `value` is the amount the customer pays (items + shipping + tax), always from D1 `total_cents / 100` (5999 → 59.99). `GET /api/orders/:id` lines also carry `unitCents` (= `lineCents / qty`) so the front end can send the same `contents[].item_price`. `content_ids` are the upper-case SKUs (`D204`, `D215`), same as the Pixel. Airwallex receives dollars; D1 stores cents; the two are
 never mixed.
 

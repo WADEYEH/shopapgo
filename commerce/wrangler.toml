@@ -32,7 +32,6 @@ SITE_HOME_URL = "http://127.0.0.1:3012"   # local brand dev server (next dev); o
 #   AIRWALLEX_PAY_ENABLED                    "false" hides Airwallex Pay (default on)
 #   PAYMENT_AUTO_CAPTURE                     "false" = authorize only (default capture)
 #   WALLET_MERCHANT_NAME                     label shown on the wallet sheet (default "APGO")
-#   EXPRESS_CHECKOUT  "true" shows the cart-page Apple Pay / Google Pay block (UI incomplete; off in staging and production)
 
 [observability]
 enabled = true
@@ -90,7 +89,6 @@ SITE_HOME_URL = "https://staging.shopapgo.com"   # worker/site.js: the store's H
 # No ROOT_PAGE: "/" is the brand home from the brand export (index.html).
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
-EXPRESS_CHECKOUT = "false"                   # worker/catalog.js publicConfig: cart-page Apple Pay / Google Pay block off (UI only, not ready). Do NOT set in production yet.
 CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked

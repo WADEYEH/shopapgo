@@ -10,12 +10,12 @@ const { d204, d215 } = DEFAULT_PRICING.products;
 test.describe("cart", () => {
   test("adds from a link, prices on the server and updates quantities", async ({ page }) => {
     await mockStore(page);
-    await page.goto("/cart.html?add=d204");
+    await page.goto("/cart?add=d204");
 
     const line = page.locator('[data-line="d204"]');
     await expect(line).toContainText("DRY");
     await expect(line).toContainText(usd(d204.priceCents));
-    await expect(page).toHaveURL(/\/cart\.html$/);
+    await expect(page).toHaveURL(/\/cart$/);
     await expect(page.locator("[data-cart-count]").first()).toHaveText("1");
 
     await line.getByRole("button", { name: "Increase quantity" }).click();
@@ -30,7 +30,7 @@ test.describe("cart", () => {
 
   test("shows a notice instead of prices when the store API is unavailable", async ({ page }) => {
     await seedCart(page, [{ sku: "d215", qty: 1 }]);
-    await page.goto("/cart.html");
+    await page.goto("/cart");
     await expect(page.locator("[data-cart-message]")).toContainText("Cart unavailable");
     await expect(page.locator("[data-checkout-button]")).toHaveAttribute("aria-disabled", "true");
   });
@@ -40,7 +40,7 @@ test.describe("checkout", () => {
   test("completes contact → shipping → payment and confirms the order", async ({ page }) => {
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
 
     await page.getByRole("button", { name: /Continue to shipping/ }).click();
     await expect(page.locator('[data-field="email"] [data-error]')).toHaveText("Enter a valid email address.");
@@ -77,7 +77,7 @@ test.describe("checkout", () => {
 
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
     await expect(page.locator("[data-confirmation]")).toContainText(ORDER_ID);
-    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`/checkout\\?order=${ORDER_ID}$`));
 
     expect(calls.session).toHaveLength(1);
     const sent = calls.session[0];
@@ -102,7 +102,7 @@ test.describe("checkout", () => {
   test("a declined card shows a safe message, retains the cart and retries the same PaymentIntent", async ({ page }) => {
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
     await fillCard(page);
 
@@ -122,7 +122,7 @@ test.describe("checkout", () => {
   test("contact and shipping survive a refresh from sessionStorage", async ({ page }) => {
     await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
 
     await page.locator("#email").fill("ada@example.com");
     await page.locator("#phone").fill(TEST_PHONE);
@@ -161,7 +161,7 @@ test.describe("checkout", () => {
   test("Airwallex Pay is a choose-one option and confirms through the same session", async ({ page }) => {
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
 
     await expect(page.locator('input[name="payMethod"][value="airwallex_pay"]')).toBeVisible();
@@ -177,7 +177,7 @@ test.describe("checkout", () => {
 
     await page.locator('[data-stub-drop-in="airwallex_pay"]').click();
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
-    await expect(page).toHaveURL(new RegExp(`checkout\\.html\\?order=${ORDER_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`/checkout\\?order=${ORDER_ID}$`));
     expect(calls.session).toHaveLength(1);
     const created = await page.evaluate(() => window.__awxDropInCreates);
     expect(created).toHaveLength(1);
@@ -190,7 +190,7 @@ test.describe("checkout", () => {
 
   test("an empty cart does not start checkout", async ({ page }) => {
     await mockStore(page);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await expect(page.locator("[data-checkout-title]")).toHaveText("Your cart is empty.");
     await expect(page.locator("[data-checkout-flow]")).toBeHidden();
   });
@@ -198,14 +198,14 @@ test.describe("checkout", () => {
   test("server-reported failure retains the cart and shows a retry link", async ({ page }) => {
     await mockStore(page, { orderStatus: "pending", paymentFailure: { message: "Card verification wasn't completed. Try again or use another payment method." } });
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
     await fillCard(page);
     await page.locator("[data-place-order]").click();
     await expect(page.locator("[data-confirmation]")).toContainText("Card verification wasn't completed.");
     await expect(page.locator("[data-confirmation]")).not.toContainText("Your card was not charged");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apgo_us_cart_v1")))).toEqual([{ sku: "d204", qty: 1 }]);
-    await page.locator('[data-confirmation] a[href="checkout.html"]').click();
+    await page.locator('[data-confirmation] a[href="/checkout"]').click();
     // The checkout draft (js/commerce/checkout-draft.js) brings the shopper straight back to the payment step with their
     // details kept, so they can retry at once. (Waiting for #email to be visible raced that restore.)
     await expect(page.locator('[data-step="payment"]')).toBeVisible();
@@ -218,10 +218,10 @@ for (const width of [320, 390, 1440]) {
     await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 10 }, { sku: "d215", qty: 10 }]);
     await page.setViewportSize({ width, height: 900 });
-    for (const path of ["/cart.html", "/checkout.html"]) {
+    for (const path of ["/cart", "/checkout"]) {
       await page.goto(path);
       await expect(page.locator(".summary .price-row--total")).toBeVisible();
-      if (path === "/checkout.html") await fillToPayment(page);
+      if (path === "/checkout") await fillToPayment(page);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `${path} overflows at ${width}px`).toBeLessThanOrEqual(0);
     }
@@ -231,10 +231,10 @@ for (const width of [320, 390, 1440]) {
 test("cart and checkout have no serious or critical axe violations", async ({ page }) => {
   await mockStore(page);
   await seedCart(page, [{ sku: "d204", qty: 1 }]);
-  for (const path of ["/cart.html", "/checkout.html"]) {
+  for (const path of ["/cart", "/checkout"]) {
     await page.goto(path);
     await expect(page.locator(".summary .price-row--total")).toBeVisible();
-    if (path === "/checkout.html") await fillToPayment(page);
+    if (path === "/checkout") await fillToPayment(page);
     const results = await new AxeBuilder({ page }).analyze();
     const blocking = results.violations.filter((v) => ["serious", "critical"].includes(v.impact));
     expect(blocking.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(", ")}`), path).toEqual([]);

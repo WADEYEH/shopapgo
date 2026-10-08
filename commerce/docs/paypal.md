@@ -73,7 +73,7 @@ Fires Meta `InitiateCheckout` with `event_id = ic_<orderId>` (production only).
     "fbp": "fb.1.1700000000000.1234567890",
     "fbc": "fb.1.1700000000001.IwAR...",
     "fbclid": "IwAR...",
-    "sourceUrl": "https://www.shopapgo.com/checkout.html"
+    "sourceUrl": "https://www.shopapgo.com/checkout"
   }
 }
 ```
@@ -207,7 +207,7 @@ paypal.Buttons({
     fbq("track", "Purchase", pixelParamsFromOrder(result), {
       eventID: result.eventIds.purchase, // purchase_<orderId>
     });
-    location.assign(`/checkout.html?order=${encodeURIComponent(result.orderId)}`);
+    location.assign(`/checkout?order=${encodeURIComponent(result.orderId)}`);
   },
   onCancel: () => { /* stay on checkout; the pending order is unused */ },
 }).render("#paypal-button");
@@ -216,8 +216,8 @@ paypal.Buttons({
 Return / cancel URLs the Worker registers on the PayPal order (redirect
 fallback):
 
-- `{origin}/checkout.html?order=<id>&paypal=return`
-- `{origin}/checkout.html?order=<id>&paypal=cancel`
+- `{origin}/checkout?order=<id>&paypal=return`
+- `{origin}/checkout?order=<id>&paypal=cancel`
 
 `origin` is the request `Origin` / `Referer` when it is
 `www.shopapgo.com`, `store.shopapgo.com`, `shopapgo.com`,

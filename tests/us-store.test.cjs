@@ -9,7 +9,7 @@ const { ROOT, compile } = require("./fixture.cjs");
 
 // The single-site switch (lib/us/routes.js): store links only where the store pages are on the same host.
 const ON = { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true" };
-const STORE_KEYS = ["shop", "cart", "privacy", "terms", "returns", "contact"];
+const STORE_KEYS = ["shop", "cart", "checkout", "privacy", "terms", "returns", "contact"];
 const routesFor = (env = {}) => compile("lib/us/routes.js", { env });
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
 
@@ -60,7 +60,7 @@ test("on (the test site now, www after the cutover): same-host Shop, cart, polic
   const r = routesFor(ON);
   assert.equal(r.singleSite, true);
   assert.deepEqual(Object.fromEntries(STORE_KEYS.map((key) => [key, r.routes[key]])), {
-    shop: "/products", cart: "/cart", privacy: "/privacy", terms: "/terms", returns: "/returns", contact: "/contact",
+    shop: "/products", cart: "/cart", checkout: "/checkout", privacy: "/privacy", terms: "/terms", returns: "/returns", contact: "/contact",
   });
   // The store's list of product URLs (D39) is the source; the brand links must match it exactly.
   const data = await import(pathToFileURL(path.join(ROOT, "commerce/prototype/js/commerce/product-data.js")).href);
@@ -71,13 +71,15 @@ test("on (the test site now, www after the cutover): same-host Shop, cart, polic
 test("every store page the brand links to exists on the site", async () => {
   const r = routesFor(ON);
   const data = await import(pathToFileURL(path.join(ROOT, "commerce/prototype/js/commerce/product-data.js")).href);
-  // The overview and the product pages are Next.js pages (D41); one page file per product URL from the store's list.
+  // The overview, the product pages, the cart and the checkout are Next.js pages (D41); one page file per product URL
+  // from the store's list.
   assert.equal(r.routes.shop, "/products");
   assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)/products/page.js")), "/products");
   assert.match(read("app/(us)/(shop)/products/[slug]/page.js"), /generateStaticParams\(\) \{\n\s+return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
   for (const sku of data.SKUS) assert.equal(r.store[sku], `/products/${data.PRODUCT_SLUGS[sku]}`, sku);
-  // The cart and the policy pages are still plain HTML store pages until they move (D41 steps 4–6).
-  for (const key of ["cart", "privacy", "terms", "returns", "contact"]) {
+  for (const key of ["cart", "checkout"]) assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)", r.routes[key], "page.js")), r.routes[key]);
+  // The policy pages are still plain HTML store pages until they move (D41 step 6).
+  for (const key of ["privacy", "terms", "returns", "contact"]) {
     assert.ok(fs.existsSync(path.join(ROOT, "commerce/prototype", `${r.routes[key]}.html`)), r.routes[key]);
   }
 });
@@ -113,6 +115,22 @@ test("adding: merges the line, caps it at 10, stores it, tells the page and repo
     { event: "add_to_cart", sku: "d204", quantity: 1 },
     { event: "add_to_cart", sku: "d215", quantity: 9 },
   ]);
+});
+
+test("the cart page's changes: quantity kept between 1 and 10, remove reports remove_from_cart, clear empties it", () => {
+  const { cart, storage, dispatched, tracked } = cartModule();
+  cart.addToCart("d204", 2);
+  cart.addToCart("d215", 1);
+  cart.setCartQty("d204", 12);
+  assert.deepEqual(JSON.parse(storage.get("apgo_us_cart_v1")), [{ sku: "d204", qty: 10 }, { sku: "d215", qty: 1 }]);
+  cart.setCartQty("d215", 0);
+  assert.deepEqual(JSON.parse(storage.get("apgo_us_cart_v1")), [{ sku: "d204", qty: 10 }, { sku: "d215", qty: 1 }]);
+  cart.removeFromCart("d204");
+  assert.deepEqual(JSON.parse(storage.get("apgo_us_cart_v1")), [{ sku: "d215", qty: 1 }]);
+  assert.deepEqual(tracked.at(-1), { event: "remove_from_cart", sku: "d204" });
+  cart.clearCart();
+  assert.equal(storage.get("apgo_us_cart_v1"), "[]");
+  assert.equal(dispatched.length, 6, "every change tells the page (the header count follows it)");
 });
 
 test("storage blocked (private mode): the cart still works for the page view", () => {

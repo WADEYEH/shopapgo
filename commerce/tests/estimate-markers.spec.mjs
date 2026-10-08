@@ -4,8 +4,7 @@ import { expect, test } from "@playwright/test";
 import { fillToPayment, mockStore, seedCart } from "./helpers/store-mock.mjs";
 
 // "[TO CONFIRM]" markers on placeholder shipping / delivery / tax, driven by the Worker's own
-// /api/store/config (`estimate`, false only once PRICING_APPROVED=true), plus the cart's
-// express block being switched by the Worker's real EXPRESS_CHECKOUT flag.
+// /api/store/config (`estimate`, false only once PRICING_APPROVED=true).
 
 const APPROVED = { AIRWALLEX_ENV: "prod", PRICING_APPROVED: "true" };
 const marks = (scope) => scope.locator("mark[data-to-confirm]");
@@ -13,7 +12,7 @@ const marks = (scope) => scope.locator("mark[data-to-confirm]");
 async function openCart(page, env) {
   await mockStore(page, { env });
   await seedCart(page, [{ sku: "d204", qty: 1 }]);
-  await page.goto("/cart.html");
+  await page.goto("/cart");
   await expect(page.locator("[data-cart-summary] .price-row--total")).toBeVisible();
 }
 
@@ -38,7 +37,7 @@ test.describe("[TO CONFIRM] markers", () => {
   test("checkout shipping options and summary carry the marker until approved", async ({ page }) => {
     await mockStore(page, {});
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await page.locator("#email").fill("test.shopper@example.com");
     await page.locator("#phone").fill("(512) 555-0134");
     await page.getByRole("button", { name: /Continue to shipping/ }).click();
@@ -53,7 +52,7 @@ test.describe("[TO CONFIRM] markers", () => {
   test("checkout shows no marker anywhere once pricing is approved", async ({ page }) => {
     await mockStore(page, { env: APPROVED });
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
     await expect(marks(page.locator("body"))).toHaveCount(0);
   });
@@ -67,25 +66,4 @@ test.describe("[TO CONFIRM] markers", () => {
       expect(overflow).toBeLessThanOrEqual(0);
     });
   }
-});
-
-test.describe("cart express block follows the Worker's EXPRESS_CHECKOUT", () => {
-  const device = (page) =>
-    page.addInitScript(() => {
-      window.__awxWalletReady = { googlePayButton: true };
-    });
-
-  test("EXPRESS_CHECKOUT=\"true\" shows the block with no test override of the config", async ({ page }) => {
-    await device(page);
-    await openCart(page, { EXPRESS_CHECKOUT: "true" });
-    await expect(page.locator("[data-express]")).toHaveAttribute("data-state", "ready");
-    await expect(page.locator("[data-express]")).toBeVisible();
-  });
-
-  test("unset (production default) keeps the block hidden and never creates a wallet", async ({ page }) => {
-    await device(page);
-    await openCart(page, {});
-    await expect(page.locator("[data-express]")).toHaveAttribute("data-state", "hidden");
-    expect(await page.evaluate(() => (window.__awxWalletCreates || []).length)).toBe(0);
-  });
 });

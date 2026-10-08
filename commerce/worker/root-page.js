@@ -22,7 +22,12 @@ export const rootPageOverride = (request, env = {}) => {
 // - /v3 (the old store home, also /v3.html) -> /, the brand home (D39). Where ROOT_PAGE is "/v3" (production until
 //   the cutover), "/" still shows that page, so nothing changes for shoppers there.
 // - /product (the old one-page-for-both product page, also /product.html) -> /products, the overview (D41).
+// - /cart.html and /checkout.html (the plain HTML pages) -> /cart and /checkout, the Next.js pages (D41). The query
+//   string matters here: payment returns (Airwallex, PayPal) registered before the move land on
+//   /checkout.html?order=…, and the v3 and policy pages still link to cart.html until they move too.
 const MOVED = new Map([
+  ["/cart.html", "/cart"],
+  ["/checkout.html", "/checkout"],
   ["/us", "/"],
   ["/us/", "/"],
   ["/v3", "/"],

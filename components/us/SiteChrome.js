@@ -44,6 +44,8 @@ export default function SiteChrome({ children, footer }) {
   const dialog = useRef(null);
   const menuButton = useRef(null);
   const inGuides = pathname === routes.guides || pathname.startsWith(`${routes.guides}/`);
+  // Checkout keeps the shopper on the form (M1): the same header with only the logo and the cart.
+  const focused = singleSite && pathname === routes.checkout;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -100,6 +102,12 @@ export default function SiteChrome({ children, footer }) {
           <Link href={routes.home} aria-label="APGO home" className="us-site-logo">
             <Image src={asset("brand/apgo-logo.png")} alt="APGO" width={140} height={32} priority />
           </Link>
+          {focused ? (
+            <>
+              <nav aria-label="Site" className="us-header-desktop"><CartLink /></nav>
+              <nav aria-label="Mobile site" className="us-header-mobile"><CartLink /></nav>
+            </>
+          ) : (<>
           <nav aria-label="Site" className="us-header-desktop">
             <Link href={homeLink.href} aria-current={pathname === routes.home ? "page" : undefined}>{homeLink.label}</Link>
             <div className="us-guides-disclosure" ref={dropdown} onBlur={(event) => {
@@ -124,6 +132,7 @@ export default function SiteChrome({ children, footer }) {
             {singleSite && <CartLink />}
             <button ref={menuButton} type="button" aria-expanded={menuOpen} aria-controls="us-mobile-menu" onClick={() => setMenuOpen(true)}>Menu <span aria-hidden="true">☰</span></button>
           </nav>
+          </>)}
         </div>
       </header>
       <dialog ref={dialog} id="us-mobile-menu" className="us-drawer" aria-labelledby="us-menu-title" onCancel={() => setMenuOpen(false)} onKeyDown={(event) => {

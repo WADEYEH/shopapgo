@@ -59,7 +59,7 @@ const tracked = async (page, name) => ((await queue(page)) || []).filter((c) => 
 async function checkoutToPayment(page, host = STORE) {
   await mockStore(page);
   await seedCart(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]);
-  await page.goto(`https://${host}/checkout.html`);
+  await page.goto(`https://${host}/checkout`);
   await fillToPayment(page);
   await fillCard(page);
 }
@@ -368,7 +368,7 @@ test.describe("session attribution", () => {
     ]);
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html?fbclid=URLCLID");
+    await page.goto("/checkout?fbclid=URLCLID");
     await fillToPayment(page);
     await fillCard(page);
     await placeOrder(page);
@@ -378,7 +378,7 @@ test.describe("session attribution", () => {
       fbp: "fb.1.1700000000000.1234567890",
       fbc: "fb.1.1700000000001.COOKIECLID",
       fbclid: "URLCLID",
-      sourceUrl: expect.stringMatching(/\/checkout\.html\?fbclid=URLCLID$/),
+      sourceUrl: expect.stringMatching(/\/checkout\?fbclid=URLCLID$/),
     });
     // Order content is unchanged by the new field.
     expect(calls.session[0]).toMatchObject({ items: [{ sku: "d204", qty: 1 }], contact: { email: "test.shopper@example.com" }, shipping: { state: "TX" } });
@@ -389,7 +389,7 @@ test.describe("session attribution", () => {
     await context.addCookies([{ name: "_fbc", value: "fb.1.1700000000001.COOKIECLID", url: origin }]);
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
     await fillCard(page);
     await placeOrder(page);
@@ -400,7 +400,7 @@ test.describe("session attribution", () => {
     const bare = await mockStore(page);
     await seedCart(page, [{ sku: "d215", qty: 1 }]);
     await page.evaluate(() => { sessionStorage.clear(); });
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
     await fillCard(page);
     await placeOrder(page);
@@ -411,7 +411,7 @@ test.describe("session attribution", () => {
     const origin = new URL(testInfo.project.use.baseURL || "http://127.0.0.1:4173").origin;
     const calls = await mockStore(page);
     await seedCart(page, [{ sku: "d204", qty: 1 }]);
-    await page.goto("/checkout.html");
+    await page.goto("/checkout");
     await fillToPayment(page);
     await fillCard(page);
 
@@ -422,7 +422,7 @@ test.describe("session attribution", () => {
 
     // Meta's script drops _fbp, the shopper arrives with a new fbclid: still the same order content.
     await context.addCookies([{ name: "_fbp", value: "fb.1.1700000000000.999", url: origin }]);
-    await page.evaluate(() => { history.replaceState(null, "", "/checkout.html?fbclid=LATER"); window.__awxDecline = false; });
+    await page.evaluate(() => { history.replaceState(null, "", "/checkout?fbclid=LATER"); window.__awxDecline = false; });
     await page.locator("[data-place-order]").click();
     await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
     expect(calls.session).toHaveLength(1);
@@ -433,7 +433,7 @@ test.describe("session attribution", () => {
 });
 
 test.describe("accessibility with the pixel active", () => {
-  for (const pageName of ["v3.html", "cart.html", "privacy.html"]) {
+  for (const pageName of ["v3.html", "cart", "checkout", "privacy.html"]) {
     test(`${pageName} has no serious or critical axe violations on the store hostname`, async ({ page }) => {
       await serveHost(page, STORE);
       await mockStore(page);

@@ -39,7 +39,7 @@ test("store host: /admin and /admin/api/* answer 404 (even with the right token)
       assert.equal(res.status, 404, `${path} ${Object.keys(headers)}`);
     }
   }
-  assert.equal((await call(STORE, "/cart.html", { headers: { Authorization: BASIC } })).status, 200);
+  assert.equal((await call(STORE, "/cart", { headers: { Authorization: BASIC } })).status, 200);
   assert.equal((await call(STORE, "/", {})).status, 401, "store stays behind the Basic gate");
   // workers.dev is a store host too
   assert.equal((await call("apgo-us-store-staging.acct.workers.dev", "/admin/", { headers: bearer })).status, 404);
@@ -68,7 +68,7 @@ test("admin host: only the back office and its own css/js/logo; the storefront i
     assert.equal(res.status, 200, path);
     assert.ok(res.headers.get("x-robots-tag").includes("noindex"), path);
   }
-  for (const path of ["/", "/v3.html", "/cart.html", "/checkout.html", "/privacy.html", "/js/v3.js", "/api/store/config", "/api/orders/APGO-US-0123456789AB", "/api/webhooks/airwallex", "/adminx", "/.well-known/apple-developer-merchantid-domain-association"]) {
+  for (const path of ["/", "/v3.html", "/cart", "/checkout", "/privacy.html", "/js/v3.js", "/api/store/config", "/api/orders/APGO-US-0123456789AB", "/api/webhooks/airwallex", "/adminx", "/.well-known/apple-developer-merchantid-domain-association"]) {
     for (const headers of [{}, bearer, { Authorization: BASIC }]) {
       const res = await call(ADMIN, path, { headers, method: path.startsWith("/api/webhooks") ? "POST" : "GET" });
       assert.equal(res.status, 404, path);
@@ -103,8 +103,8 @@ test("admin host: CSRF same-origin check is relative to the admin host", { skip 
 test("ADMIN_HOST unset (local dev / tests): one host serves store and back office as before", { skip }, async () => {
   const e = env({ ADMIN_HOST: undefined, SITE_ENV: undefined });
   assert.equal((await call("localhost", "/admin/", { headers: bearer, e })).status, 200);
-  assert.equal((await call("localhost", "/cart.html", { e })).status, 200);
-  assert.equal((await call(ADMIN, "/cart.html", { e })).status, 200);
+  assert.equal((await call("localhost", "/cart", { e })).status, 200);
+  assert.equal((await call(ADMIN, "/cart", { e })).status, 200);
 });
 
 // One [env.<name>] block with its sub-tables, up to the next environment.

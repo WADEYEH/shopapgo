@@ -35,10 +35,8 @@ for (const width of [360, 1440]) {
     await expect(page).toHaveURL((url) => url.origin === site && ["/cart", "/cart.html"].includes(url.pathname));
     await expect(page.locator('[data-line="d204"]')).toBeVisible();
 
-    // The store's links back to the brand site stay on the same origin.
-    await expect(page.locator("[data-site-home]").first()).toHaveAttribute("href", `${site}/`);
-    await expect(page.locator("[data-site-guides]").first()).toHaveAttribute("href", `${site}/us/guides`);
-    await page.locator("[data-site-guides]").first().click();
+    // The cart is in the site's own header and footer (D41): back to the guides on the same origin.
+    await page.locator("#site-footer").getByRole("link", { name: "All guides" }).click();
     await expect(page).toHaveURL(`${site}/us/guides`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("APGO car care guides");
   });
@@ -79,6 +77,8 @@ test("moved URLs answer 301 with the query string; the guides and unknown paths 
     "/products/d215.html": "/products/atomic-glaze-coating",
     "/v3": "/",
     "/product.html": "/products",
+    "/checkout.html?order=APGO-US-0123456789AB&paypal=return": "/checkout?order=APGO-US-0123456789AB&paypal=return",
+    "/cart.html?add=d204": "/cart?add=d204",
   };
   for (const [from, to] of Object.entries(moved)) {
     const redirect = await request.get(`${site}${from}`, { maxRedirects: 0 });
