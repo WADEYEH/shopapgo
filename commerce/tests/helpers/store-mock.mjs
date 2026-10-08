@@ -5,6 +5,7 @@ import { validateCheckout } from "../../worker/checkout.js";
 import { ADDRESS_MESSAGES } from "../../worker/address-check.js";
 import { resolvePricing } from "../../worker/pricing.js";
 import { checkShipping } from "../../prototype/js/commerce/address-rules.js";
+import { CONTACT_MESSAGES, checkContactMessage } from "../../prototype/js/commerce/contact-rules.js";
 
 // The static test server has no Worker, so /api/* is answered here with the real
 // catalog/validation modules, and Airwallex.js is replaced by a local stub whose
@@ -138,8 +139,8 @@ window.paypal = {
 };
 `;
 
-export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified" } = {}) {
-  const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [] };
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false } = {}) {
+  const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [], contact: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
     route.fulfill({ contentType: "application/javascript", body: AIRWALLEX_STUB }));
   await page.route("https://www.paypal.com/sdk/js**", (route) =>
@@ -155,6 +156,16 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         const config = publicConfig(env);
         if (paypal !== undefined) config.paypal = paypal;
         return reply(200, config);
+      }
+      // Contact us (worker/contact.js): the same field rules; a robot field answers ok and keeps nothing.
+      if (pathname === "/api/contact") {
+        if (contactBusy) return reply(429, { error: { code: "too_many_messages", message: CONTACT_MESSAGES.busy } });
+        if (String(body?.company ?? "").trim()) return reply(200, { ok: true });
+        const { value, errors } = checkContactMessage(body ?? {});
+        const [field, message] = Object.entries(errors)[0] ?? [];
+        if (field) throw new QuoteError("invalid_contact", message, field);
+        calls.contact.push(value);
+        return reply(200, { ok: true });
       }
       if (pathname === "/api/cart/quote") return reply(200, quote(body.items, { state: body.state, method: body.method }, resolvePricing(env)));
       if (pathname === "/api/checkout/address") {

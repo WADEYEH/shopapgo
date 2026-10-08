@@ -43,10 +43,10 @@ drafts, email/password admin login and the live production settings. The legacy 
   brand pages keep `/products/d204` and `/products/d215`; the Worker answers those, and
   `/v3`, with a 301 to the new URLs (`worker/root-page.js`).
 - Every page shoppers see is moving into the Next.js site (D41, `docs/commerce-plan.md` §6). Done:
-  `/products`, the overview of every product on sale, the two product pages, `/cart` and `/checkout`
-  (`app/(us)/(shop)`, components in `components/shop`, shared store code in `lib/shop`), in the site's
-  own header and footer (on the checkout only the logo and the cart). The policy pages are still the plain
-  HTML pages in `prototype/` until they move. Because the store pages now come from the Next.js build,
+  `/products`, the two product pages, `/cart`, `/checkout`, the policy pages (`/privacy`, `/terms`, `/returns`,
+  `/shipping`, read from the drafts in `docs/legal`) and `/contact` with its form (`app/(us)/(shop)`,
+  components in `components/shop`, shared store code in `lib/shop`), in the site's own header and footer (on
+  the checkout only the logo and the cart). Of the store's customer pages only v3 is still plain HTML. Because the store pages now come from the Next.js build,
   do not deploy `main` to production before the cutover moves all of www to this Worker.
 - Store footers link back to the brand site and guides. `SITE_HOME_URL` selects
   the destination, defaulting to `https://www.shopapgo.com/us` (which now redirects to `/`).

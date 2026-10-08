@@ -258,3 +258,20 @@ CREATE TABLE IF NOT EXISTS order_payments (
   created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS order_payments_provider_ref ON order_payments (provider, provider_ref);
+
+-- ---------------------------------------------------------------------------------
+-- Contact us form (worker/contact.js, D28). Saved before the email goes out, so a message is never lost and the
+-- back office lists it. ip_hash is a salted hash that changes every UTC day (hourly sending cap only).
+-- ---------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id TEXT PRIMARY KEY,                  -- CM-<uuid>
+  created_at TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  message TEXT NOT NULL,
+  ip_hash TEXT NOT NULL,
+  email_status TEXT NOT NULL,           -- pending | sent | skipped | failed
+  email_detail TEXT
+);
+CREATE INDEX IF NOT EXISTS contact_messages_created ON contact_messages (created_at);
+CREATE INDEX IF NOT EXISTS contact_messages_ip ON contact_messages (ip_hash, created_at);

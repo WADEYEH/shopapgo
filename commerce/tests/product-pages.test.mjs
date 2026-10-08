@@ -215,12 +215,12 @@ test("the overview lists every product with its own Add to cart, price slot and 
   assert.equal((card.match(/addToCart\(/g) || []).length, 1, "one add per click");
 });
 
-test("store pages that are still plain HTML link to the overview (Shop) next to the cart; checkout stays focused", () => {
-  for (const file of ["privacy.html", "terms.html", "returns.html", "contact.html"]) {
-    const header = readProto(file).split("</header>")[0];
-    assert.ok(header.includes('<a href="products.html">Shop</a>'), `${file}: Shop`);
-    assert.ok(header.includes("data-cart-count"), `${file}: cart count`);
-  }
+test("the store's pages link to the overview (Shop) next to the cart; checkout stays focused", () => {
+  // Every Next.js store page has the site header (Shop and the cart, components/us/SiteChrome.js); v3 is the one
+  // plain HTML store page left.
+  const v3 = readProto("v3.html").split("</header>")[0];
+  assert.ok(v3.includes('<a href="products.html">Shop</a>'), "v3: Shop");
+  assert.ok(v3.includes("data-cart-count"), "v3: cart count");
   // The checkout keeps the site header with only the logo and the cart (components/us/SiteChrome.js).
   assert.match(read("components/us/SiteChrome.js"), /const focused = singleSite && pathname === routes\.checkout;/);
   assert.ok(read(CART).includes('<a className="btn btn--sm" href="/products">Choose Dry or Wet'), "an empty cart leads to the overview");

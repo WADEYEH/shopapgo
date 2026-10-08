@@ -57,8 +57,9 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | `AMAZON_OUTBOUND_BASE_URL`, `OUTBOUND_INTERNAL_TOKEN` | Amazon MCF through amazon-spapi-mcp | set |
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` | PayPal Orders v2 (sandbox on staging, live on prod) | set |
 | `PAYPAL_WEBHOOK_ID` | PayPal webhook verify | **not set** until the Dashboard URL is registered (capture + order poll still settle) |
+| `TURNSTILE_SECRET_KEY` | Contact us bot check (Cloudflare Turnstile), with the plain var `TURNSTILE_SITE_KEY` | not set (the form relies on the robot field and the hourly caps) |
 
-Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `PRICING_APPROVED`, `PRICING_JSON`,
+Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `CONTACT_EMAIL_TO`, `TURNSTILE_SITE_KEY`, `PRICING_APPROVED`, `PRICING_JSON`,
 `PAYMENT_AUTO_CAPTURE`, `APPLE_PAY_ENABLED`, `GOOGLE_PAY_ENABLED`, `WALLET_MERCHANT_NAME`, `CUSTOMER_EMAIL_FROM`, `CUSTOMER_EMAIL_REPLY_TO`, `CUSTOMER_EMAIL_POLICY_NOTE`,
 `CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`, `PAYPAL_ENV`.
 PayPal secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
@@ -245,6 +246,25 @@ Old addresses answer 301 with the query string kept (`worker/root-page.js`): `/p
   site: both products and the overview, add to cart and analytics, pair, sticky bar, config prices, hide rules,
   JSON-LD, 390 / 1440 overflow, axe, 44 px targets, keyboard) and the site's `tests/us-store.test.cjs` (cart rules,
   the reviews rule, the header cart link).
+
+## Policy pages and Contact us (`/privacy`, `/terms`, `/returns`, `/shipping`, `/contact`)
+
+Next.js pages of the site (D41), in its own header and footer; all `noindex` until launch.
+
+* **Policy pages** show the drafts in `docs/legal/` exactly as written (`components/shop/PolicyPage.js`, read at build
+  time by `lib/shop/markdown.js`, which knows headings, paragraphs, lists, tables, bold, italic and links). The owner and
+  counsel edit those files; the next build shows the change. A bracketed note that is not a link ("[legal entity
+  name]") is an open point and shows as `[TO CONFIRM: …]`; the draft's own first line shows as the draft notice. The old
+  generator (`scripts/build-policy-pages.py`) and the plain HTML pages are gone. `tests/policy-pages.test.mjs` checks
+  that the drafts agree with the store's rules (shipping cost and time, where we ship, the returns window).
+* **Contact us** (D28): the support details (`lib/us/company.js`) and a form (`components/shop/ContactForm.js`) with
+  name, email and message. `POST /api/contact` (`worker/contact.js`) checks the same rules
+  (`prototype/js/commerce/contact-rules.js`), saves the message in D1 (`contact_messages`), then emails it to
+  `CONTACT_EMAIL_TO` through Resend (same sender as the order emails) with the shopper as Reply-To. Saved even when the
+  email cannot go out; the back office lists every message under "Customer messages" (`GET /admin/api/contact-messages`).
+  Abuse limits (M12-06): a field only robots fill, 5 messages an hour per address (a salted hash that changes daily,
+  never the address) and 60 an hour overall, and Cloudflare Turnstile once `TURNSTILE_SITE_KEY` (var) and
+  `TURNSTILE_SECRET_KEY` (secret) are set. Staging sends only to the approved test recipient.
 
 ## Prices, shipping and tax: one source (`worker/pricing.js`)
 

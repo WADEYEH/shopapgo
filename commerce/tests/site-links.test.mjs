@@ -27,5 +27,5 @@ test("every store page's built-in fallback links point at the current brand home
       }
     }
   }
-  assert.ok(checked >= 10, `checked ${checked} links`); // the policy pages and v3 (the cart and checkout are Next.js pages)
+  assert.ok(checked >= 2, `checked ${checked} links`); // v3, the one plain HTML store page left (the rest are Next.js pages)
 });

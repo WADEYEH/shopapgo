@@ -92,6 +92,7 @@ ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic lo
 CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
+CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"   # worker/contact.js: Contact us messages go to the approved test recipient on staging
 CUSTOMER_EMAIL_POLICY_NOTE = "TEST EMAIL - Sample order and shipping details only. No payment or shipment took place."
 CUSTOMER_EMAIL_ENABLED = "true"             # staging only: dedicated key configured, exact owner-approved recipient allowlist
 CUSTOMER_EMAIL_RETRY_CRON = "true"          # recovers new payment instructions and outbox rows; no historical backfill
@@ -168,6 +169,10 @@ SITE_HOME_URL = "https://www.shopapgo.com"
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
 META_DATASET_ID = "2606879866471418"
+# Contact us form (worker/contact.js, D28): messages go to the customer-service inbox, sent with the order-email sender
+# (RESEND_API_KEY + CUSTOMER_EMAIL_FROM). Turnstile (bot check) once the owner sets TURNSTILE_SITE_KEY here and the secret
+# TURNSTILE_SECRET_KEY.
+CONTACT_EMAIL_TO = "services@apgo.com.tw"
 # ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Admin login is
 # ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves

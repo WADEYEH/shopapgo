@@ -8,10 +8,9 @@ Browser half of APGO US Meta tracking. The server half (Conversions API) lives i
 - Code: `prototype/js/meta-pixel.js` (new), `components/shop/checkout/CheckoutPage.js` (attribution +
   `checkout_session_created` event + order items on `purchase`)
 - Pages that load it (`<script src="js/meta-pixel.js" defer>` + `<noscript>` image in `<head>`):
-  `index`, `v2`, `v3`, `contact`, `privacy`, `returns`, `terms`. The Next.js store pages (`/products`, the product pages,
-  `/cart` and `/checkout`, D41) load it from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is
+  `index`, `v2`, `v3`. The Next.js store pages (`/products`, the product pages, `/cart`, `/checkout`, the policy pages
+  and `/contact`, D41) load it from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is
   interactive, plus the `<noscript>` image); events those pages sent before it ran are read from `window.dataLayer`.
-  Policy pages come from `scripts/build-policy-pages.py`; change the template and re-run it.
   **Not** loaded on `/admin/` and `v3-style.html`. The pixel is deliberately not in `shared.js`
   (admin pages load that file).
 

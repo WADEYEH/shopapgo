@@ -126,6 +126,8 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
     pricingApproved: pricingApproved(env),
     estimate: !pricingApproved(env),
     wallets: walletConfig(env),
+    // Contact us form (worker/contact.js): the Turnstile widget key, only once both Turnstile keys are set.
+    contact: { turnstileSiteKey: env.TURNSTILE_SECRET_KEY && env.TURNSTILE_SITE_KEY ? String(env.TURNSTILE_SITE_KEY) : null },
     // Airwallex Pay (e-wallet) on the payment step. Default on — production Cards
     // are not enabled yet, so this is the working Airwallex method. Set
     // AIRWALLEX_PAY_ENABLED=false to hide the option; the card UI stays.
