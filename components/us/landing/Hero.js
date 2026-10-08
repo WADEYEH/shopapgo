@@ -138,7 +138,7 @@ export default function Hero() {
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ ...specNum, color: color.dry, letterSpacing: ".04em" }}>DRY</span>
-            <span style={specLabel}>Apply after drying</span>
+            <span style={specLabel}>{products.d204.when}</span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ ...specNum, textTransform: "uppercase" }}>{products.d204.name}</span>

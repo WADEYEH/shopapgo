@@ -9,12 +9,14 @@ import { track } from "@/lib/us/analytics";
 import ProductCta from "./ProductCta";
 import RoutineSelector from "./RoutineSelector";
 
-// The product facts (name, SKU, contents, how long it lasts) come from the store's product data via lib/us/tokens.js.
+// The product facts (name, SKU, contents, when to apply, how long it lasts) come from the store's product data via
+// lib/us/tokens.js.
 const fact = (sku) => {
   const p = products[sku];
   return {
     name: p.name,
     tag: p.tag,
+    when: p.when,
     lasts: p.lasts,
     contents: `${p.size} / ${p.oz}`,
     meta: `${p.name} · ${p.tag} · ${p.size} · Up to ${p.lasts}`,
@@ -28,7 +30,6 @@ const PANEL = {
     word: "DRY",
     accent: color.dry,
     ...fact("d204"),
-    when: "After drying",
     footageLabel: "Real footage · Dry-surface application",
     heading: "The finishing step, on your terms.",
     body: "Wash, dry fully, then in the shade: spray one panel, spread, buff with a clean microfiber. A separate finish—without the hours a wax used to ask for.",
@@ -44,7 +45,6 @@ const PANEL = {
     word: "WET",
     accent: color.wet,
     ...fact("d215"),
-    when: "Before final drying",
     footageLabel: "Real footage · Wet-surface application",
     heading: "Finish while the water is still on the paint.",
     body: "Rinse, then while the paint is still wet: spray, spread with a wet cloth, and dry the car as usual. No extra step—the finish goes on the way to the towel.",
