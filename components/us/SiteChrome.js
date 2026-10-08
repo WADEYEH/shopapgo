@@ -119,7 +119,7 @@ export default function SiteChrome({ children, footer }) {
           <nav aria-label="Mobile site" className="us-header-mobile">
             {/* Phones have room for three items: on the single site Shop and the cart; the guides stay in the menu. */}
             {singleSite
-              ? <a href={routes.shop}>Shop</a>
+              ? <a href={routes.shop} className="us-header-shop">Shop</a>
               : <Link href={routes.guides} className={inGuides ? "is-active" : undefined} aria-current={pathname === routes.guides ? "page" : undefined}>Guides</Link>}
             {singleSite && <CartLink />}
             <button ref={menuButton} type="button" aria-expanded={menuOpen} aria-controls="us-mobile-menu" onClick={() => setMenuOpen(true)}>Menu <span aria-hidden="true">☰</span></button>

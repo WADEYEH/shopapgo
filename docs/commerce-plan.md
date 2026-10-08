@@ -89,6 +89,7 @@
 | D38 | 10/6 | 测试站改回 `staging.shopapgo.com`（后台 `admin-staging.shopapgo.com`）：landing 冻结后不会再互相覆盖，而且 staging 已经设好全部测试用密钥和 Airwallex 测试通知。`next.shopapgo.com` 停用，它的 Worker 和数据库由你在 Cloudflare 删除 | 取代 D35 |
 | D39 | 10/7 | M1 前台：商品页网址改用商品名称（旧网址 301）；页首加「Shop」和购物车件数；新增商品总览 `/products`；store.shopapgo.com 的网址都 301 到 www，保留到你删除 store 为止（删除前先搬付款通知、Apple Pay 网域和广告连结）；商品页正式上线时才开放收录 | 见 `docs/design/modules/M1-pages-content.md` |
 | D40 | 10/7 | GA4／GTM 用 9 月建的那一套：GTM `GTM-TD5NTFH9` → GA4 `G-YM10YMKE30`（资源「shopapgo.com (US)」，在公司行销帐号 mkt@apgo.com.tw 底下）。线上现在载入的 `GTM-56WK5G8T` → `G-DRY1NJHGXW` 不再使用，已收到的资料留作历史 | 解决 O2；见 M10 |
+| D41 | 10/7 | 顾客看到的所有页面（首页、指南、商品总览、商品页、购物车、结账、订单页、政策页、联络页）都做在同一个 Next.js 网站里，共用同一个页首、页尾和样式；商品资料只有一份，页面和后端都读它。切换上线前完成。理由：以后维护简单（一套做法、改一个地方）。商店现有的规则、地址检查、付款流程沿用，只换画面那一层；后台不在范围内 | 取代阶段 2 第一步「两种页面由同一个程式拼在一起」的过渡做法；见第 3 章、第 6 章阶段 2 |
 
 ---
 
@@ -158,20 +159,18 @@
 
 | 路径 | 内容 | 说明 |
 |---|---|---|
-| `/` | 301 转到 `/us` | 维持现状 |
-| `/us` | 首页：品牌介绍加商品入口 | 原本 5 个 Amazon 按钮改成「看商品 / 加入购物车」 |
-| `/us/guides/…` | 22 篇指南 | 网址不变；文中的产品卡片改连到产品页 |
-| `/us/products` | 商品总览 | 新增 |
-| `/us/products/colored-glaze` | D204 产品页 | 网址用描述性名称（有利 SEO），SKU 只放在资料里 |
-| `/us/products/glaze-coating` | D215 产品页 | 同上 |
-| `/us/cart` | 购物车 | 不让搜索引擎收录 |
-| `/us/checkout` | 结账 | 不收录 |
-| `/us/order` | 订单完成与查询（`?id=订单编号`） | 不收录 |
-| `/us/policies/privacy`、`terms`、`returns`、`shipping` | 政策页 | 新增运费政策页 |
-| `/us/contact` | 联络我们 | 联络资讯，加上联络表单（D28） |
+| `/` | 首页：品牌介绍加商品入口 | main #26 起首页在 `/`；`/us` 301 转到 `/` |
+| `/us/guides/…` | 指南 | 网址不变；文中的产品卡片连到商品页 |
+| `/products` | 商品总览 | D39 |
+| `/products/atomic-colored-glaze` | D204 商品页 | D39；旧网址 `/products/d204` 301 转来 |
+| `/products/atomic-glaze-coating` | D215 商品页 | D39；旧网址 `/products/d215` 301 转来 |
+| `/cart` | 购物车 | 不收录 |
+| `/checkout` | 结账，付款完成后显示订单状态（`?order=订单编号`） | 不收录 |
+| `/privacy`、`/terms`、`/returns`、`/shipping` | 政策页 | 运费政策页是新增的（M11） |
+| `/contact` | 联络我们 | 联络资讯，加上联络表单（D28） |
 | `/api/*` | 后端 API | 由 Worker 处理 |
-| `admin.shopapgo.com` | 后台 | Cloudflare Access 保护 |
-| `store.shopapgo.com/*` | 301 转到对应的 www 网址 | 切换后至少保留 6 个月；webhook 网址更新前照常处理 |
+| `admin.shopapgo.com` | 后台 | 只有后台网域提供 |
+| `store.shopapgo.com/*` | 301 转到对应的 www 网址 | 保留到你删除 store 为止（D39） |
 | `staging.shopapgo.com` | 测试站，跟正式站同一套代码 | Basic auth，不收录 |
 
 ### 3.2 系统组成
@@ -203,13 +202,13 @@ Cloudflare Worker「apgo-us-store」（沿用现有的正式环境资源，一�
 ### 3.3 Repo 结构（shopapgo）
 
 ```
-app/(us)/us/...          Next.js 页面：品牌、指南、商品、购物车、结账、订单、政策
-components/us/...        共用元件（新增 shop/ 元件）
-lib/us/catalog/          商品资料，唯一来源，前台和后端共用
-commerce/worker/         后端 API 与排程
-commerce/migrations/     D1 数据库迁移文件（新增）
-commerce/admin/          后台页面
-commerce/tests/          后端测试与端到端测试
+app/(us)/...             Next.js 页面：首页、指南、商品总览、商品页、购物车、结账、政策、联络（D41）
+components/us/...        共用元件：页首、页尾、指南
+components/shop/...      商店元件：商品卡、购物车、结账步骤、付款方式
+lib/shop/                商品资料、地址规则、购物车、报价显示：唯一来源，页面和后端共用
+commerce/worker/         后端 API、后台、转址与排程
+commerce/prototype/admin 后台页面（D41 不动）
+commerce/tests/          后端测试与浏览器测试（测 Next.js 做出来的网站）
 docs/                    本企划、维运文件
 wrangler.toml            Worker 设定（staging / production）
 .github/workflows/       CI 与部署
@@ -305,12 +304,24 @@ wrangler.toml            Worker 设定（staging / production）
 
 ### 阶段 2：单一网站前台（约 5–7 天）
 
-- 在 Next.js 里做：商品总览、两个产品页、购物车、结账、订单页、政策页、联络页（M1–M3、M11）。购物车和结账沿用现有逻辑，改写成 Next.js 元件；端到端测试改成测新页面。
-- 套用新规则：运费 $7.99、48 州加 DC、新退货政策、拿掉加急。
-- 首页和指南的按钮改连商品；统一 Meta Pixel；加上 GA4 电商事件和产品结构化资料。
-- Worker 改成同时提供 Next.js 静态页面（先在 staging 上做）。
+已完成（10/7）：staging 由同一个 Worker 提供整个网站（PR #29）；单一网站开关、页首 Shop 和购物车件数、商品总览、商品页新网址（PR #30）；M3 结账规则：运费 $7.99、48 州加 DC、PO Box、ZIP 对州、电话、地址验证（PR #32）。10/8：PR 一（下表步骤 1–3）完成，已部署到 staging（版本 `be0a435d`），等你同意合并。
 
-**完成条件**：staging 上是完整的单一网站；端到端测试通过；手机、平板、桌面的画面检查通过。
+接下来照 D41 把商店页搬进 Next.js，分三个 PR，每一步都要测试全过、部署 staging、检查过才往下走（约 5–7 个工作天）：
+
+| 步骤 | 内容 | PR |
+|---|---|---|
+| 1 | 共用基础：商品资料、地址规则、购物车、报价显示放到 `lib/shop/`，页面和后端都读这里；商店的样式变成网站里的样式，不影响品牌页 | 一 |
+| 2 | 所有页面用同一个页首、页尾（品牌站那一套，含 Shop 和购物车件数） | 一 |
+| 3 | 商品总览和两个商品页（网址不变）；首页的商品资讯改读同一份商品资料 | 一 |
+| 4 | 购物车 | 二 |
+| 5 | 结账：联络、地址与地址验证、信用卡、Apple Pay／Google Pay、Airwallex Pay、PayPal、完成页。规则和付款流程沿用已测过的程式，只换画面 | 二 |
+| 6 | 政策页、运费政策页、联络页搬进来（内容等 M11 的律师意见再改） | 三 |
+| 7 | 清理：删掉旧的商店页面、拼接步骤和重复的图片；Worker 直接提供 Next.js 做出来的网站 | 三 |
+| 8 | 验收：所有测试通过；staging 手机、平板、桌面检查；你在 staging 用测试卡付一次（PayPal 等测试帐号） | — |
+
+之后：统一 Meta Pixel、加上 GA4 电商事件（M10，D40 那一组）；政策页内容等律师意见（M11）；首页和指南的按钮已在 PR #30 改连商品。
+
+**完成条件**：顾客看到的页面只有一套（Next.js）；staging 上是完整的单一网站；测试全部通过；手机、平板、桌面的画面检查通过。
 
 ### 阶段 3：后台与营运（约 5–8 天）
 
@@ -327,7 +338,7 @@ wrangler.toml            Worker 设定（staging / production）
 - 切换步骤（由我执行，你在线上待命）：
   1. 备份正式数据库，套用迁移。迁移只新增资料表，不影响旧版还在运作的店。
   2. 把 shopapgo 的新版部署到正式环境的 Worker `apgo-us-store`，取代 landing 的代码（沿用正式数据库和 Airwallex 正式帐户）。store 和 admin 的网域本来就绑在这个 Worker 上：store 的网址改为 301 转到 www，webhook 路径照常处理。
-  3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker（先在 staging 网域演练过）。
+  3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker（先在 staging 网域演练过）。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
   4. 在 Airwallex 和 Resend 把 webhook 网址改成 www；在 Airwallex 登记 www 网域（Apple Pay 需要）。
   5. 冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。
   6. 观察 48 小时。Search Console 是用网域验证的，不受影响，重新提交 sitemap 即可。
@@ -438,6 +449,8 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/7 | staging 上用信用卡测试付款成功（订单 APGO-US-XMW9QVZPFDRG，确认信已寄出）；PayPal 测试等测试帐号。阶段 2 第一步完成：staging 由同一个 Worker 提供整个网站（品牌首页、指南、商品页、购物车、结账），`/us` 转到首页，测试版不载入任何追踪程式（PR #29） |
 | 10/7 | 阶段 2 第二步的第一部分完成，已部署到 staging（版本 `af3a1ff8`）：品牌站加上「单一网站开关」，只在测试站和切换后的 www 打开；页首加「Shop」和购物车件数；新增商品总览 `/products`；商品页改用新网址，旧网址和 `/v3` 都 301。商店的商品页、购物车、结账维持现有页面，由同一个 Worker 跟品牌页一起提供，没有照第 6 章原本写的改写成 Next.js 元件（待你确认）。测试：商店静态 293 项、浏览器 219 项、品牌站 29 项、单一网站 7 项都通过。下一部分：M3 结账规则 |
 | 10/7 | 阶段 2 第二步的第二部分（M3 结账规则）完成，已部署到 staging（版本 `3b2b8b11`）：运费每单 $7.99、拿掉加急；只送 48 州加 DC；挡 PO Box 和军邮；ZIP 要对得上州；电话必填；栏位太长显示错误不截断；Email 拼错提示；Google 地址验证（程式完成，等你设金钥）。顺手修了两个结账页的小问题：网路慢时顾客已经到第二步又被弹回第一步；付款完成后表单草稿偶尔被写回去。前后端用同一套规则（`address-rules.js`） |
+| 10/7 | 决定把顾客看到的所有页面都做在同一个 Next.js 网站里，切换上线前完成（D41，理由：以后维护简单）。第 3 章网址表更新为现在的网址；第 6 章阶段 2 改成八个步骤、三个 PR。PR #30、#32 的检查都已通过，等你同意合并 |
+| 10/8 | PR #30、#32 已合进 `main`。阶段 2 的 PR 一（步骤 1–3）完成，已部署到 staging（版本 `be0a435d`）：商品总览和两个商品页改成 Next.js 页面，跟首页、指南共用同一个页首和页尾，网址不变；旧的单一商品页 `/product` 301 到 `/products`；首页的商品名称、SKU、容量、持久时间改读同一份商品资料（文字逐字比对过，没有变）；Meta Pixel 不会漏记「浏览商品」；手机版页首、页尾的连结点击范围补到 44px。测试：网站 32 项、商店静态 312 项、浏览器 225 项（另 7 项单一网站测试平常跳过）都通过。待你决定首页和商品页「使用时机」用哪种写法 |
 
 ---
 

@@ -14,8 +14,10 @@ Claude Design export of **2026-10-05**, unpacked (read-only, not committed) at
 | Images | `APGO Design System/assets/{products,application,video}` are byte-identical to files already in `prototype/assets/`, so nothing was copied |
 
 The `.dc.html` files and React/JSX are design references only. Nothing from the export is loaded at
-runtime (`support.js`, `<x-dc>`, `sc-if`, `{{ }}`, React, Babel); a static test guards that. The page is
-rebuilt as plain HTML, CSS and ES modules, reusing the store's `commerce.css`, `shared.js` cart and header/footer.
+runtime (`support.js`, `<x-dc>`, `sc-if`, `{{ }}`, Babel); a static test guards that. The pages were first
+rebuilt as plain HTML; since D41 they are Next.js pages of the site (`app/(us)/(shop)/products`,
+`components/shop`), in the site's own header and footer, with the store styles scoped under `.shop`
+(`app/(us)/(shop)/shop.css`). How they work: [commerce.md](commerce.md), "Product pages and the overview".
 
 ## Section order (as designed)
 
@@ -39,10 +41,12 @@ Copy is the design's (FTC-reviewed) text, unchanged.
   shoppers: the rating line and reviews appear only with 3+ verified reviews. The before/after section is
   hidden entirely until a real photo pair exists in product-reviews.js (no placeholder slots, in any mode).
 * **Price note:** no "placeholder price" note; the note only appears when the price could not be loaded.
+* **DRY / WET switch:** the design swaps the product in place. Each routine has its own page (D39), so the
+  switch, the quiz result and the compare table link to the other product page.
 * **Quiz** uses native radio groups (keyboard and screen-reader friendly); upcoming questions are dimmed by
   colour, not opacity, to keep contrast.
 * **Keep reading:** the design links two guide articles that do not exist in this repo, so the section
-  links to the other product page and back to the store instead.
+  links to the other product page and to "How APGO works" on the home page instead.
 * **"Read the full how-to guide" button** is omitted (no guide page yet).
 * **Compare table** is a real table that fits 390 px without horizontal scrolling.
 * **Application video** is the existing click-to-load MP4 with captions already used on the v3 page

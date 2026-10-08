@@ -1,5 +1,5 @@
 import { asset } from "@/lib/us/routes";
-import { color, CONDENSED } from "@/lib/us/tokens";
+import { color, CONDENSED, products } from "@/lib/us/tokens";
 import ProductCta from "./ProductCta";
 
 const ctaStyle = {
@@ -88,8 +88,8 @@ export default function FinalSection() {
             border: `1px solid ${color.hairline}`,
           }}
         >
-          <Cell sku="d204" accent={color.dry} word="DRY" name="Atomic Colored Glaze" meta="After drying · 300 mL" cta="Shop D204" />
-          <Cell sku="d215" accent={color.wet} word="WET" name="Atomic Glaze Coating" meta="Before final drying · 200 mL" cta="Shop D215" />
+          <Cell sku="d204" accent={color.dry} word="DRY" name={products.d204.name} meta={`After drying · ${products.d204.size}`} cta={`Shop ${products.d204.tag}`} />
+          <Cell sku="d215" accent={color.wet} word="WET" name={products.d215.name} meta={`Before final drying · ${products.d215.size}`} cta={`Shop ${products.d215.tag}`} />
         </div>
       </div>
     </section>

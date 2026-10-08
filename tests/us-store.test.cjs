@@ -11,7 +11,41 @@ const { ROOT, compile } = require("./fixture.cjs");
 const ON = { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true" };
 const STORE_KEYS = ["shop", "cart", "privacy", "terms", "returns", "contact"];
 const routesFor = (env = {}) => compile("lib/us/routes.js", { env });
-const cartLink = () => compile("components/us/CartLink.js", { aliases: { "@/lib/us/routes": routesFor(ON) } });
+const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
+
+// The store's cart (lib/shop/cart.js) with a browser stand-in: localStorage, events, and the analytics it reports to.
+function cartModule({ storage = new Map(), blocked = false } = {}) {
+  const dispatched = [];
+  const tracked = [];
+  const localStorage = {
+    getItem: (key) => {
+      if (blocked) throw new Error("blocked");
+      return storage.has(key) ? storage.get(key) : null;
+    },
+    setItem: (key, value) => {
+      if (blocked) throw new Error("blocked");
+      storage.set(key, value);
+    },
+  };
+  const window = { localStorage, dispatchEvent: (event) => dispatched.push(event), addEventListener() {}, removeEventListener() {} };
+  class CustomEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.detail = init.detail;
+    }
+  }
+  const cart = compile("lib/shop/cart.js", {
+    aliases: {
+      "@/lib/shop/catalog": compile("commerce/prototype/js/commerce/product-data.js"),
+      "@/lib/us/analytics": { track: (event, params) => tracked.push({ event, ...params }) },
+    },
+    globals: { window, CustomEvent },
+  });
+  return { cart, storage, dispatched, tracked };
+}
+
+const cartLink = () =>
+  compile("components/us/CartLink.js", { aliases: { "@/lib/us/routes": routesFor(ON), "@/lib/shop/cart": cartModule().cart } });
 
 test("off (the live www until the cutover, previews): today's product links and no store links", () => {
   for (const env of [{}, { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "false" }, { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "TRUE" }, { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "1" }]) {
@@ -34,25 +68,59 @@ test("on (the test site now, www after the cutover): same-host Shop, cart, polic
   assert.equal(r.routes.shop, data.SHOP_PATH);
 });
 
-test("every store page the brand links to exists in the store", () => {
+test("every store page the brand links to exists on the site", async () => {
   const r = routesFor(ON);
-  for (const href of [...STORE_KEYS.map((key) => r.routes[key]), ...Object.values(r.store)]) {
-    assert.ok(fs.existsSync(path.join(ROOT, "commerce/prototype", `${href}.html`)), href);
+  const data = await import(pathToFileURL(path.join(ROOT, "commerce/prototype/js/commerce/product-data.js")).href);
+  // The overview and the product pages are Next.js pages (D41); one page file per product URL from the store's list.
+  assert.equal(r.routes.shop, "/products");
+  assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)/products/page.js")), "/products");
+  assert.match(read("app/(us)/(shop)/products/[slug]/page.js"), /generateStaticParams\(\) \{\n\s+return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
+  for (const sku of data.SKUS) assert.equal(r.store[sku], `/products/${data.PRODUCT_SLUGS[sku]}`, sku);
+  // The cart and the policy pages are still plain HTML store pages until they move (D41 steps 4–6).
+  for (const key of ["cart", "privacy", "terms", "returns", "contact"]) {
+    assert.ok(fs.existsSync(path.join(ROOT, "commerce/prototype", `${r.routes[key]}.html`)), r.routes[key]);
   }
 });
 
 test("only the test-site build turns the switch on", () => {
-  assert.match(fs.readFileSync(path.join(ROOT, "commerce/scripts/build-site.mjs"), "utf8"), /NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true"/);
-  assert.match(fs.readFileSync(path.join(ROOT, ".env.example"), "utf8"), /^NEXT_PUBLIC_APGO_US_SINGLE_SITE=false\r?$/m);
+  assert.match(read("commerce/scripts/build-site.mjs"), /NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true"/);
+  assert.match(read(".env.example"), /^NEXT_PUBLIC_APGO_US_SINGLE_SITE=false\r?$/m);
 });
 
-test("the header count reads the store's own cart with the store's rules", () => {
-  const { cartCount, CART_KEY } = cartLink();
-  const shared = fs.readFileSync(path.join(ROOT, "commerce/prototype/js/commerce/shared.js"), "utf8");
-  assert.ok(shared.includes(`const STORAGE_KEY = "${CART_KEY}";`), "same localStorage key as the store");
-  for (const raw of [null, "", "not json", '{"sku":"d204","qty":1}', "[]"]) assert.equal(cartCount(raw), 0, String(raw));
-  assert.equal(cartCount(JSON.stringify([{ sku: "d204", qty: 2 }, { sku: "d215", qty: 1 }])), 3);
-  assert.equal(cartCount(JSON.stringify([{ sku: "d204", qty: 1 }, { sku: "x", qty: 5 }, { sku: "d215", qty: 0 }, { sku: "d215", qty: 1.5 }, null])), 1);
+test("the store's cart: one key and the same rules as the cart and checkout pages that are still plain HTML", () => {
+  const { cart } = cartModule();
+  const shared = read("commerce/prototype/js/commerce/shared.js");
+  assert.ok(shared.includes(`const STORAGE_KEY = "${cart.CART_KEY}";`), "same localStorage key");
+  assert.ok(shared.includes(`const MAX_QTY = ${cart.MAX_QTY};`), "same quantity limit");
+  for (const raw of [null, "", "not json", '{"sku":"d204","qty":1}', "[]"]) assert.equal(cart.parseCart(raw).length, 0, String(raw));
+  assert.equal(cart.cartCount(cart.parseCart(JSON.stringify([{ sku: "d204", qty: 2 }, { sku: "d215", qty: 1 }]))), 3);
+  // Unknown products, zero, fractions and junk are dropped, as in shared.js.
+  const mixed = JSON.stringify([{ sku: "d204", qty: 1 }, { sku: "x", qty: 5 }, { sku: "d215", qty: 0 }, { sku: "d215", qty: 1.5 }, null]);
+  assert.deepEqual([...cart.parseCart(mixed)].map((line) => ({ ...line })), [{ sku: "d204", qty: 1 }]);
+});
+
+test("adding: merges the line, caps it at 10, stores it, tells the page and reports add_to_cart", () => {
+  const { cart, storage, dispatched, tracked } = cartModule();
+  cart.addToCart("d215", 2, { placement: "shop" });
+  cart.addToCart("d204");
+  cart.addToCart("d215", 9);
+  cart.addToCart("nope", 1);
+  assert.deepEqual(JSON.parse(storage.get("apgo_us_cart_v1")), [{ sku: "d215", qty: 10 }, { sku: "d204", qty: 1 }]);
+  assert.equal(cart.cartCount(), 11);
+  assert.deepEqual(dispatched.map((event) => event.type), ["apgo:cart-updated", "apgo:cart-updated", "apgo:cart-updated"]);
+  assert.deepEqual(tracked, [
+    { event: "add_to_cart", sku: "d215", quantity: 2, placement: "shop" },
+    { event: "add_to_cart", sku: "d204", quantity: 1 },
+    { event: "add_to_cart", sku: "d215", quantity: 9 },
+  ]);
+});
+
+test("storage blocked (private mode): the cart still works for the page view", () => {
+  const { cart, dispatched } = cartModule({ blocked: true });
+  assert.equal(cart.cartCount(), 0);
+  cart.addToCart("d204", 3);
+  assert.equal(cart.cartCount(), 3);
+  assert.equal(dispatched.length, 1);
 });
 
 test("the cart link's server markup: the cart page, a spoken count, the badge hidden until the cart is read", () => {
@@ -61,4 +129,16 @@ test("the cart link's server markup: the cart page, a spoken count, the badge hi
   assert.match(html, /^<a href="\/cart" class="us-cart-link" aria-label="Cart, 0 items" data-cart-link="true">/);
   assert.match(html, /<span class="us-cart-count" data-cart-count="true" hidden="">0<\/span><\/a>$/);
   assert.match(renderToStaticMarkup(createElement(CartRow)), /^<a class="us-drawer-home" href="\/cart">Cart · 0/);
+});
+
+test("reviews (FTC 16 CFR 465): only verified ones with a rating, and none at all below the minimum", () => {
+  const { reviewsToShow, verifiedReviews, averageRating } = compile("lib/shop/reviews.js");
+  const review = (rating, verified = true) => ({ rating, verified, quote: "Real quote" });
+  assert.equal(reviewsToShow(undefined, 3).length, 0);
+  assert.equal(reviewsToShow([review(5), review(4), review(5, false)], 3).length, 0, "two verified are not enough");
+  assert.equal(reviewsToShow([review(5), review(4), review(5, "true")], 3).length, 0, "verified must be exactly true");
+  assert.equal(reviewsToShow([review(5), review(4), review(Number.NaN), {}], 3).length, 0, "a review without a rating does not count");
+  assert.equal(reviewsToShow([review(5), review(4), review(3), review(2, false)], 3).length, 3);
+  assert.equal(verifiedReviews([review(5), null, review(4, false)]).length, 1);
+  assert.equal(averageRating([review(5), review(4)]), 4.5);
 });

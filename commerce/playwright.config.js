@@ -1,7 +1,12 @@
+import { existsSync } from "node:fs";
 import { defineConfig } from "@playwright/test";
 
 const baseURL = process.env.APGO_BASE_URL || "http://127.0.0.1:4173";
-const prototypeDirectory = process.env.APGO_PROTOTYPE_DIR || "prototype";
+// The single site (D41): the brand pages and the store pages as one folder. Build it first: npm run build:site.
+const prototypeDirectory = process.env.APGO_PROTOTYPE_DIR || "site";
+if (!existsSync(`${prototypeDirectory}/index.html`)) {
+  throw new Error(`Browser tests run against the built site: run "npm run build:site" first (${prototypeDirectory}/index.html is missing).`);
+}
 const port = new URL(baseURL).port || "4173";
 
 export default defineConfig({
@@ -30,7 +35,8 @@ export default defineConfig({
     command: "node scripts/serve-static.mjs",
     env: { PORT: port, APGO_PROTOTYPE_DIR: prototypeDirectory },
     url: `${baseURL}/`,
-    reuseExistingServer: true,
+    // Never reuse a server left running: it may serve another folder (an older build, the store-only prototype).
+    reuseExistingServer: false,
     timeout: 20_000,
   },
 });

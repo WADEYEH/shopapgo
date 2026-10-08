@@ -35,9 +35,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: commerce/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            commerce/package-lock.json
+      # The site's own packages too: the browser tests run against the single site, which includes the Next.js build.
+      - run: npm ci --prefix ..
       - run: npm ci
       - run: npm run test:static
       - run: npm run verify:bundle
+      - run: npm run build:site
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

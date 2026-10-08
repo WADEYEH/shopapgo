@@ -147,6 +147,9 @@ routes = [
   { pattern = "shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
 ]
 
+# Do NOT deploy main here before the cutover (docs/commerce-plan.md §6, stage 4). The overview and the product pages are
+# Next.js pages now (D41): they are not in ./prototype, and they need www's /_next/* from the same build. The cutover
+# switches this to the single site and moves all of www to this Worker in the same deploy.
 [env.production.assets]
 directory = "./prototype"
 binding = "ASSETS"

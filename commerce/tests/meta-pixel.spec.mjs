@@ -1,6 +1,6 @@
 // Meta Pixel (browser side), end to end. The page is served as an allowed store host
 // (store.shopapgo.com / shopapgo.com / www.shopapgo.com) by intercepting that origin with
-// Playwright routes (files come from prototype/, /api/* from the store mock) and Meta's
+// Playwright routes (files come from the built site, npm run build:site; /api/* from the store mock) and Meta's
 // fbevents.js is replaced by a stub, so nothing reaches Meta.
 // Because the stub never drains fbq's queue, window.fbq.queue is the list of calls the store made.
 import { readFile } from "node:fs/promises";
@@ -16,8 +16,11 @@ const PIXEL_ID = "2606879866471418";
 const STORE = "store.shopapgo.com";
 const STORE_HOSTS = ["store.shopapgo.com", "shopapgo.com", "www.shopapgo.com"];
 const { d204, d215 } = DEFAULT_PRICING.products;
-const PROTOTYPE = path.resolve(process.env.APGO_PROTOTYPE_DIR || "prototype");
-const TYPES = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".json": "application/json", ".woff2": "font/woff2" };
+const PROTOTYPE = path.resolve(process.env.APGO_PROTOTYPE_DIR || "site");
+const TYPES = {
+  ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
+  ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json", ".txt": "text/plain", ".woff2": "font/woff2", ".vtt": "text/vtt", ".mp4": "video/mp4",
+};
 
 async function serveHost(page, host) {
   const state = { fbeventsRequests: 0, facebookRequests: [] };
@@ -30,12 +33,14 @@ async function serveHost(page, host) {
     return route.fulfill({ status: 204 });
   });
   await page.route(`https://${host}/**`, async (route) => {
-    let { pathname } = new URL(route.request().url());
+    // Decoded: the Next.js chunk of /products/[slug] is requested as .../%5Bslug%5D/page-<hash>.js.
+    let pathname = decodeURIComponent(new URL(route.request().url()).pathname);
     if (pathname === "/") pathname = "/v3.html"; // ROOT_PAGE in wrangler.toml
     // API calls never leave the test: mockStore() (registered after this, so it runs first) answers them,
     // and without it the store is "down". The real store host must never be reached.
     if (/^\/(admin\/)?api\//.test(pathname)) return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     if (pathname.endsWith("/")) pathname += "index.html";
+    else if (!path.extname(pathname)) pathname += ".html"; // Cloudflare serves x.html at /x
     try {
       const file = path.join(PROTOTYPE, pathname);
       if (!file.startsWith(PROTOTYPE)) throw new Error("outside");
@@ -196,7 +201,7 @@ test.describe("product pages", () => {
   test("view_item -> one ViewContent per view, add to cart -> AddToCart with API prices; a pair is one AddToCart per product", async ({ page }) => {
     await serveHost(page, STORE);
     await mockStore(page);
-    await page.goto(`https://${STORE}/products/atomic-colored-glaze.html`);
+    await page.goto(`https://${STORE}/products/atomic-colored-glaze`);
     await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
     await page.waitForTimeout(300);
     expect(await tracked(page, "ViewContent")).toHaveLength(1);
@@ -220,21 +225,24 @@ test.describe("product pages", () => {
     expect(await tracked(page, "InitiateCheckout")).toHaveLength(0);
   });
 
-  test("switching the product sends a ViewContent for the new SKU; the product page loads Meta only on the store host", async ({ page }) => {
+  test("the other routine is its own page: the switch opens it and that page sends its own ViewContent", async ({ page }) => {
     await serveHost(page, STORE);
     await mockStore(page);
-    await page.goto(`https://${STORE}/product.html#dry`);
-    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
-    await page.locator('[data-compare-body] [data-switch-to="d215"]').click();
-    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(2);
-    expect((await tracked(page, "ViewContent")).map((c) => c[2].content_ids[0])).toEqual(["D204", "D215"]);
+    await page.goto(`https://${STORE}/products/atomic-colored-glaze`);
+    await expect.poll(async () => (await tracked(page, "ViewContent")).map((c) => c[2].content_ids[0])).toEqual(["D204"]);
+    // In the middle of the screen: the sticky add-to-cart bar slides in over the bottom of the page.
+    const view = page.locator('[data-compare-body] [data-switch-to="d215"]');
+    await view.evaluate((node) => node.scrollIntoView({ block: "center" }));
+    await view.click();
+    await page.waitForURL(`https://${STORE}/products/atomic-glaze-coating`);
+    await expect.poll(async () => (await tracked(page, "ViewContent")).map((c) => c[2].content_ids[0])).toEqual(["D215"]);
   });
 
   for (const host of ["staging.shopapgo.com", "admin.shopapgo.com"]) {
     test(`${host}: the product page loads no Meta and still works`, async ({ page }) => {
       const meta = await serveHost(page, host);
       await mockStore(page);
-      await page.goto(`https://${host}/products/atomic-glaze-coating.html?fbclid=TEST123`);
+      await page.goto(`https://${host}/products/atomic-glaze-coating?fbclid=TEST123`);
       await page.locator("[data-buyrow] [data-pdp-add]").click();
       await expect(page.locator("[data-added]")).toContainText("Added to cart");
       expect(meta.fbeventsRequests).toBe(0);
@@ -245,7 +253,7 @@ test.describe("product pages", () => {
   test("the /products overview: one ViewContent for both products (no single value), AddToCart with the API price", async ({ page }) => {
     await serveHost(page, STORE);
     await mockStore(page);
-    await page.goto(`https://${STORE}/products.html`);
+    await page.goto(`https://${STORE}/products`);
     await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
     expect((await tracked(page, "ViewContent"))[0][2]).toEqual({
       content_type: "product",
@@ -263,7 +271,7 @@ test.describe("product pages", () => {
   test("product pages have no serious or critical axe violations with the pixel active", async ({ page }) => {
     await serveHost(page, STORE);
     await mockStore(page);
-    await page.goto(`https://${STORE}/products/atomic-colored-glaze.html`);
+    await page.goto(`https://${STORE}/products/atomic-colored-glaze`);
     await page.waitForLoadState("networkidle");
     const results = await new AxeBuilder({ page }).analyze();
     const blocking = results.violations.filter((v) => ["serious", "critical"].includes(v.impact));

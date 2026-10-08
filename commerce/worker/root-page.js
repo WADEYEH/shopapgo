@@ -21,12 +21,16 @@ export const rootPageOverride = (request, env = {}) => {
 // - /products/d204 and /products/d215 (also with .html or a trailing slash) -> the named product URLs (D39).
 // - /v3 (the old store home, also /v3.html) -> /, the brand home (D39). Where ROOT_PAGE is "/v3" (production until
 //   the cutover), "/" still shows that page, so nothing changes for shoppers there.
+// - /product (the old one-page-for-both product page, also /product.html) -> /products, the overview (D41).
 const MOVED = new Map([
   ["/us", "/"],
   ["/us/", "/"],
   ["/v3", "/"],
   ["/v3.html", "/"],
   ["/v3/", "/"],
+  ["/product", "/products"],
+  ["/product.html", "/products"],
+  ["/product/", "/products"],
   ...Object.entries(PRODUCT_SLUGS).flatMap(([sku, slug]) =>
     ["", ".html", "/"].map((suffix) => [`/products/${sku}${suffix}`, `/products/${slug}`]),
   ),

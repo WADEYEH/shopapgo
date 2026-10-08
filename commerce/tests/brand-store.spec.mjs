@@ -22,8 +22,9 @@ for (const width of [360, 1440]) {
     await expect(page).toHaveURL(`${site}/products/atomic-colored-glaze`);
     await page.locator("html[data-pdp-ready='true']").waitFor();
 
+    // The product page is in the same header (D41).
     await page.getByRole("button", { name: "Add to cart" }).first().click();
-    await expect(page.locator("header [data-cart-count]")).toHaveText("1");
+    await expect(header(page, width).locator("[data-cart-count]")).toHaveText("1");
 
     // Back on a brand page, its header shows the same count and leads to the same cart.
     await page.goto(`${site}/us/guides`);
@@ -53,7 +54,7 @@ for (const width of [360, 1440]) {
     await expect(page.locator("h1")).toHaveText("Same finish. Pick your moment.");
     await expect(page.locator('[data-price-sku="d215"]')).toHaveText(/^\$\d+\.\d\d$/);
     await page.locator('[data-add-to-cart="d215"]').click();
-    await expect(page.locator("header [data-cart-count]")).toHaveText("1");
+    await expect(header(page, width).locator("[data-cart-count]")).toHaveText("1");
     await page.goto(`${site}/`);
     await expect(header(page, width).locator("[data-cart-count]")).toHaveText("1");
   });
@@ -77,6 +78,7 @@ test("moved URLs answer 301 with the query string; the guides and unknown paths 
     "/products/d204?fbclid=X": "/products/atomic-colored-glaze?fbclid=X",
     "/products/d215.html": "/products/atomic-glaze-coating",
     "/v3": "/",
+    "/product.html": "/products",
   };
   for (const [from, to] of Object.entries(moved)) {
     const redirect = await request.get(`${site}${from}`, { maxRedirects: 0 });

@@ -1,5 +1,6 @@
 // Local review server only. The deployed store uses Worker Static Assets.
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
@@ -14,7 +15,8 @@ createServer(async (request, response) => {
       return response.end();
     }
     let pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
-    if (pathname === "/") pathname = "/v3.html";
+    // The single site's home is the brand home; the store-only folder had none and showed v3 (ROOT_PAGE).
+    if (pathname === "/") pathname = existsSync(path.join(root, "index.html")) ? "/index.html" : "/v3.html";
     if (pathname.endsWith("/")) pathname += "index.html";
     let file = path.resolve(root, `.${pathname}`);
     if (!file.startsWith(root + path.sep)) throw new Error("Outside review assets");

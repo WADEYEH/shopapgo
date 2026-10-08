@@ -1,52 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCartCount } from "@/lib/shop/cart";
 import { routes } from "@/lib/us/routes";
 
-// The cart belongs to the store pages (commerce/prototype/js/commerce/shared.js): same localStorage key and the same
-// rule for a valid line. The brand pages only read it to show the count; products are added on the store pages.
+// The cart in the site header and menu. The count comes from the store's own cart (lib/shop/cart.js) and follows it
+// live: an add on this page, another tab, or a page restored from the back/forward cache.
 // Used only on the single site (routes.singleSite), where the cart is on the same host.
-export const CART_KEY = "apgo_us_cart_v1";
-const SKUS = ["d204", "d215"];
-
-export function cartCount(raw) {
-  try {
-    const items = JSON.parse(raw || "[]");
-    if (!Array.isArray(items)) return 0;
-    return items
-      .filter((item) => SKUS.includes(item?.sku) && Number.isInteger(item.qty) && item.qty > 0)
-      .reduce((sum, item) => sum + item.qty, 0);
-  } catch {
-    return 0;
-  }
-}
-
-function readCount() {
-  try {
-    return cartCount(window.localStorage.getItem(CART_KEY));
-  } catch {
-    return 0; // storage blocked: same as an empty cart
-  }
-}
-
-// 0 on the server and on the first client render (no hydration mismatch), then the real count.
-export function useCartCount() {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    const update = () => setCount(readCount());
-    const onStorage = (event) => {
-      if (event.key === null || event.key === CART_KEY) update();
-    };
-    update();
-    window.addEventListener("storage", onStorage); // the cart changed in another tab
-    window.addEventListener("pageshow", update); // back from a store page through the back/forward cache
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("pageshow", update);
-    };
-  }, []);
-  return count;
-}
 
 // Header: cart icon, "Cart" (hidden on phones) and the count (hidden while the cart is empty).
 export default function CartLink() {
