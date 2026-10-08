@@ -9,7 +9,7 @@ const { ROOT, compile } = require("./fixture.cjs");
 
 // The single-site switch (lib/us/routes.js): store links only where the store pages are on the same host.
 const ON = { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true" };
-const STORE_KEYS = ["shop", "cart", "checkout", "privacy", "terms", "returns", "contact"];
+const STORE_KEYS = ["shop", "cart", "checkout", "privacy", "terms", "returns", "shipping", "contact"];
 const routesFor = (env = {}) => compile("lib/us/routes.js", { env });
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
 
@@ -60,7 +60,7 @@ test("on (the test site now, www after the cutover): same-host Shop, cart, polic
   const r = routesFor(ON);
   assert.equal(r.singleSite, true);
   assert.deepEqual(Object.fromEntries(STORE_KEYS.map((key) => [key, r.routes[key]])), {
-    shop: "/products", cart: "/cart", checkout: "/checkout", privacy: "/privacy", terms: "/terms", returns: "/returns", contact: "/contact",
+    shop: "/products", cart: "/cart", checkout: "/checkout", privacy: "/privacy", terms: "/terms", returns: "/returns", shipping: "/shipping", contact: "/contact",
   });
   // The store's list of product URLs (D39) is the source; the brand links must match it exactly.
   const data = await import(pathToFileURL(path.join(ROOT, "commerce/prototype/js/commerce/product-data.js")).href);
@@ -77,10 +77,8 @@ test("every store page the brand links to exists on the site", async () => {
   assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)/products/page.js")), "/products");
   assert.match(read("app/(us)/(shop)/products/[slug]/page.js"), /generateStaticParams\(\) \{\n\s+return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
   for (const sku of data.SKUS) assert.equal(r.store[sku], `/products/${data.PRODUCT_SLUGS[sku]}`, sku);
-  for (const key of ["cart", "checkout"]) assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)", r.routes[key], "page.js")), r.routes[key]);
-  // The policy pages are still plain HTML store pages until they move (D41 step 6).
-  for (const key of ["privacy", "terms", "returns", "contact"]) {
-    assert.ok(fs.existsSync(path.join(ROOT, "commerce/prototype", `${r.routes[key]}.html`)), r.routes[key]);
+  for (const key of ["cart", "checkout", "privacy", "terms", "returns", "shipping", "contact"]) {
+    assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)", r.routes[key], "page.js")), r.routes[key]);
   }
 });
 

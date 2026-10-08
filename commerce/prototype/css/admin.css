@@ -91,3 +91,13 @@
 .admin-mcf [data-mcf-message]:empty { display: none; }
 .admin-mcf [data-mcf-message] { margin-top: 12px; }
 @media (max-width: 480px) { .admin-mcf__actions .btn { flex: 1 1 100%; } }
+
+/* Customer messages (Contact us form) */
+.admin-messages { margin-top: 48px; display: grid; gap: 12px; justify-items: start; }
+.admin-messages [data-admin-messages] { justify-self: stretch; }
+.admin-message-list { list-style: none; margin: 0; padding: 0; }
+.admin-message { padding: 16px 0; border-top: 1px solid var(--border-hairline); }
+.admin-message__head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.admin-message__head a { color: var(--accent); overflow-wrap: anywhere; }
+.admin-message__head small { color: var(--text-quiet); }
+.admin-message__text { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary); line-height: 1.55; }

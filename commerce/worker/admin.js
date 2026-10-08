@@ -25,6 +25,7 @@ import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder
 import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
 import { AIRWALLEX_INTENT_LOOKUP, PAYPAL_ORDER_LOOKUP, lookupAirwallexIntent, lookupPaypalOrder } from "./payment-lookup.js";
+import { listContactMessages } from "./contact.js";
 
 export { MIN_ADMIN_TOKEN_LENGTH };
 
@@ -218,6 +219,11 @@ export async function handleAdminApi(request, env, pathname) {
   if (intentLookup) return lookupAirwallexIntent(env, intentLookup[1], NO_INDEX);
   const paypalLookup = pathname.match(PAYPAL_ORDER_LOOKUP);
   if (paypalLookup) return lookupPaypalOrder(env, paypalLookup[1], NO_INDEX);
+
+  // Messages from the Contact us form (worker/contact.js), newest first.
+  if (pathname === "/admin/api/contact-messages") {
+    return json(await listContactMessages(env.DB, { before: url.searchParams.get("before") || undefined }), 200, NO_INDEX);
+  }
 
   if (pathname === "/admin/api/orders") {
     const status = url.searchParams.get("status") || undefined;

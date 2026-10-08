@@ -14,9 +14,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
 // The store pages that are still plain HTML. The legacy Amazon landing pages (index, v2) are not part of this repo;
-// "/" serves v3 (ROOT_PAGE). The overview, the product pages, the cart and the checkout are Next.js pages (D41): see the
-// shop layout test below.
-const PIXEL_PAGES = ["v3", "contact", "privacy", "returns", "terms"];
+// "/" serves v3 (ROOT_PAGE). Every other store page (overview, product, cart, checkout, policy and contact pages) is a
+// Next.js page (D41): see the shop layout test below.
+const PIXEL_PAGES = ["v3"];
 
 const head = (html) => html.slice(html.indexOf("<head"), html.indexOf("</head>"));
 
@@ -30,7 +30,7 @@ test("every public store page loads js/meta-pixel.js (deferred, in <head>) plus 
   }
 });
 
-test("the Next.js store pages (/products, the product pages, /cart, /checkout) load it once, from the shop layout, and the brand pages do not", async () => {
+test("the Next.js store pages (/products, product, cart, checkout, policy and contact pages) load it once, from the shop layout, and the brand pages do not", async () => {
   const layout = await read("../app/(us)/(shop)/layout.js");
   assert.equal(layout.split('<Script src="/js/meta-pixel.js" strategy="afterInteractive" />').length - 1, 1, "one pixel script");
   assert.ok(layout.includes(`src="https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1"`), "noscript pixel");
@@ -56,12 +56,6 @@ test("the pixel is never part of shared.js (admin pages load that file)", async 
     const admin = await read(`prototype/js/${file}`);
     assert.ok(!/fbq|fbevents/.test(admin));
   }
-});
-
-test("policy pages come from scripts/build-policy-pages.py (template carries the pixel tags)", async () => {
-  const script = await read("scripts/build-policy-pages.py");
-  assert.ok(script.includes('<script src="js/meta-pixel.js" defer></script>'));
-  assert.ok(script.includes(PIXEL_ID));
 });
 
 test("meta-pixel.js: fixed ids, hostname gate, event ids, and no hard-coded prices", async () => {

@@ -89,6 +89,8 @@ app/
       products/[slug]/page.js  # /products/atomic-colored-glaze、/products/atomic-glaze-coating
       cart/page.js      # /cart 購物車
       checkout/page.js  # /checkout 結帳與訂單頁（/checkout?order=…）
+      privacy/ terms/ returns/ shipping/  # 政策頁，內容直接讀 docs/legal/ 的草稿
+      contact/page.js   # /contact 聯絡我們與聯絡表單
 components/shop/       # 商品頁、商品卡片（價格一律取自 Worker 的 /api/store/config）
 lib/shop/              # 商店共用：商品資料、購物車、商店設定與價格、評論規則
 components/us/
@@ -118,7 +120,7 @@ public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
 
 `/` 是 APGO 美國落地頁（原 `/us`），依設計交付包高保真重建。精確 `/us` 會 301 到 `/`。主要購買 CTA 連到同域商店商品頁（`/products/d204`、`/products/d215`）；結帳由同一主機的 Worker 處理。產品與指南正文仍維持原核准文案。
 
-商品總覽 `/products`、兩個商品頁、購物車 `/cart` 與結帳 `/checkout` 也是這個 Next.js 網站的頁面（`app/(us)/(shop)`，D41），共用同一個 Header / Footer（結帳頁只留標誌和購物車），商品資料與首頁共用同一份（`lib/shop/catalog.js`）。政策頁暫時仍是 `commerce/prototype/` 的 HTML 頁面，之後也會搬進來（`docs/commerce-plan.md` 第 6 章）。這些頁面要跟 Worker 一起看：`npm --prefix commerce run build:site` 建出單一網站，預覽與測試方式見 `commerce/README.md`。
+商品總覽 `/products`、兩個商品頁、購物車 `/cart`、結帳 `/checkout`、政策頁（`/privacy`、`/terms`、`/returns`、`/shipping`）與聯絡我們 `/contact` 也是這個 Next.js 網站的頁面（`app/(us)/(shop)`，D41），共用同一個 Header / Footer（結帳頁只留標誌和購物車），商品資料與首頁共用同一份（`lib/shop/catalog.js`）。政策頁的內容直接讀 `docs/legal/` 的草稿，律師改那幾個檔案，重新建置後網站就跟著變。這些頁面要跟 Worker 一起看：`npm --prefix commerce run build:site` 建出單一網站，預覽與測試方式見 `commerce/README.md`。
 
 ### 環境變數
 

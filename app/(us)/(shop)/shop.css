@@ -410,6 +410,7 @@
 .shop .field__error { color: var(--accent-dry); }
 .shop .field input,
 .shop .field select,
+.shop .field textarea,
 .shop .card-input {
   width: 100%;
   height: 48px;
@@ -423,12 +424,13 @@
   outline: none;
   transition: border-color var(--dur-fast);
 }
-.shop .field input:focus, .shop .field select:focus, .shop .card-input.is-focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.shop .field input:focus, .shop .field select:focus, .shop .field textarea:focus, .shop .card-input.is-focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .shop .field input::placeholder { color: var(--text-quiet); }
 .shop .field--error .field__label { color: var(--accent-dry); }
-.shop .field--error input, .shop .field--error select, .shop .field--error .card-input { border-color: var(--accent-dry); }
+.shop .field--error input, .shop .field--error select, .shop .field--error textarea, .shop .field--error .card-input { border-color: var(--accent-dry); }
 .shop .select { position: relative; }
 .shop .field select { padding-right: 40px; appearance: none; -webkit-appearance: none; }
+.shop .field textarea { height: auto; min-height: 144px; padding: 12px 14px; line-height: 1.5; resize: vertical; }
 .shop .select::after {
   content: "›";
   position: absolute;
@@ -605,7 +607,12 @@
   color: var(--text-secondary, var(--text-tertiary));
 }
 .shop .legal__section p { margin: 0 0 12px; }
-.shop .legal__section ul { margin: 0 0 12px; padding-left: 20px; }
+.shop .legal__section ul, .shop .legal__section ol { margin: 0 0 12px; padding-left: 20px; }
+.shop .legal__section h3 { margin: 16px 0 8px; font-size: 16px; color: var(--text-primary); }
+.shop .legal__table-wrap { overflow-x: auto; margin: 0 0 12px; }
+.shop .legal__table { width: 100%; border-collapse: collapse; font-size: var(--text-body-sm); }
+.shop .legal__table th, .shop .legal__table td { padding: 10px 12px; border-bottom: 1px solid var(--border-hairline); text-align: left; vertical-align: top; color: var(--text-secondary, var(--text-tertiary)); }
+.shop .legal__table th { color: var(--text-primary); font-weight: 600; }
 .shop .legal__section li { margin-bottom: 6px; }
 .shop .legal__section a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .shop .legal__draft {
@@ -636,50 +643,6 @@
 }
 .shop .legal__confirm-note { margin: 12px 0 0; font-size: 13px; color: var(--text-quiet); }
 .shop .legal__confirm-note mark[data-to-confirm] { font-size: 12px; }
-
-/* ---------- Cart express checkout (Apple Pay / Google Pay, flag-gated) ---------- */
-
-/* Collapsed state: out of flow (no gap in the summary), no height, not focusable,
-   but still laid out at full width so Airwallex can mount and report `ready`. */
-.shop .express:not(.is-active) {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 0;
-  overflow: hidden;
-  visibility: hidden;
-  pointer-events: none;
-}
-.shop .express { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-@media (max-width: 900px) {
-  .shop .summary { position: relative; }
-}
-.shop .express__slots { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.shop .express__divider { margin: 6px 0 0; }
-.shop .express__skeleton {
-  display: none;
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--border-default) 50%, var(--bg-surface) 75%);
-  background-size: 200% 100%;
-  animation: express-shimmer 1.2s linear infinite;
-}
-.shop .express[data-state="updating"] .express__skeleton { display: block; }
-.shop .express[data-state="updating"] .wallet-slot { visibility: hidden; }
-@keyframes express-shimmer { to { background-position: -200% 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .shop .express__skeleton { animation: none; }
-}
-.shop .express__error {
-  margin: 0;
-  padding: 10px 14px;
-  border: 1px solid var(--border-default);
-  border-top: var(--accent-bar-w) solid var(--accent-dry);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-}
 
 /* ---------- 390px review fixes: tap targets >= 44px ---------- */
 
@@ -1135,3 +1098,10 @@
 
 /* The sticky add-to-cart bar must not cover the end of the site footer. */
 body[data-sticky-bar="on"] .us-site-footer { padding-bottom: calc(76px + 16px); }
+
+/* ---------- Contact us form (components/shop/ContactForm.js) ---------- */
+
+.shop .contact-form { max-width: 640px; }
+.shop .contact-form__trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.shop .contact-form__privacy { margin: 0; color: var(--text-quiet); }
+.shop .contact-form__privacy a { color: var(--accent); }

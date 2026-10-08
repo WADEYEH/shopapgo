@@ -13,8 +13,10 @@ const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");
 const schema = await read("worker/schema.sql");
 const production = await read("tests/fixtures/production-schema-2026-10-06.sql");
 
-// Tables that exist only in this repo (payment failures, refunds, customer email outbox): the production upgrade adds them.
+// Tables that exist only in this repo (payment failures, refunds, customer email outbox, Contact us messages): the
+// production upgrade adds them.
 const ADDED = [
+  "contact_messages",
   "customer_email_events",
   "customer_email_suppressions",
   "order_email_delivery",

@@ -552,6 +552,49 @@ $("[data-admin-mcf-sync-all]").addEventListener("click", async (event) => {
   button.disabled = false;
 });
 
+// ---------- Customer messages (Contact us form) ----------
+
+const EMAIL_STATUS = { sent: "emailed", skipped: "not emailed", failed: "email failed", pending: "sending" };
+const messages = { list: [], nextBefore: null };
+
+function renderMessages() {
+  const host = $("[data-admin-messages]");
+  if (!messages.list.length) return host.replaceChildren(el("p", { class: "body body--sm" }, "No messages yet."));
+  host.replaceChildren(
+    el("ul", { class: "admin-message-list" }, ...messages.list.map((m) =>
+      el("li", { class: "admin-message", "data-message-id": m.id },
+        el("div", { class: "admin-message__head" },
+          el("strong", {}, m.name),
+          el("a", { href: `mailto:${m.email}` }, m.email),
+          el("span", { class: `status status--${m.emailStatus === "sent" ? "paid" : "review"}`, title: m.emailDetail || "" }, EMAIL_STATUS[m.emailStatus] ?? m.emailStatus),
+          el("small", {}, formatDate(m.createdAt)),
+        ),
+        el("p", { class: "admin-message__text" }, m.message),
+      ))),
+    messages.nextBefore ? el("button", { class: "btn btn--sm btn--text", type: "button", onclick: () => loadMessages() }, "Load older messages") : null,
+  );
+}
+
+async function loadMessages({ reset = false } = {}) {
+  const button = $("[data-admin-messages-load]");
+  button.disabled = true;
+  try {
+    const params = new URLSearchParams();
+    if (!reset && messages.nextBefore) params.set("before", messages.nextBefore);
+    const page = await adminApi(`/admin/api/contact-messages?${params}`);
+    messages.list = reset ? page.messages : [...messages.list, ...page.messages];
+    messages.nextBefore = page.nextBefore;
+    renderMessages();
+    button.textContent = "Refresh messages";
+  } catch (error) {
+    $("[data-admin-messages]").replaceChildren(notice("warning", "Messages unavailable", error.message));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("[data-admin-messages-load]").addEventListener("click", () => loadMessages({ reset: true }));
+
 await load({ reset: true });
 const initial = decodeURIComponent(window.location.hash.slice(1));
 if (initial) select(initial, { focus: false });

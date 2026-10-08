@@ -20,6 +20,7 @@ export default function SiteFooter() {
     { label: "Privacy Policy", href: routes.privacy },
     { label: "Terms of Sale", href: routes.terms },
     { label: "Returns & Refunds", href: routes.returns },
+    { label: "Shipping", href: routes.shipping },
     { label: "Contact", href: routes.contact },
   ].filter(({ href }) => onHost(href));
   return (

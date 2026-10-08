@@ -78,6 +78,7 @@ import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
 import { rootPageOverride, siteRedirect } from "./root-page.js";
+import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 
 async function readBody(request) {
@@ -501,6 +502,7 @@ async function route(request, env, services) {
   if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env));
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
   if (pathname === "/api/checkout/address" && method === "POST") return handleAddressCheck(request, env);
+  if (pathname === "/api/contact" && method === "POST") return handleContact(request, env);
   if (pathname === "/api/checkout/session" && method === "POST") return handleCheckoutSession(request, env, services);
   if (pathname === "/api/checkout/paypal/order" && method === "POST") return handlePaypalCreate(request, env, services);
   if (pathname === "/api/checkout/paypal/capture" && method === "POST") return handlePaypalCapture(request, env, services);

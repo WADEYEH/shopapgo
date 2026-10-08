@@ -64,8 +64,8 @@ test("the brand footer links to Shop, the cart and every policy page on this ori
   await expect(footer.getByRole("link", { name: "Shop APGO" })).toHaveAttribute("href", "/products");
   await expect(footer.getByRole("link", { name: "Cart", exact: true })).toHaveAttribute("href", "/cart");
   const legal = footer.getByRole("navigation", { name: "Legal" }).getByRole("link");
-  await expect(legal).toHaveText(["Privacy Policy", "Terms of Sale", "Returns & Refunds", "Contact"]);
-  for (const href of ["/privacy", "/terms", "/returns", "/contact", "/products", "/cart"]) {
+  await expect(legal).toHaveText(["Privacy Policy", "Terms of Sale", "Returns & Refunds", "Shipping", "Contact"]);
+  for (const href of ["/privacy", "/terms", "/returns", "/shipping", "/contact", "/products", "/cart", "/checkout"]) {
     expect((await request.get(`${site}${href}`)).status(), href).toBe(200);
   }
 });

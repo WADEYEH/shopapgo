@@ -69,7 +69,7 @@ test.describe("Meta Pixel loading", () => {
     test(`${host} loads fbevents.js once, inits the pixel and sends PageView`, async ({ page }) => {
       const meta = await serveHost(page, host);
       await mockStore(page);
-      await page.goto(`https://${host}/privacy.html`);
+      await page.goto(`https://${host}/privacy`);
       await expect.poll(() => meta.fbeventsRequests).toBe(1);
       expect(await queue(page)).toEqual([["init", PIXEL_ID], ["track", "PageView"]]);
     });
@@ -82,7 +82,7 @@ test.describe("Meta Pixel loading", () => {
       existing.queue = [];
       window.fbq = existing;
     });
-    await page.goto(`https://${STORE}/privacy.html`);
+    await page.goto(`https://${STORE}/privacy`);
     expect(await queue(page)).toEqual([]);
   });
 
@@ -433,7 +433,7 @@ test.describe("session attribution", () => {
 });
 
 test.describe("accessibility with the pixel active", () => {
-  for (const pageName of ["v3.html", "cart", "checkout", "privacy.html"]) {
+  for (const pageName of ["v3.html", "cart", "checkout", "privacy", "contact"]) {
     test(`${pageName} has no serious or critical axe violations on the store hostname`, async ({ page }) => {
       await serveHost(page, STORE);
       await mockStore(page);

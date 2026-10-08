@@ -21,7 +21,7 @@ const NOINDEX = "noindex, nofollow, noarchive";
 let failed = 0;
 const check = (name, pass, detail = "") => { console.log(`  ${pass ? "✔" : "✖"} ${name}${detail ? ` — ${detail}` : ""}`); if (!pass) failed += 1; };
 
-const pages = ["/", "/v3.html", "/privacy.html", "/terms.html", "/returns.html", "/contact.html", "/cart.html", "/checkout.html"];
+const pages = ["/", "/products", "/privacy", "/terms", "/returns", "/shipping", "/contact", "/cart", "/checkout"];
 mkdirSync(path.join(root, "review"), { recursive: true });
 for (const p of [...pages, "/api/store/config", "/css/commerce.css", ...(adminBase ? [] : ["/admin/"])]) {
   const anon = await fetch(base + p, { redirect: "manual" });
