@@ -1,4 +1,4 @@
-// Checkout field rules shared by the page and the Worker (prototype/js/commerce/address-rules.js, M3 §3.2).
+// Checkout field rules shared by the page and the Worker (lib/shop/address-rules.mjs, M3 §3.2).
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -13,7 +13,7 @@ import {
   normalizeUsPhone,
   suggestEmail,
   zipMatchesState,
-} from "../prototype/js/commerce/address-rules.js";
+} from "../../lib/shop/address-rules.mjs";
 
 const ADDRESS = { firstName: "Ada", lastName: "Lee", street: "100 Example Ave", street2: "Apt 4", city: "Austin", state: "TX", zip: "78701" };
 const errorsOf = (patch) => checkShipping({ ...ADDRESS, ...patch }).errors;

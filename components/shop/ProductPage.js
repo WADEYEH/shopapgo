@@ -6,6 +6,7 @@ import { MAX_QTY, addToCart } from "@/lib/shop/cart";
 import { averageRating, reviewsToShow } from "@/lib/shop/reviews";
 import { priceCents, priceText, useStoreConfig } from "@/lib/shop/store-config";
 import { track } from "@/lib/us/analytics";
+import { asset } from "@/lib/us/routes";
 import { SITE_URL } from "@/lib/site";
 
 // A product page (D204 DRY / D215 WET), one per product URL (D39).
@@ -61,7 +62,7 @@ function Gallery({ sku }) {
   const p = PRODUCTS[sku];
   const images = [
     { src: SEO[sku].image, alt: `APGO ${p.name} ${p.size}`, fit: "contain" },
-    ...p.steps.slice(0, 3).map(([file, caption]) => ({ src: `/assets/application/${file}.webp`, alt: `${p.word} application, step: ${caption}`, fit: "cover" })),
+    ...p.steps.slice(0, 3).map(([file, caption]) => ({ src: asset(`application/${file}.webp`), alt: `${p.word} application, step: ${caption}`, fit: "cover" })),
   ];
   const [index, setIndex] = useState(0);
   const current = images[index];
@@ -90,7 +91,7 @@ function Gallery({ sku }) {
 function HowTo({ sku }) {
   const p = PRODUCTS[sku];
   const [playing, setPlaying] = useState(false);
-  const poster = `/assets/video/${sku}-poster.webp`;
+  const poster = asset(`video/${sku}-poster.webp`);
   const play = () => {
     setPlaying(true);
     track("video_play", { sku, placement: "pdp" });
@@ -103,8 +104,8 @@ function HowTo({ sku }) {
           <div className="pdp-video" data-video="">
             <div className="pdp-video__frame" data-video-frame="">
               {playing ? (
-                <video className="pdp-video__player" data-video-player="" controls autoPlay playsInline preload="none" poster={poster} src={`/assets/video/${sku}-application.mp4`}>
-                  <track kind="captions" srcLang="en" label="English" src={`/assets/video/${sku}-v3-captions-en.vtt`} default />
+                <video className="pdp-video__player" data-video-player="" controls autoPlay playsInline preload="none" poster={poster} src={asset(`video/${sku}-application.mp4`)}>
+                  <track kind="captions" srcLang="en" label="English" src={asset(`video/${sku}-captions-en.vtt`)} default />
                 </video>
               ) : (
                 <>
@@ -121,7 +122,7 @@ function HowTo({ sku }) {
               {p.steps.map(([file, caption]) => (
                 <li key={file}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/assets/application/${file}.webp`} alt={`${p.word} application: ${caption}`} loading="lazy" width="600" height="450" />
+                  <img src={asset(`application/${file}.webp`)} alt={`${p.word} application: ${caption}`} loading="lazy" width="600" height="450" />
                   <span>{caption}</span>
                 </li>
               ))}

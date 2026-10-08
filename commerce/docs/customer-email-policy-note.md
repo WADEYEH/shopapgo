@@ -14,7 +14,7 @@ Returns and refunds: our return window is [TO CONFIRM: return window] and the st
 
 Notes for the engineer:
 
-- Keep it one paragraph, plain text. The store pages and address are in `prototype/returns.html` / `contact.html`; use the absolute store URL of the returns page if the email template wants a link.
+- Keep it one paragraph, plain text. The policies are the site's pages `/returns` and `/contact` (text in `docs/legal/`); use the absolute URL of the returns page if the email template wants a link.
 - Support hours are Taiwan time (UTC+8); do not convert them in the email.
 
 ## Still TO CONFIRM (owner / counsel decisions)

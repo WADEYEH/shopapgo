@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import { SHIP_STATES } from "../prototype/js/commerce/address-rules.js";
+import { SHIP_STATES } from "../../lib/shop/address-rules.mjs";
 import { DEFAULT_PRICING } from "../worker/pricing.js";
 
 const root = new URL("../../", import.meta.url);
@@ -21,7 +21,7 @@ test("each policy page reads its draft in docs/legal, is not indexed, and the pl
     assert.ok(existsSync(new URL(`docs/legal/${file}`, root)), file);
     assert.ok(read(`docs/legal/${file}`).startsWith("# "), `${file} starts with its title`);
   }
-  for (const gone of ["commerce/prototype/privacy.html", "commerce/prototype/terms.html", "commerce/prototype/returns.html", "commerce/prototype/contact.html", "commerce/scripts/build-policy-pages.py"]) {
+  for (const gone of ["commerce/prototype", "commerce/scripts/build-policy-pages.py"]) {
     assert.equal(existsSync(new URL(gone, root)), false, `${gone} is gone`);
   }
   const component = read("components/shop/PolicyPage.js");
@@ -59,8 +59,8 @@ test("the contact page: the form, the support details from lib/us/company.js, th
   assert.ok(form.includes('api("/api/contact"'), "posts to the Worker");
   assert.ok(form.includes("checkContactMessage"), "the shared field rules");
   assert.ok(form.includes('name="company" tabIndex={-1}'), "the field only robots fill");
-  assert.ok(read("lib/shop/contact.js").includes("contact-rules.js"));
-  assert.ok(read("commerce/worker/contact.js").includes('from "../prototype/js/commerce/contact-rules.js"'), "the Worker checks the same rules");
+  assert.ok(read("lib/shop/contact.js").includes("contact-rules.mjs"));
+  assert.ok(read("commerce/worker/contact.js").includes('from "../../lib/shop/contact-rules.mjs"'), "the Worker checks the same rules");
 });
 
 test("the site footer links every policy page and the contact page (single site)", () => {
@@ -68,10 +68,4 @@ test("the site footer links every policy page and the contact page (single site)
   for (const [label, key] of [["Privacy Policy", "privacy"], ["Terms of Sale", "terms"], ["Returns & Refunds", "returns"], ["Shipping", "shipping"], ["Contact", "contact"]]) {
     assert.ok(footer.includes(`{ label: "${label}", href: routes.${key} }`), label);
   }
-});
-
-test("v3 keeps its look: footer link group only, no price", () => {
-  const html = read("commerce/prototype/v3.html");
-  assert.match(html, /<nav class="v3-footer__links" aria-label="Legal and support">/);
-  assert.doesNotMatch(html, /\$\s?\d/);
 });

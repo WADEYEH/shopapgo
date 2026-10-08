@@ -36,7 +36,7 @@ function cartModule({ storage = new Map(), blocked = false } = {}) {
   }
   const cart = compile("lib/shop/cart.js", {
     aliases: {
-      "@/lib/shop/catalog": compile("commerce/prototype/js/commerce/product-data.js"),
+      "@/lib/shop/catalog": compile("lib/shop/product-data.mjs"),
       "@/lib/us/analytics": { track: (event, params) => tracked.push({ event, ...params }) },
     },
     globals: { window, CustomEvent },
@@ -63,14 +63,14 @@ test("on (the test site now, www after the cutover): same-host Shop, cart, polic
     shop: "/products", cart: "/cart", checkout: "/checkout", privacy: "/privacy", terms: "/terms", returns: "/returns", shipping: "/shipping", contact: "/contact",
   });
   // The store's list of product URLs (D39) is the source; the brand links must match it exactly.
-  const data = await import(pathToFileURL(path.join(ROOT, "commerce/prototype/js/commerce/product-data.js")).href);
+  const data = await import(pathToFileURL(path.join(ROOT, "lib/shop/product-data.mjs")).href);
   for (const sku of data.SKUS) assert.equal(r.productPathFor(sku), data.productPath(sku), sku);
   assert.equal(r.routes.shop, data.SHOP_PATH);
 });
 
 test("every store page the brand links to exists on the site", async () => {
   const r = routesFor(ON);
-  const data = await import(pathToFileURL(path.join(ROOT, "commerce/prototype/js/commerce/product-data.js")).href);
+  const data = await import(pathToFileURL(path.join(ROOT, "lib/shop/product-data.mjs")).href);
   // The overview, the product pages, the cart and the checkout are Next.js pages (D41); one page file per product URL
   // from the store's list.
   assert.equal(r.routes.shop, "/products");
@@ -87,14 +87,13 @@ test("only the test-site build turns the switch on", () => {
   assert.match(read(".env.example"), /^NEXT_PUBLIC_APGO_US_SINGLE_SITE=false\r?$/m);
 });
 
-test("the store's cart: one key and the same rules as the cart and checkout pages that are still plain HTML", () => {
+test("the store's cart: the old store pages' key (a cart from before the move carries over) and their rules", () => {
   const { cart } = cartModule();
-  const shared = read("commerce/prototype/js/commerce/shared.js");
-  assert.ok(shared.includes(`const STORAGE_KEY = "${cart.CART_KEY}";`), "same localStorage key");
-  assert.ok(shared.includes(`const MAX_QTY = ${cart.MAX_QTY};`), "same quantity limit");
+  assert.equal(cart.CART_KEY, "apgo_us_cart_v1");
+  assert.equal(cart.MAX_QTY, 10);
   for (const raw of [null, "", "not json", '{"sku":"d204","qty":1}', "[]"]) assert.equal(cart.parseCart(raw).length, 0, String(raw));
   assert.equal(cart.cartCount(cart.parseCart(JSON.stringify([{ sku: "d204", qty: 2 }, { sku: "d215", qty: 1 }]))), 3);
-  // Unknown products, zero, fractions and junk are dropped, as in shared.js.
+  // Unknown products, zero, fractions and junk are dropped.
   const mixed = JSON.stringify([{ sku: "d204", qty: 1 }, { sku: "x", qty: 5 }, { sku: "d215", qty: 0 }, { sku: "d215", qty: 1.5 }, null]);
   assert.deepEqual([...cart.parseCart(mixed)].map((line) => ({ ...line })), [{ sku: "d204", qty: 1 }]);
 });

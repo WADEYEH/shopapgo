@@ -91,9 +91,9 @@ test("production stays closed until PRICING_APPROVED=true; the sandbox is never 
 });
 
 test("front-end code contains no price, shipping fee or tax rate of its own", async () => {
-  const dir = "prototype/js/commerce";
-  for (const file of await readdir(dir)) {
-    const source = await readFile(`${dir}/${file}`, "utf8");
+  const dirs = ["../lib/shop", "../components/shop", "../components/shop/checkout"];
+  for (const file of (await Promise.all(dirs.map(async (dir) => (await readdir(dir)).filter((name) => /\.m?js$/.test(name)).map((name) => `${dir}/${name}`)))).flat()) {
+    const source = await readFile(file, "utf8");
     assert.ok(!/priceCents\s*[:=]\s*\d|amountCents\s*[:=]\s*\d|5999|2999|\b59\.99|\b29\.99|\b7\.99/.test(source), `${file} hard-codes a price`);
     assert.ok(!/RateBps|taxRate/i.test(source), `${file} hard-codes a tax rate`);
   }

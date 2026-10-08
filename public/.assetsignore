@@ -1,0 +1,2 @@
+# Files in the site export (out/) the Worker must not upload as static assets (wrangler reads this file).
+apple-pay/README.txt

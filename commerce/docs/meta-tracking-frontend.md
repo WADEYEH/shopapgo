@@ -4,15 +4,14 @@ Browser half of APGO US Meta tracking. The server half (Conversions API) lives i
 `worker/` and is owned separately; the two must agree on the **event_id rules** and the
 **attribution contract** below.
 
-- Pixel (dataset) ID: `2606879866471418` (public value, written in `prototype/js/meta-pixel.js`)
-- Code: `prototype/js/meta-pixel.js` (new), `components/shop/checkout/CheckoutPage.js` (attribution +
+- Pixel (dataset) ID: `2606879866471418` (public value, written in `public/js/meta-pixel.js`)
+- Code: `public/js/meta-pixel.js`, `components/shop/checkout/CheckoutPage.js` (attribution +
   `checkout_session_created` event + order items on `purchase`)
-- Pages that load it (`<script src="js/meta-pixel.js" defer>` + `<noscript>` image in `<head>`):
-  `index`, `v2`, `v3`. The Next.js store pages (`/products`, the product pages, `/cart`, `/checkout`, the policy pages
-  and `/contact`, D41) load it from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is
-  interactive, plus the `<noscript>` image); events those pages sent before it ran are read from `window.dataLayer`.
-  **Not** loaded on `/admin/` and `v3-style.html`. The pixel is deliberately not in `shared.js`
-  (admin pages load that file).
+- Pages that load it: the store pages (`/products`, the product pages, `/cart`, `/checkout`, the policy pages and
+  `/contact`, D41), from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is interactive, plus
+  the `<noscript>` image); events those pages sent before it ran are read from `window.dataLayer`.
+  **Not** loaded on `/admin/` (the back office has no tracking code at all) or the brand pages (their own pixel,
+  `components/us/MetaPixel.js`; unifying the two is M10).
 
 ## When it runs
 

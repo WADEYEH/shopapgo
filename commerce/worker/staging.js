@@ -9,7 +9,7 @@
 //     credentials; each handler verifies its own signature), /admin, /admin/* (their own admin-auth check also uses
 //     the Authorization header, so a second
 //     gate in front would make the back office unusable) and the whole ADMIN_HOST hostname (worker/hosts.js: only the
-//     back office + its css/js are reachable there; one login: ADMIN_LOGIN_EMAIL/PASSWORD, ADMIN_TOKEN, or
+//     back office + the logo are reachable there; one login: ADMIN_LOGIN_EMAIL/PASSWORD, ADMIN_TOKEN, or
 //     (ADMIN_ACCEPT_SITE_BASIC="true") the same Basic user/password as the website - never two prompts).
 
 import { isAdminHost } from "./hosts.js";
@@ -54,7 +54,7 @@ async function basicGate(request, env) {
     ? await Promise.all([sameSecret(given.user, user), sameSecret(given.password, password)])
     : [false, false];
   if (userOk && passwordOk) return null;
-  // The /admin/ page loads its CSS/JS from gated paths when ADMIN_HOST is unset; the same owner
+  // The /admin/ page loads the site logo from a gated path when ADMIN_HOST is unset; the same owner
   // email/password or ADMIN_TOKEN the back office accepts therefore also pass this gate.
   if (await matchesAdminLogin(request, env)) return null;
   if (given && (await matchesAdminToken(request, env))) return null;

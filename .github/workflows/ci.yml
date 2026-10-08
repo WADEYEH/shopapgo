@@ -21,8 +21,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # The single site: the brand export and the store pages must combine without any shared path.
-      - run: node commerce/scripts/build-site.mjs --out "${{ runner.temp }}/site"
+      # The Worker serves this export as it is: check it has the pages, the back office and the files the Worker needs.
+      - run: node commerce/scripts/build-site.mjs --check
 
   commerce:
     runs-on: ubuntu-latest
@@ -38,11 +38,12 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             commerce/package-lock.json
-      # The site's own packages too: the browser tests run against the single site, which includes the Next.js build.
+      # The site's own packages too: the browser tests run against the site, the Next.js export (npm run build:site).
       - run: npm ci --prefix ..
       - run: npm ci
       - run: npm run test:static
-      - run: npm run verify:bundle
+      # The Worker serves the site build (../out), so the bundle check needs it first.
       - run: npm run build:site
+      - run: npm run verify:bundle
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

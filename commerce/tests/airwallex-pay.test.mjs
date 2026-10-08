@@ -15,7 +15,7 @@ import {
   dropInOptions,
   dropInUpdate,
   shopperName,
-} from "../prototype/js/commerce/airwallex-pay.js";
+} from "../../lib/shop/airwallex-pay.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");

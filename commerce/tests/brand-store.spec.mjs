@@ -1,7 +1,7 @@
-// The single site: brand pages and store pages served by one Worker from one asset directory (scripts/build-site.mjs,
-// brand built with NEXT_PUBLIC_APGO_US_SINGLE_SITE=true). Runs only against a served single site, for example locally:
+// The single site: every page served by one Worker from the Next.js export (scripts/build-site.mjs, built with
+// NEXT_PUBLIC_APGO_US_SINGLE_SITE=true). Runs only against a served site, for example locally:
 //   npm run build:site
-//   npx wrangler dev --port 8799 --assets ./site --var ROOT_PAGE:off --var SITE_HOME_URL:http://127.0.0.1:8799
+//   npx wrangler dev --port 8799
 //   APGO_SITE_URL=http://127.0.0.1:8799 npx playwright test tests/brand-store.spec.mjs
 import { expect, test } from "@playwright/test";
 
@@ -79,6 +79,7 @@ test("moved URLs answer 301 with the query string; the guides and unknown paths 
     "/product.html": "/products",
     "/checkout.html?order=APGO-US-0123456789AB&paypal=return": "/checkout?order=APGO-US-0123456789AB&paypal=return",
     "/cart.html?add=d204": "/cart?add=d204",
+    "/assets/products/d204-packshot.webp": "/us/assets/products/d204-packshot.webp",
   };
   for (const [from, to] of Object.entries(moved)) {
     const redirect = await request.get(`${site}${from}`, { maxRedirects: 0 });

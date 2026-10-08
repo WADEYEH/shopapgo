@@ -12,7 +12,7 @@
 //   TURNSTILE_SECRET_KEY      secret; with it every message needs a valid Turnstile token
 // On staging only the approved test recipients receive mail (email-delivery.js allowedEmailRecipient).
 
-import { CONTACT_LIMITS as FIELD_LIMITS, CONTACT_MESSAGES, checkContactMessage, cleanText, isEmail } from "../prototype/js/commerce/contact-rules.js";
+import { CONTACT_LIMITS as FIELD_LIMITS, CONTACT_MESSAGES, checkContactMessage, cleanText, isEmail } from "../../lib/shop/contact-rules.mjs";
 import { QuoteError } from "./catalog.js";
 import { allowedEmailRecipient } from "./email-delivery.js";
 import { customerEmailConfig } from "./customer-email.js";

@@ -1,4 +1,3 @@
-import { siteLinks } from "./site.js";
 // Quote engine. Every number it uses (prices, shipping, tax, limits) comes from
 // worker/pricing.js; this file only applies them. The browser only sends SKUs and
 // quantities; prices, shipping and tax are always recomputed here. All money is
@@ -9,7 +8,7 @@ import { siteLinks } from "./site.js";
 // `PRICING_JSON` override applies, and passes the result to quote()/publicConfig().
 
 import { DEFAULT_PRICING, computeTax, pricingApproved, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
-import { SHIP_STATES } from "../prototype/js/commerce/address-rules.js";
+import { SHIP_STATES } from "../../lib/shop/address-rules.mjs";
 import { US_STATES } from "./states.js";
 import { walletConfig } from "./wallets.js";
 
@@ -104,7 +103,6 @@ export function quote(items, { state, method } = {}, pricing = DEFAULT_PRICING) 
 export function publicConfig(env = {}, pricing = resolvePricing(env)) {
   const enabled = (name) => String(env[name] ?? "true").toLowerCase() !== "false";
   return {
-    siteLinks: siteLinks(env),
     currency: pricing.currency,
     airwallexEnv: env.AIRWALLEX_ENV === "prod" ? "prod" : "demo",
     maxQtyPerLine: pricing.maxQtyPerLine,

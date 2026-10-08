@@ -9,9 +9,9 @@ Claude Design export of **2026-10-05**, unpacked (read-only, not committed) at
 |---|---|
 | Page structure and section order | `APGO Design System/ui_kits/product-v2/ProductScreenV2.jsx`, `README.md` (preferred over the simpler `ui_kits/product/`) |
 | Naming rule "Routine first" (DRY/WET first, product name second, SKU a small tag) | `CLAUDE.md`, `APGO Design System/readme.md` |
-| Tokens, type (Barlow / Barlow Condensed), colours | `APGO Design System/tokens/*.css`, mirrored 1:1 in `prototype/css/commerce.css` |
+| Tokens, type (Barlow / Barlow Condensed), colours | `APGO Design System/tokens/*.css`, mirrored 1:1 in `app/(us)/(shop)/shop.css` (the back office keeps the old copy, `public/admin/commerce.css`) |
 | Component behaviour (FAQ, step figures, video card, sticky bar, quantity stepper, breadcrumb) | `APGO Design System/components/**` |
-| Images | `APGO Design System/assets/{products,application,video}` are byte-identical to files already in `prototype/assets/`, so nothing was copied |
+| Images | `APGO Design System/assets/{products,application,video}` are byte-identical to the site's files in `public/us/assets/` (one copy since the D41 cleanup), so nothing was copied |
 
 The `.dc.html` files and React/JSX are design references only. Nothing from the export is loaded at
 runtime (`support.js`, `<x-dc>`, `sc-if`, `{{ }}`, Babel); a static test guards that. The pages were first

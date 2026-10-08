@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 export const BASE_URL = process.env.APGO_BASE_URL || "http://127.0.0.1:4173";
-const PROTOTYPE_DIRECTORY = process.env.APGO_PROTOTYPE_DIR || "prototype";
+const SITE_DIRECTORY = process.env.APGO_SITE_DIR || "../out";
 const SERVER_PORT = new URL(BASE_URL).port || "4173";
 
 async function isReachable(url) {
@@ -29,7 +29,7 @@ export async function ensurePrototypeServer() {
     ["scripts/serve-static.mjs"],
     {
       cwd: process.cwd(),
-      env: { ...process.env, PORT: SERVER_PORT, APGO_PROTOTYPE_DIR: PROTOTYPE_DIRECTORY },
+      env: { ...process.env, PORT: SERVER_PORT, APGO_SITE_DIR: SITE_DIRECTORY },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );

@@ -13,7 +13,7 @@ import {
   paypalSdkUrl,
   readPaypalOrder,
   storePaypalOrder,
-} from "../prototype/js/commerce/paypal.js";
+} from "../../lib/shop/paypal.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
@@ -113,7 +113,7 @@ test("the checkout hides the PayPal slot until the buttons are ready", async () 
 
 test("the checkout persists the draft in sessionStorage and treats PayPal vs card as choose-one", async () => {
   const source = await read("../components/shop/checkout/CheckoutPage.js");
-  assert.ok((await read("../lib/shop/checkout.js")).includes("checkout-draft.js"));
+  assert.ok((await read("../lib/shop/checkout.js")).includes("checkout-draft.mjs"));
   assert.ok(source.includes("readCheckoutDraft"));
   assert.ok(source.includes("writeCheckoutDraft"));
   assert.ok(source.includes("clearCheckoutDraft"));

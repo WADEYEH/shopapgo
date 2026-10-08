@@ -11,9 +11,8 @@ pages and a Cloudflare Worker.
 > Scope note: `IMPLEMENTATION_CONTRACT.md` forbids cart UI and unverified prices
 > on the **landing pages** (it governs `index.html`; it has not been amended).
 > The store pages below are separate, `noindex`, and keep all prices server-side.
-> Only the in-progress **`v3.html`** has cart entry points (see "Landing entry
-> points"); `index.html` and `v2.html` are unchanged and still link only to Amazon.
-> The landing page never shows a price or a cart total.
+> The v3 landing page that carried the first cart entry points is gone (D41 cleanup, 2026-10-08): every page shoppers
+> see is a page of the Next.js site, and `/v3` answers 301 to the home page.
 
 ## Handoff
 
@@ -59,7 +58,7 @@ Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]
 | `PAYPAL_WEBHOOK_ID` | PayPal webhook verify | **not set** until the Dashboard URL is registered (capture + order poll still settle) |
 | `TURNSTILE_SECRET_KEY` | Contact us bot check (Cloudflare Turnstile), with the plain var `TURNSTILE_SITE_KEY` | not set (the form relies on the robot field and the hourly caps) |
 
-Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ROOT_PAGE`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `CONTACT_EMAIL_TO`, `TURNSTILE_SITE_KEY`, `PRICING_APPROVED`, `PRICING_JSON`,
+Plain (non-secret) variables: `AIRWALLEX_ENV`, `SITE_ENV`, `ADMIN_HOST`, `ADMIN_ACCEPT_SITE_BASIC`, `CONTACT_EMAIL_TO`, `TURNSTILE_SITE_KEY`, `PRICING_APPROVED`, `PRICING_JSON`,
 `PAYMENT_AUTO_CAPTURE`, `APPLE_PAY_ENABLED`, `GOOGLE_PAY_ENABLED`, `WALLET_MERCHANT_NAME`, `CUSTOMER_EMAIL_FROM`, `CUSTOMER_EMAIL_REPLY_TO`, `CUSTOMER_EMAIL_POLICY_NOTE`,
 `CUSTOMER_EMAIL_ENABLED`, `ORDER_NOTIFY_EMAIL_TO`, `ORDER_NOTIFY_EMAIL_FROM`, `MCF_AUTO_SUBMIT`, `MCF_SKU_MAP_JSON`, `MCF_SHIPPING_MAP_JSON`, `MCF_SYNC_CRON`, `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE`, `MCF_NOTIFY_AMAZON_EMAIL`, `PAYPAL_ENV`.
 PayPal secrets: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` (see [paypal.md](paypal.md)).
@@ -117,7 +116,7 @@ credentials). It is **off by default** (`MCF_AUTO_SUBMIT` unset). Details: "Amaz
   lib/shop           │                    ├─ worker/airwallex.js token · PaymentIntent · webhook HMAC
                      │                    ├─ worker/paypal.js    Orders v2 create · capture · webhook verify
                      │                    ├─ worker/notify.js    new paid-order notification (opt-in)
-prototype/admin/ ────┘                    ├─ worker/admin.js     admin-auth gate + /admin/api/*
+public/admin/ ───────┘                    ├─ worker/admin.js     admin-auth gate + /admin/api/*
                                           ├─ worker/fulfillment.js  mark shipped · validation · audit log
                                           ├─ worker/customer-email.js  order confirmation + shipment emails (Resend, opt-in)
                                           ├─ worker/amazon-mcf.js  Amazon MCF client (bearer call to the amazon-spapi-mcp outbound endpoints)
@@ -152,7 +151,7 @@ prototype/admin/ ────┘                    ├─ worker/admin.js     a
 | `POST /api/checkout/paypal/order` | `{ items, contact, shipping?, method? }` → `{ orderId, quote, paypal, eventIds }` (PayPal Orders v2; see [paypal.md](paypal.md)) |
 | `POST /api/checkout/paypal/capture` | `{ paypalOrderId }` or `{ orderId }` → settle the same D1 order |
 | `GET /api/orders/:id` | status, lines, totals, masked email (no address) |
-| `GET /.well-known/apple-developer-merchantid-domain-association` | Apple Pay domain file (served from `prototype/apple-pay/`, `application/octet-stream`; 404 until you add it) |
+| `GET /.well-known/apple-developer-merchantid-domain-association` | Apple Pay domain file (served from the site's `public/apple-pay/`, `application/octet-stream`; 404 until you add it) |
 | `POST /api/webhooks/airwallex` | HMAC-verified (`x-timestamp` + raw body), idempotent by event id; a genuine delivery older than 5 minutes is settled from the Retrieve API, not from its stale body |
 | `POST /api/webhooks/paypal` | PayPal-verified (`PAYPAL_WEBHOOK_ID` + transmission headers), idempotent by event id; settles `PAYMENT.CAPTURE.COMPLETED` from a Retrieve of the PayPal order |
 | `GET /admin/` · `GET /admin/api/orders[?status&fulfillment&q&before]` · `GET /admin/api/orders/:id` | order back office, admin auth required (below) |
@@ -167,38 +166,10 @@ are not re-enabled by that work; MCF stays off.
 
 The cart and checkout are Next.js pages (D41): `app/(us)/(shop)/cart` and `app/(us)/(shop)/checkout` (the order page is
 `/checkout?order=<id>`), built in `components/shop/CartPage.js` and `components/shop/checkout/`, on the field rules and
-payment helpers in `lib/shop/` (the rules are the Worker's own, `address-rules.js`). `/cart.html` and `/checkout.html`
+payment helpers in `lib/shop/` (the rules are the Worker's own, `address-rules.mjs`). `/cart.html` and `/checkout.html`
 answer 301 to them with the query string kept, so payment returns registered earlier still land on the order page.
 
-Adding to the cart from any page: link to `/cart?add=d204`; Next.js pages call `addToCart()` from `lib/shop/cart.js`; a
-plain HTML page that loads `js/commerce/shared.js` can use `<button data-add-to-cart="d215" data-placement="hero">`
-(add `data-go-to-cart` to jump to the cart).
-
-## Landing entry points (v3 only)
-
-`prototype/v3.html` loads `js/commerce/landing-cart.js` (a module that shares
-`shared.js` and the `apgo_us_cart_v1` cart with the store pages):
-
-- **Header:** a Cart link with an item-count badge (hidden at 0, `aria-label`
-  "Cart, N items"; icon-only at ≤ 760 px so the header does not crowd). The badge
-  follows the cart across tabs.
-- **Selected product panel** and **final handoff** (D204 / D215): a primary
-  **Add to cart** button, a polite inline confirmation ("Added · N in cart · View
-  cart →"), then the **Amazon link as the outlined secondary option**
-  ("Or shop on Amazon"). Amazon links keep their existing fail-closed
-  validation, status line and `amazon_referral_click` event.
-- **Mobile sticky bar:** Add to cart + a compact Amazon link; the add is
-  announced through a visually hidden live region.
-- Add-to-cart does not navigate; the shopper opens the cart from the header or
-  the inline link. The `add_to_cart` event carries `sku`, `quantity`, `placement`
-  (`selected` / `final` / `sticky`).
-- Review shots: `npm run capture:v3-cart` →
-  `review/v3-cart-{d204,d215}-{desktop,mobile}.png`, `v3-cart-header-*.png`,
-  `v3-cart-sticky-mobile.png`.
-
-`index.html` / `v2.html` are intentionally not wired. To add the entry there, load
-`js/commerce/landing-cart.js` and add the same markup; first amend
-`IMPLEMENTATION_CONTRACT.md` (root integrator).
+Adding to the cart from any page: link to `/cart?add=d204`, or call `addToCart()` from `lib/shop/cart.js`.
 
 ## Product pages and the overview (`/products`, `/products/atomic-colored-glaze`, `/products/atomic-glaze-coating`)
 
@@ -211,19 +182,19 @@ Next.js pages of the site (D41), built from the Claude Design **product-v2** kit
 | `/products/atomic-colored-glaze` | `app/(us)/(shop)/products/[slug]/page.js` | DRY, Atomic Colored Glaze (`components/shop/ProductPage.js`). |
 | `/products/atomic-glaze-coating` | same | WET, Atomic Glaze Coating. |
 
-Old addresses answer 301 with the query string kept (`worker/root-page.js`): `/products/d204` and `/products/d215`
+Old addresses answer 301 with the query string kept (`worker/redirects.js`): `/products/d204` and `/products/d215`
 (also `.html` or a trailing slash) to the named pages (D39), and `/product` (the earlier page for both products, also
 `.html`) to `/products`. Cloudflare serves the exported `x.html` at `/x`, so the `.html` form redirects to the clean URL.
 
-* **Data:** names, routines, copy, URLs and SEO in `prototype/js/commerce/product-data.js`, read through
-  `lib/shop/catalog.js` (the file moves into `lib/shop` when the cart and checkout become Next.js pages). The Worker
-  and the plain HTML store pages read the same file.
+* **Data:** names, routines, copy, URLs and SEO in `lib/shop/product-data.mjs`, read through `lib/shop/catalog.js`.
+  The Worker reads the same file. Images and videos are the site's files in `public/us/assets/`, shared with the brand
+  pages; the old `/assets/*` URLs answer 301 there.
 * **Styles:** `app/(us)/(shop)/shop.css`, the store styles scoped under `.shop`, so they never reach the brand pages.
 * **Prices come only from `/api/store/config`** (`worker/pricing.js`, read by `lib/shop/store-config.js`): the buy
   box, the sticky bar, the compare table, the overview and the analytics `value`. The exported HTML has no price. If
   the config cannot be loaded the price reads "—" and the cart still works (it only stores SKU and quantity).
-* **Add to cart** (`lib/shop/cart.js`) keeps the same localStorage key and rules as `shared.js`, so the cart and
-  checkout pages see the same cart, and the header count follows it live. Ticking the pair upsell also adds the other
+* **Add to cart** (`lib/shop/cart.js`) keeps the old store pages' localStorage key and rules, so a cart from before
+  the move carries over; the cart and checkout pages see the same cart, and the header count follows it live. Ticking the pair upsell also adds the other
   product (quantity 1), priced as the sum of the two config prices; no discount is invented. `add_to_cart` events
   (`apgo:analytics` / `dataLayer`) carry `sku`, `quantity`, `placement` (`pdp-buybox` / `pdp-sticky` / `pdp-quiz` /
   `pdp-compare` on the product pages, `shop` on the overview), `pair`, `currency`, `value` and `items[]` (`item_id`,
@@ -231,7 +202,7 @@ Old addresses answer 301 with the query string kept (`worker/root-page.js`): `/p
 * **The other routine is its own page:** the DRY / WET switch, the quiz result and the compare table link to it.
 * **No unconfirmed promises:** terms the brand has not confirmed (pair price, shipping, returns, guarantee) are left
   out, not marked.
-* **Reviews and photos are never invented.** `js/commerce/product-reviews.js` ships empty. The rating line and the
+* **Reviews and photos are never invented.** `lib/shop/product-reviews.mjs` ships empty. The rating line and the
   reviews section appear only for a product with at least 3 *verified* reviews (FTC 16 CFR Part 465,
   `lib/shop/reviews.js`). Before/after appears only with a real photo pair.
 * **SEO:** per-page title, description, canonical and og tags (absolute www URLs) and a Product JSON-LD. `offers` is
@@ -239,8 +210,7 @@ Old addresses answer 301 with the query string kept (`worker/root-page.js`): `/p
   search engines. All three pages are `noindex, nofollow` like the rest of the store until launch, and stay out of the
   sitemap until then. Staging also sends `X-Robots-Tag: noindex`.
 * **Meta Pixel:** the shop layout loads `/js/meta-pixel.js` ([meta-tracking-frontend.md](meta-tracking-frontend.md)).
-* **Entry points:** Shop in the site header and footer, the product buttons on the home page, the v3 header "Shop"
-  link and the "View full product details" link in each v3 product panel and final choice, and the product name in
+* **Entry points:** Shop in the site header and footer, the product buttons on the home page, and the product name in
   cart lines and the checkout summary (new tab there, so a shopper mid-checkout keeps the form).
 * Tests: `tests/product-pages.test.mjs` (static contract), `tests/product-pages.spec.mjs` (Playwright on the built
   site: both products and the overview, add to cart and analytics, pair, sticky bar, config prices, hide rules,
@@ -259,7 +229,7 @@ Next.js pages of the site (D41), in its own header and footer; all `noindex` unt
   that the drafts agree with the store's rules (shipping cost and time, where we ship, the returns window).
 * **Contact us** (D28): the support details (`lib/us/company.js`) and a form (`components/shop/ContactForm.js`) with
   name, email and message. `POST /api/contact` (`worker/contact.js`) checks the same rules
-  (`prototype/js/commerce/contact-rules.js`), saves the message in D1 (`contact_messages`), then emails it to
+  (`lib/shop/contact-rules.mjs`), saves the message in D1 (`contact_messages`), then emails it to
   `CONTACT_EMAIL_TO` through Resend (same sender as the order emails) with the shopper as Reply-To. Saved even when the
   email cannot go out; the back office lists every message under "Customer messages" (`GET /admin/api/contact-messages`).
   Abuse limits (M12-06): a field only robots fill, 5 messages an hour per address (a salted hash that changes daily,
@@ -279,7 +249,7 @@ else in the repository contains a price:
 - The browser holds no price at all. Cart, checkout, summary and the wallet buttons
   render what the Worker returned, so front end and back end cannot disagree.
   `tests/commerce-pricing.test.mjs` fails if a price or tax rate appears in
-  `prototype/js/commerce/`, or a literal price in `catalog.js` / `index.js`.
+  `lib/shop/` or `components/shop/`, or a literal price in `catalog.js` / `index.js`.
 - Playwright mocks and unit tests import the same module (no duplicated `2990`).
 
 **Change a number without editing code**: set the optional, non-secret Worker
@@ -326,7 +296,7 @@ wallet and then pays another way does not create a second order. Settlement is
 unchanged: `payment_intent.succeeded` webhook or `GET /api/orders/:id` (retrieve
 fallback), then the same notification.
 
-**Hidden unless it can really work** (`prototype/js/commerce/wallets.js`):
+**Hidden unless it can really work** (`lib/shop/wallets.mjs`):
 
 1. The operator allows it (`APPLE_PAY_ENABLED` / `GOOGLE_PAY_ENABLED`, default on; set
    `"false"` to hide one).
@@ -381,8 +351,8 @@ in production:
       sandbox testing, production needs your real domain).
    2. **Download the domain verification file** Airwallex offers.
    3. Save it in this repo as
-      `prototype/apple-pay/apple-developer-merchantid-domain-association` (no
-      extension). It is a public token, safe to commit. Deploy.
+      `public/apple-pay/apple-developer-merchantid-domain-association` (no
+      extension; the site's own folder, at the repository root). It is a public token, safe to commit. Deploy.
    4. Open `https://<domain>/.well-known/apple-developer-merchantid-domain-association`:
       it must download the file (status 200, `application/octet-stream`). The Worker
       serves it at that path because Wrangler does not upload dot-folders.
@@ -435,7 +405,7 @@ express block above the chooser.
 **Operator flag.** `AIRWALLEX_PAY_ENABLED=false` hides the option (default on).
 `GET /api/store/config` includes `airwallexPay: { enabled }`. Honour `storeReady`.
 
-Code: `prototype/js/commerce/airwallex-pay.js`, wiring in
+Code: `lib/shop/airwallex-pay.mjs`, wiring in
 `components/shop/checkout/CheckoutPage.js`. Tests: `tests/airwallex-pay.test.mjs`.
 
 ## Go-live decisions ("needs your decision before prod")
@@ -462,9 +432,8 @@ Nothing below is decided; the store refuses production traffic until
 npm install
 cp .dev.vars.example .dev.vars    # fill in Airwallex SANDBOX credentials (+ admin login / ADMIN_TOKEN)
 npm run db:migrate:local           # re-run after pulling: schema.sql is additive/idempotent
-npm run dev                        # http://127.0.0.1:8799/v3.html  ·  /admin/  (the plain HTML store pages only)
-# The cart, checkout and product pages are Next.js pages: build the single site and serve it instead
-npm run build:site && npx wrangler dev --port 8799 --assets ./site --var ROOT_PAGE:off   # /cart?add=d204
+npm run build:site                 # the site the Worker serves: the Next.js export in ../out, test settings
+npm run dev                        # http://127.0.0.1:8799/  ·  /cart?add=d204  ·  /admin/
 ```
 
 Sandbox test card: `4035 5010 0000 0008`, any future expiry, any CVC.
@@ -898,7 +867,6 @@ Wrangler does not inherit bindings/vars/assets into `[env.*]`, and secrets are s
 | D1 | local SQLite | `apgo-us-store-staging` (own database) | `apgo-us-store` (placeholder id until created) |
 | `AIRWALLEX_ENV` | `demo` | `demo` (Airwallex **sandbox**; `worker/airwallex.js` treats anything but `prod` as sandbox) | `prod` |
 | `SITE_ENV` | unset | `staging` | unset |
-| `ROOT_PAGE` | unset | `/v3`: `/` serves the v3 store entry (cart badge + Add to cart); `prototype/index.html` is the older Amazon-referral landing without a cart (`worker/root-page.js`) | unset |
 | `PRICING_APPROVED` | unset | unset (only matters for prod) | **unset**: checkout answers 503 (payments closed) until the owner approves prices/shipping/tax |
 | Airwallex keys | sandbox (`.dev.vars`) | sandbox only | production keys, set by the owner |
 
@@ -909,7 +877,7 @@ With `SITE_ENV` unset (local dev and production) the module is a pass-through: n
 - Every response gets `X-Robots-Tag: noindex, nofollow, noarchive`, and `GET /robots.txt` answers `User-agent: *` / `Disallow: /`.
 - The whole site is behind **HTTP Basic auth** (secrets `STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD`; missing secrets fail closed with 503).
   `run_worker_first = true` in `[env.staging.assets]` makes static pages and images go through the Worker too.
-  Blocked: pages (`/`, `/v3`, policy pages, cart, checkout), static files (css/js/images), `/api/store/config`, `/api/cart/quote`,
+  Blocked: pages (`/`, products, policy pages, cart, checkout), static files (css/js/images), `/api/store/config`, `/api/cart/quote`,
   `/api/checkout/session`, `/api/orders/:id`, Apple Pay association file.
 - **Not** behind the Basic gate: `/robots.txt` (crawlers must read it); `POST /api/webhooks/airwallex` (Airwallex cannot send our
   credentials; the handler verifies the Airwallex signature itself); `/admin` and `/admin/*` and the whole `ADMIN_HOST` hostname (their own
@@ -969,8 +937,8 @@ hostnames, nothing else changes.
 
 The back office no longer shares the store's domain. With the plain var `ADMIN_HOST` set, the Worker splits by the request `Host`:
 
-- Host = `ADMIN_HOST`: only `/admin`, `/admin/*` (still the admin-auth gate, see above), `/robots.txt` and the page's own files (`/css/commerce.css`, `/css/admin.css`,
-  `/js/admin.js`, `/js/commerce/shared.js`, `/assets/brand/apgo-logo.png`) are served; any other path (store pages, `/api/*`, webhook, Apple Pay file) is 404. Every response
+- Host = `ADMIN_HOST`: only `/admin`, `/admin/*` (still the admin-auth gate, see above; the page's own files are there too, `public/admin/`), `/robots.txt` and the
+  site logo (`/us/assets/brand/apgo-logo.png`) are served, and `/` redirects to `/admin/`; any other path (store pages, `/api/*`, webhook, Apple Pay file) is 404. Every response
   carries `X-Robots-Tag: noindex, nofollow`. It is exempt from the staging Basic gate (no double prompt). Login there is `ADMIN_LOGIN_EMAIL` + `ADMIN_LOGIN_PASSWORD`
   (HTTP Basic; same secret names on production and staging, no `SITE_ENV=staging` required), or `ADMIN_TOKEN` (Bearer, or Basic with any username and the token as password), or,
   when the plain var `ADMIN_ACCEPT_SITE_BASIC = "true"` (set on staging) and `SITE_ENV=staging`, the **same Basic user + password as the website**
@@ -1181,9 +1149,6 @@ not establish a real provider refund: record sandbox acceptance separately in
   mismatch, notify-once across racing polls, admin auth (503/401/email-password Basic/Bearer,
   filters, search, writes limited to the ship endpoint), notification payloads (signed, no PII), Airwallex
   client token cache / 401 refresh / retry rules.
-- `tests/v3-cart-entry.spec.mjs` (Playwright): v3 Add to cart in every placement,
-  badge and cross-tab sync, Amazon stays as the secondary link, sticky bar,
-  overflow at 320/390/1440, axe, no price on the landing page.
 - `tests/product-pages.test.mjs` and `tests/product-pages.spec.mjs`: the overview and the product pages (see "Product pages and the overview").
 - `tests/admin.spec.mjs` (Playwright, `/admin/api/*` stubbed): list, filters,
   search, detail contents, unconfigured notice, overflow, axe.

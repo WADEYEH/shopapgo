@@ -1,4 +1,4 @@
-// Meta Pixel (browser side): static contract + a behaviour harness that runs js/meta-pixel.js
+// Meta Pixel (browser side): static contract + a behaviour harness that runs public/js/meta-pixel.js
 // in a bare vm with a fake window/document, so hostname gating, the _fbc rule and the event
 // mapping are tested without a browser. Browser flows are in meta-pixel.spec.mjs.
 import assert from "node:assert/strict";
@@ -13,23 +13,6 @@ import { DEFAULT_PRICING } from "../worker/pricing.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
-// The store pages that are still plain HTML. The legacy Amazon landing pages (index, v2) are not part of this repo;
-// "/" serves v3 (ROOT_PAGE). Every other store page (overview, product, cart, checkout, policy and contact pages) is a
-// Next.js page (D41): see the shop layout test below.
-const PIXEL_PAGES = ["v3"];
-
-const head = (html) => html.slice(html.indexOf("<head"), html.indexOf("</head>"));
-
-test("every public store page loads js/meta-pixel.js (deferred, in <head>) plus the noscript fallback", async () => {
-  for (const page of PIXEL_PAGES) {
-    const html = await read(`prototype/${page}.html`);
-    const h = head(html);
-    assert.equal((h.match(/<script src="\/?js\/meta-pixel\.js" defer><\/script>/g) || []).length, 1, `${page}.html: one deferred meta-pixel script in head`);
-    assert.ok(h.includes(`facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1`), `${page}.html: noscript pixel in head`);
-    assert.match(h, /<noscript><img [^>]*alt=""[^>]*><\/noscript>/, `${page}.html: noscript image has an empty alt`);
-  }
-});
-
 test("the Next.js store pages (/products, product, cart, checkout, policy and contact pages) load it once, from the shop layout, and the brand pages do not", async () => {
   const layout = await read("../app/(us)/(shop)/layout.js");
   assert.equal(layout.split('<Script src="/js/meta-pixel.js" strategy="afterInteractive" />').length - 1, 1, "one pixel script");
@@ -39,27 +22,15 @@ test("the Next.js store pages (/products, product, cart, checkout, policy and co
   assert.ok(!(await read("../app/(us)/layout.js")).includes("meta-pixel.js"));
 });
 
-test("pages that must not load the pixel do not", async () => {
-  for (const page of ["admin/index", "v3-style"]) {
-    let html;
-    try { html = await read(`prototype/${page}.html`); } catch { continue; }
-    assert.ok(!html.includes("meta-pixel") && !html.includes("facebook"), `${page}.html must not load the Meta Pixel`);
-  }
-  const admin = await read("prototype/admin/index.html").catch(() => "");
-  assert.ok(!admin.includes("meta-pixel"));
-});
-
-test("the pixel is never part of shared.js (admin pages load that file)", async () => {
-  const shared = await read("prototype/js/commerce/shared.js");
-  assert.ok(!/fbq|facebook|fbevents|meta-pixel/i.test(shared));
-  for (const file of ["admin.js"]) {
-    const admin = await read(`prototype/js/${file}`);
-    assert.ok(!/fbq|fbevents/.test(admin));
+test("the back office never loads the pixel", async () => {
+  for (const file of ["index.html", "admin.js", "ui.js"]) {
+    const source = await read(`../public/admin/${file}`);
+    assert.ok(!/fbq|facebook|fbevents|meta-pixel/i.test(source), `admin/${file} must not load the Meta Pixel`);
   }
 });
 
 test("meta-pixel.js: fixed ids, hostname gate, event ids, and no hard-coded prices", async () => {
-  const source = await read("prototype/js/meta-pixel.js");
+  const source = await read("../public/js/meta-pixel.js");
   assert.ok(source.includes(`"${PIXEL_ID}"`));
   assert.ok(source.includes("https://connect.facebook.net/en_US/fbevents.js"));
   assert.ok(source.includes('"store.shopapgo.com"'));
@@ -134,7 +105,7 @@ function run({ hostname = "store.shopapgo.com", search = "", cookie = "", fbq, a
     appended,
     store,
     load: async () => {
-      const source = await read("prototype/js/meta-pixel.js");
+      const source = await read("../public/js/meta-pixel.js");
       vm.runInContext(source, sandbox);
     },
     emit: (detail) => (listeners["apgo:analytics"] || []).forEach((handler) => handler({ detail })),
