@@ -1,6 +1,6 @@
 /* The store's styles on the Next.js pages (D41), scoped under .shop (app/(us)/(shop)/layout.js) so nothing reaches the
-   brand pages. Ported from commerce/prototype/css/commerce.css + product.css, which the pages that are still plain HTML
-   keep using until they move here. Tokens are the APGO Design System's; fonts are the site's next/font Barlow faces. */
+   brand pages. Ported from the old plain HTML store pages' commerce.css + product.css (the back office keeps its own
+   copy of the base styles: public/admin/commerce.css). Tokens are the APGO Design System's; fonts are the site's next/font Barlow faces. */
 
 /* APGO US store — cart + checkout.
    Tokens are copied 1:1 from the APGO Design System (tokens/*.css); components

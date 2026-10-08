@@ -62,13 +62,17 @@ test("admin host: no token -> 401, token -> page and API, everything noindex", {
   assert.equal((await call(ADMIN, "/admin", { headers: bearer })).status, 301);
 });
 
-test("admin host: only the back office and its own css/js/logo; the storefront is 404 and there is one password only", { skip }, async () => {
-  for (const path of ["/css/commerce.css", "/css/admin.css", "/js/admin.js", "/js/commerce/shared.js", "/js/commerce/product-data.js", "/assets/brand/apgo-logo.png"]) {
-    const res = await call(ADMIN, path);
+test("admin host: only the back office (its own files behind the login) and the logo; the storefront is 404 and there is one password only", { skip }, async () => {
+  const logo = await call(ADMIN, "/us/assets/brand/apgo-logo.png");
+  assert.equal(logo.status, 200);
+  assert.ok(logo.headers.get("x-robots-tag").includes("noindex"));
+  for (const path of ["/admin/commerce.css", "/admin/admin.css", "/admin/admin.js", "/admin/ui.js"]) {
+    assert.equal((await call(ADMIN, path)).status, 401, path);
+    const res = await call(ADMIN, path, { headers: bearer });
     assert.equal(res.status, 200, path);
     assert.ok(res.headers.get("x-robots-tag").includes("noindex"), path);
   }
-  for (const path of ["/", "/v3.html", "/cart", "/checkout", "/privacy.html", "/js/v3.js", "/api/store/config", "/api/orders/APGO-US-0123456789AB", "/api/webhooks/airwallex", "/adminx", "/.well-known/apple-developer-merchantid-domain-association"]) {
+  for (const path of ["/", "/products", "/cart", "/checkout", "/privacy", "/js/meta-pixel.js", "/css/commerce.css", "/js/admin.js", "/api/store/config", "/api/orders/APGO-US-0123456789AB", "/api/webhooks/airwallex", "/adminx", "/.well-known/apple-developer-merchantid-domain-association"]) {
     for (const headers of [{}, bearer, { Authorization: BASIC }]) {
       const res = await call(ADMIN, path, { headers, method: path.startsWith("/api/webhooks") ? "POST" : "GET" });
       assert.equal(res.status, 404, path);
@@ -127,11 +131,12 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(staging, /^AIRWALLEX_ENV = "demo"/m);
   assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID|MCF_AUTO_SUBMIT)\s*=/m.test(staging), "the test site never takes live payments, sends Meta events or ships through Amazon");
   assert.ok(!toml.includes("[env.next"), "next.shopapgo.com was retired (plan D38)");
-  // Staging is the single site: brand export + store pages (scripts/build-site.mjs), "/" is the brand home.
-  assert.match(staging, /^directory = "\.\/site"/m);
-  assert.match(staging, /^not_found_handling = "404-page"/m);
-  assert.ok(!/^\s*ROOT_PAGE\s*=/m.test(staging), "the brand export has its own index.html");
-  assert.match(staging, /^SITE_HOME_URL = "https:\/\/staging\.shopapgo\.com"/m);
+  // Every environment serves the site as the Next.js export builds it (D41): no combining step, "/" is the home page.
+  for (const section of [toml.slice(0, toml.indexOf("[env.")), staging]) {
+    assert.match(section, /^directory = "\.\.\/out"/m);
+    assert.match(section, /^not_found_handling = "404-page"/m);
+  }
+  assert.ok(!/ROOT_PAGE|SITE_HOME_URL|prototype/.test(toml), "the v3 home, the store's link config and the old store folder are gone");
   const production = envSection(toml, "production");
   assert.match(production, /pattern = "store\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
@@ -141,8 +146,10 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   const storePaths = ["/products*", "/cart*", "/checkout*", "/api/*", "/terms*", "/privacy*", "/returns*", "/contact*", "/css/*", "/js/*", "/assets/*", "/.well-known/*"];
   const zoneRoutes = [...production.matchAll(/\{ pattern = "([^"]+)", zone_name = "shopapgo\.com" \}/g)].map((match) => match[1]);
   assert.deepEqual(zoneRoutes.sort(), ["www.shopapgo.com", "shopapgo.com"].flatMap((host) => storePaths.map((path) => host + path)).sort());
-  assert.match(production, /^directory = "\.\/prototype"/m, "production serves the store pages only until the cutover");
-  assert.match(production, /^ROOT_PAGE = "\/v3"/m, "this repo has no legacy index.html, so / must serve the v3 store entry");
+  // The same site in production, which takes effect with the cutover deploy (www moves to this Worker then).
+  assert.match(production, /^directory = "\.\.\/out"/m);
+  assert.match(production, /^not_found_handling = "404-page"/m);
+  assert.match(toml, /# Do NOT deploy main here before the cutover/);
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");
   }

@@ -11,7 +11,7 @@
 
 import { US_STATES } from "./states.js";
 import { toMajor } from "./catalog.js";
-import { checkShipping } from "../prototype/js/commerce/address-rules.js";
+import { checkShipping } from "../../lib/shop/address-rules.mjs";
 
 const API_BASE = {
   live: "https://api-m.paypal.com",

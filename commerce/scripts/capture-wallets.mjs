@@ -28,7 +28,7 @@ try {
       }, wallets);
       await mockStore(page);
       await seedCart(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 1 }]);
-      await page.goto(`${BASE_URL}/checkout.html`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
       await fillToPayment(page);
       if (wallets) await page.locator('[data-wallet-slot="googlePay"].is-ready').waitFor();
       await page.evaluate(() => document.fonts?.ready);

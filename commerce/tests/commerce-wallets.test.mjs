@@ -7,7 +7,7 @@ import test from "node:test";
 import worker from "../worker/index.js";
 import { publicConfig } from "../worker/catalog.js";
 import { APPLE_PAY_ASSET_PATH, autoCaptureEnabled, paymentMethodOptions, walletConfig } from "../worker/wallets.js";
-import { candidateWallets, detectApplePay, detectGooglePay, walletAmount, walletOptions, walletUpdate } from "../prototype/js/commerce/wallets.js";
+import { candidateWallets, detectApplePay, detectGooglePay, walletAmount, walletOptions, walletUpdate } from "../../lib/shop/wallets.mjs";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
 
 globalThis.fetch = async (url) => { throw new Error(`unexpected real network call: ${url}`); };
@@ -183,6 +183,6 @@ test("Apple Pay domain file is served at /.well-known as octet-stream, only when
 test("wrangler routes the Apple Pay path through the Worker and the folder keeps no secrets", async () => {
   const toml = await readFile("wrangler.toml", "utf8");
   assert.match(toml, /run_worker_first\s*=\s*true/);
-  const readme = await readFile("prototype/apple-pay/README.txt", "utf8");
+  const readme = await readFile("../public/apple-pay/README.txt", "utf8");
   assert.ok(readme.includes("apple-developer-merchantid-domain-association"));
 });

@@ -1,20 +1,14 @@
 // Host split between the storefront and the order back office.
 //
 // With the plain var ADMIN_HOST set (e.g. "admin-staging.shopapgo.com"; prod plan: "admin.shopapgo.com"):
-//   * requests whose Host is ADMIN_HOST only get /admin, /admin/* (admin-auth, see admin.js), /robots.txt and the few
-//     static files the back office page loads; everything else is 404. Every response there carries X-Robots-Tag noindex.
+//   * requests whose Host is ADMIN_HOST only get /admin, /admin/* (admin-auth, see admin.js; the back office's own files
+//     are there too: public/admin/), /robots.txt and the site logo; everything else is 404. Every response there carries X-Robots-Tag noindex.
 //   * every other host (the store domain, workers.dev) answers 404 for /admin and /admin/* - the back office is not
 //     served there any more.
 // With ADMIN_HOST unset (local `npm run dev`, tests) nothing changes: one host serves both, as before.
 
-const ADMIN_HOST_ASSETS = new Set([
-  "/css/commerce.css",
-  "/css/admin.css",
-  "/js/admin.js",
-  "/js/commerce/shared.js",
-  "/js/commerce/product-data.js", // imported by shared.js
-  "/assets/brand/apgo-logo.png",
-]);
+// The one file outside /admin/ the back office page loads.
+const ADMIN_HOST_ASSETS = new Set(["/us/assets/brand/apgo-logo.png"]);
 
 export const ADMIN_ROBOTS_TAG = "noindex, nofollow";
 

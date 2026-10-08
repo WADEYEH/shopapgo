@@ -1,5 +1,5 @@
 import { QuoteError } from "./catalog.js";
-import { checkContact, checkShipping } from "../prototype/js/commerce/address-rules.js";
+import { checkContact, checkShipping } from "../../lib/shop/address-rules.mjs";
 
 // Crockford base32 without I, L, O, U so IDs read cleanly over the phone.
 const ORDER_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -34,7 +34,7 @@ function addressReview(body) {
 }
 
 // Validates the shopper-supplied parts of a checkout request with the same rules as the checkout page
-// (prototype/js/commerce/address-rules.js: 48 states and DC, no PO boxes or military mail, ZIP matching the state,
+// (lib/shop/address-rules.mjs: 48 states and DC, no PO boxes or military mail, ZIP matching the state,
 // a US phone, Amazon's lengths). Throws QuoteError with a shopper-facing message and the field; the caller maps it to
 // HTTP 400. The phone travels with the address (shipping.phone), where fulfillment and Meta read it.
 export function validateCheckout(body) {

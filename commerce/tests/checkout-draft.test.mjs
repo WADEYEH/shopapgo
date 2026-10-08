@@ -13,7 +13,7 @@ import {
   resolveDraftStep,
   shippingComplete,
   writeCheckoutDraft,
-} from "../prototype/js/commerce/checkout-draft.js";
+} from "../../lib/shop/checkout-draft.mjs";
 
 function memoryStorage() {
   const store = new Map();

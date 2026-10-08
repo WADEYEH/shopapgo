@@ -27,7 +27,7 @@ const call = (path, { method = "GET", headers = {}, e = env() } = {}) =>
 const NOINDEX = "noindex, nofollow, noarchive";
 
 test("staging: no credentials -> 401 with a Basic challenge and the noindex header", async () => {
-  for (const path of ["/", "/v3.html", "/cart", "/checkout", "/privacy.html", "/api/store/config"]) {
+  for (const path of ["/", "/products", "/cart", "/checkout", "/privacy", "/us/assets/brand/apgo-logo.png", "/api/store/config"]) {
     const res = await call(path);
     assert.equal(res.status, 401, path);
     assert.match(res.headers.get("www-authenticate"), /^Basic /);
@@ -97,18 +97,19 @@ test("staging: webhook and /admin skip the Basic gate and keep their own checks"
   assert.equal(noTok.headers.get("x-robots-tag"), NOINDEX);
   const page = await call("/admin/", { headers: { Authorization: basic("admin", "admin-token-0123456789abcdef") } });
   assert.equal(page.status, 200);
-  // The admin page's own CSS/JS sit behind the gate, so a valid ADMIN_TOKEN also passes it (but a short / wrong one does not).
-  const css = await call("/css/commerce.css", { headers: { Authorization: basic("admin", "admin-token-0123456789abcdef") } });
+  // The admin page's logo sits behind the gate, so a valid ADMIN_TOKEN also passes it (but a short / wrong one does not).
+  const logo = "/us/assets/brand/apgo-logo.png";
+  const css = await call(logo, { headers: { Authorization: basic("admin", "admin-token-0123456789abcdef") } });
   assert.equal(css.status, 200);
-  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("admin", "wrong-token-0123456789abcdef") } })).status, 401);
-  assert.equal((await call("/css/commerce.css", { e: env({ ADMIN_TOKEN: "short" }), headers: { Authorization: basic("admin", "short") } })).status, 401);
+  assert.equal((await call(logo, { headers: { Authorization: basic("admin", "wrong-token-0123456789abcdef") } })).status, 401);
+  assert.equal((await call(logo, { e: env({ ADMIN_TOKEN: "short" }), headers: { Authorization: basic("admin", "short") } })).status, 401);
   // The staging Basic credentials are NOT an admin token.
   assert.equal((await call("/admin/", { headers: { Authorization: basic() } })).status, 401);
-  // Owner email/password is an admin login and also passes the site gate (CSS/JS when ADMIN_HOST is unset).
+  // Owner email/password is an admin login and also passes the site gate (the logo when ADMIN_HOST is unset).
   const login = env({ ADMIN_LOGIN_EMAIL: "owner@example.com", ADMIN_LOGIN_PASSWORD: "owner-login-password-test", ADMIN_TOKEN: "" });
   assert.equal((await call("/admin/", { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
-  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
-  assert.equal((await call("/css/commerce.css", { headers: { Authorization: basic("other@example.com", "owner-login-password-test") }, e: login })).status, 401);
+  assert.equal((await call(logo, { headers: { Authorization: basic("owner@example.com", "owner-login-password-test") }, e: login })).status, 200);
+  assert.equal((await call(logo, { headers: { Authorization: basic("other@example.com", "owner-login-password-test") }, e: login })).status, 401);
 });
 
 test("non-staging (prod / local dev): pass-through, no gate, no robots override, no forced header", async () => {
@@ -123,18 +124,11 @@ test("non-staging (prod / local dev): pass-through, no gate, no robots override,
   }
 });
 
-test("ROOT_PAGE: '/' serves that page only for GET/HEAD on '/', everything else untouched", async () => {
-  const e = env({ ROOT_PAGE: "/v3" });
+test("'/' is the site's home page from the export; the v3 home override is gone", async () => {
   const auth = { Authorization: basic() };
-  const home = await call("/", { headers: auth, e });
+  const home = await call("/", { headers: auth, e: env({ ROOT_PAGE: "/v3" }) });
   assert.equal(home.status, 200);
-  assert.equal(await home.text(), "asset:/v3");
+  assert.equal(await home.text(), "asset:/");
   assert.equal(home.headers.get("x-robots-tag"), NOINDEX);
-  assert.equal(await (await call("/", { headers: auth, e: env() })).text(), "asset:/");
-  assert.equal(await (await call("/cart", { headers: auth, e })).text(), "asset:/cart");
-  assert.equal(await (await call("/v2.html", { headers: auth, e })).text(), "asset:/v2.html");
-  assert.equal((await call("/", { e })).status, 401); // still behind the gate
-  for (const bad of ["v3", "/a/b", "//evil.example", "/v3?x", ""]) {
-    assert.equal(await (await call("/", { headers: auth, e: env({ ROOT_PAGE: bad }) })).text(), "asset:/", JSON.stringify(bad));
-  }
+  assert.equal((await call("/", { e: env() })).status, 401); // still behind the gate
 });

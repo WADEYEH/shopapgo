@@ -1,5 +1,5 @@
 // Manual 390x844 QA audit (not part of the test suite): screenshots to review/qa-390-*.png,
-// axe, tap targets, layout, focus order. Start `python3 -m http.server 4173 -d prototype` first,
+// axe, tap targets, layout, focus order. Start `npm run serve` (the built site, npm run build:site) first,
 // then `node tests/helpers/qa-390-audit.mjs`.
 import { chromium } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
@@ -68,16 +68,14 @@ async function audit(name, setup, { tabs = 40 } = {}) {
   await ctx.close();
 }
 
-await audit("v3", async (p) => { await p.goto(base + "/v3.html"); }, { tabs: 45 });
-await audit("v3-selected", async (p) => { await p.goto(base + "/v3.html#d204"); await p.waitForTimeout(500); }, { tabs: 45 });
 const cartSetup = (items, flag) => async (p) => {
   await mockStore(p);
   await seedCart(p, items);
-  await p.goto(base + "/cart.html");
+  await p.goto(base + "/cart");
 };
 await audit("cart", cartSetup([{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]), { tabs: 20 });
 await audit("cart-empty", cartSetup([]), { tabs: 12 });
-await audit("checkout", async (p) => { await mockStore(p); await seedCart(p, [{ sku: "d204", qty: 1 }]); await p.goto(base + "/checkout.html"); }, { tabs: 20 });
-await audit("checkout-payment", async (p) => { await mockStore(p); await seedCart(p, [{ sku: "d204", qty: 1 }]); await p.goto(base + "/checkout.html"); await fillToPayment(p); }, { tabs: 25 });
+await audit("checkout", async (p) => { await mockStore(p); await seedCart(p, [{ sku: "d204", qty: 1 }]); await p.goto(base + "/checkout"); }, { tabs: 20 });
+await audit("checkout-payment", async (p) => { await mockStore(p); await seedCart(p, [{ sku: "d204", qty: 1 }]); await p.goto(base + "/checkout"); await fillToPayment(p); }, { tabs: 25 });
 for (const s of ["privacy", "terms", "returns", "contact"]) await audit(s, async (p) => { await p.goto(base + `/${s}.html`); }, { tabs: 12 });
 await browser.close();

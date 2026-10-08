@@ -16,7 +16,7 @@ const PIXEL_ID = "2606879866471418";
 const STORE = "store.shopapgo.com";
 const STORE_HOSTS = ["store.shopapgo.com", "shopapgo.com", "www.shopapgo.com"];
 const { d204, d215 } = DEFAULT_PRICING.products;
-const PROTOTYPE = path.resolve(process.env.APGO_PROTOTYPE_DIR || "site");
+const SITE = path.resolve(process.env.APGO_SITE_DIR || "../out");
 const TYPES = {
   ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
   ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json", ".txt": "text/plain", ".woff2": "font/woff2", ".vtt": "text/vtt", ".mp4": "video/mp4",
@@ -35,15 +35,14 @@ async function serveHost(page, host) {
   await page.route(`https://${host}/**`, async (route) => {
     // Decoded: the Next.js chunk of /products/[slug] is requested as .../%5Bslug%5D/page-<hash>.js.
     let pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (pathname === "/") pathname = "/v3.html"; // ROOT_PAGE in wrangler.toml
     // API calls never leave the test: mockStore() (registered after this, so it runs first) answers them,
     // and without it the store is "down". The real store host must never be reached.
     if (/^\/(admin\/)?api\//.test(pathname)) return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     if (pathname.endsWith("/")) pathname += "index.html";
     else if (!path.extname(pathname)) pathname += ".html"; // Cloudflare serves x.html at /x
     try {
-      const file = path.join(PROTOTYPE, pathname);
-      if (!file.startsWith(PROTOTYPE)) throw new Error("outside");
+      const file = path.join(SITE, pathname);
+      if (!file.startsWith(SITE)) throw new Error("outside");
       return route.fulfill({ contentType: TYPES[path.extname(file)] || "application/octet-stream", body: await readFile(file) });
     } catch {
       return route.fulfill({ status: 404, body: "not found" });
@@ -90,7 +89,7 @@ test.describe("Meta Pixel loading", () => {
     test(`${host} never loads Meta`, async ({ page }) => {
       const meta = await serveHost(page, host);
       await mockStore(page);
-      await page.goto(`https://${host}/v3.html?fbclid=TEST123`);
+      await page.goto(`https://${host}/products?fbclid=TEST123`);
       await page.waitForLoadState("networkidle");
       expect(meta.fbeventsRequests).toBe(0);
       expect(await page.evaluate(() => typeof window.fbq)).toBe("undefined");
@@ -102,7 +101,7 @@ test.describe("Meta Pixel loading", () => {
     let facebook = 0;
     await page.route(/facebook\.(net|com)/, (route) => { facebook += 1; return route.abort(); });
     await mockStore(page);
-    await page.goto("/v3.html?fbclid=TEST123");
+    await page.goto("/products?fbclid=TEST123");
     await page.waitForLoadState("networkidle");
     expect(facebook).toBe(0);
     expect(await page.evaluate(() => typeof window.fbq)).toBe("undefined");
@@ -117,12 +116,16 @@ test.describe("Meta Pixel loading", () => {
   });
 });
 
+// The store pages load the pixel once they are interactive (next/script afterInteractive), so wait for it to have run.
+const pixelRan = (page) => page.waitForFunction(() => typeof window.fbq === "function");
+
 test.describe("fbclid -> _fbc", () => {
   test("writes _fbc=fb.1.<ms>.<fbclid> for 90 days on .shopapgo.com when it is missing", async ({ page, context }) => {
     await serveHost(page, STORE);
     await mockStore(page);
     const before = Date.now();
-    await page.goto(`https://${STORE}/v3.html?fbclid=IwAR_test-123`);
+    await page.goto(`https://${STORE}/products?fbclid=IwAR_test-123`);
+    await pixelRan(page);
     const cookie = (await context.cookies(`https://${STORE}`)).find((c) => c.name === "_fbc");
     expect(cookie).toBeTruthy();
     expect(cookie.value).toMatch(/^fb\.1\.\d{13}\.IwAR_test-123$/);
@@ -139,59 +142,18 @@ test.describe("fbclid -> _fbc", () => {
     await serveHost(page, STORE);
     await mockStore(page);
     await context.addCookies([{ name: "_fbc", value: "fb.1.1700000000000.OLD", domain: ".shopapgo.com", path: "/" }]);
-    await page.goto(`https://${STORE}/v3.html?fbclid=NEW`);
+    await page.goto(`https://${STORE}/products?fbclid=NEW`);
+    await pixelRan(page);
     expect((await context.cookies(`https://${STORE}`)).find((c) => c.name === "_fbc").value).toBe("fb.1.1700000000000.OLD");
 
     const fresh = await context.browser().newContext();
     const other = await fresh.newPage();
     await serveHost(other, STORE);
     await mockStore(other);
-    await other.goto(`https://${STORE}/v3.html`);
+    await other.goto(`https://${STORE}/products`);
+    await pixelRan(other);
     expect((await fresh.cookies(`https://${STORE}`)).map((c) => c.name)).not.toContain("_fbc");
     await fresh.close();
-  });
-});
-
-test.describe("product page events", () => {
-  test("v3 sends ViewContent with SKUs and API prices, then AddToCart with the quantity price", async ({ page }) => {
-    await serveHost(page, STORE);
-    await mockStore(page);
-    await page.goto(`https://${STORE}/v3.html#d204`);
-    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
-
-    const [view] = await tracked(page, "ViewContent");
-    expect(view[2]).toEqual({
-      content_type: "product",
-      content_ids: ["D204", "D215"],
-      contents: [
-        { id: "D204", quantity: 1, item_price: d204.priceCents / 100 },
-        { id: "D215", quantity: 1, item_price: d215.priceCents / 100 },
-      ],
-      currency: "USD",
-    });
-
-    await page.locator('[data-product-panel="d204"] [data-add-to-cart]').click();
-    await expect.poll(async () => (await tracked(page, "AddToCart")).length).toBe(1);
-    const [add] = await tracked(page, "AddToCart");
-    expect(add[2]).toEqual({
-      content_type: "product",
-      content_ids: ["D204"],
-      contents: [{ id: "D204", quantity: 1, item_price: d204.priceCents / 100 }],
-      currency: "USD",
-      value: d204.priceCents / 100,
-    });
-  });
-
-  test("when /api/store/config is unavailable no value is sent", async ({ page }) => {
-    await serveHost(page, STORE);
-    await page.goto(`https://${STORE}/v3.html#d215`);
-    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
-    await page.locator('[data-product-panel="d215"] [data-add-to-cart]').click();
-    await expect.poll(async () => (await tracked(page, "AddToCart")).length).toBe(1);
-    for (const call of [...(await tracked(page, "ViewContent")), ...(await tracked(page, "AddToCart"))]) {
-      expect(call[2]).not.toHaveProperty("value");
-      expect(call[2].content_ids.length).toBeGreaterThan(0);
-    }
   });
 });
 
@@ -266,6 +228,18 @@ test.describe("product pages", () => {
     expect((await tracked(page, "AddToCart"))[0][2]).toEqual({
       content_type: "product", content_ids: ["D215"], contents: [{ id: "D215", quantity: 1, item_price: price("d215") }], currency: "USD", value: price("d215"),
     });
+  });
+
+  test("when /api/store/config is unavailable no value is sent", async ({ page }) => {
+    await serveHost(page, STORE);
+    await page.goto(`https://${STORE}/products`);
+    await expect.poll(async () => (await tracked(page, "ViewContent")).length).toBe(1);
+    await page.locator('[data-add-to-cart="d215"]').click();
+    await expect.poll(async () => (await tracked(page, "AddToCart")).length).toBe(1);
+    for (const call of [...(await tracked(page, "ViewContent")), ...(await tracked(page, "AddToCart"))]) {
+      expect(call[2]).not.toHaveProperty("value");
+      expect(call[2].content_ids.length).toBeGreaterThan(0);
+    }
   });
 
   test("product pages have no serious or critical axe violations with the pixel active", async ({ page }) => {
@@ -433,7 +407,7 @@ test.describe("session attribution", () => {
 });
 
 test.describe("accessibility with the pixel active", () => {
-  for (const pageName of ["v3.html", "cart", "checkout", "privacy", "contact"]) {
+  for (const pageName of ["products", "cart", "checkout", "privacy", "contact"]) {
     test(`${pageName} has no serious or critical axe violations on the store hostname`, async ({ page }) => {
       await serveHost(page, STORE);
       await mockStore(page);

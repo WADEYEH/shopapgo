@@ -3,7 +3,7 @@ import "./shop.css";
 
 // The store's pages on the one site (D41): the site's header and footer come from app/(us)/layout.js; this wraps the
 // page in .shop for the store styles (shop.css, scoped so they never reach the brand pages) and loads the store's Meta
-// Pixel script, which only runs on the store hostnames (commerce/prototype/js/meta-pixel.js). Unifying it with the brand
+// Pixel script, which only runs on the store hostnames (public/js/meta-pixel.js). Unifying it with the brand
 // pixel is M10's job, before the cutover.
 export default function ShopLayout({ children }) {
   return (

@@ -1,81 +1,67 @@
-// Builds the single-site asset directory served by the Worker: the brand site's Next.js static export plus the store
-// pages (prototype/). Both trees are copied into one directory, and a path that exists in both stops the build, so
-// neither side can silently replace the other. Pages-only files are left out (_redirects: the Worker answers /us itself).
+// Builds the site the Worker serves: the Next.js static export in ../out, as it is (D41). Every customer page is a
+// Next.js page, and the back office page (public/admin/), the store's Meta Pixel script (public/js/) and the Apple Pay
+// folder (public/apple-pay/) are files in public/, so there is nothing to combine.
 //
-//   node scripts/build-site.mjs                 copy ../out + prototype -> site
-//   node scripts/build-site.mjs --build-brand   first run the brand build for a test site (TEST_SITE_BRAND_ENV)
-//   node scripts/build-site.mjs --brand <dir> --store <dir> --out <dir>
+//   node scripts/build-site.mjs           build ../out with the test-site settings (local, staging), then check it
+//   node scripts/build-site.mjs --check   only check an export that is already there (CI after `npm run build`)
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const COMMERCE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const SITE_DIR = path.join(COMMERCE, "..", "out");
 
-// Brand-export files that only Cloudflare Pages understands; the Worker handles their job.
-export const BRAND_SKIP = new Set(["_redirects"]);
-
-// The brand build for a test site. NEXT_PUBLIC_* values are inlined at build time, and values already in the
-// environment win over a developer's .env.local.
+// The build for a test site. NEXT_PUBLIC_* values are inlined at build time, and values already in the environment
+// win over a developer's .env.local.
 // - It must never report to the production GA4, GTM or Meta Pixel.
 // - It turns on the single-site links (lib/us/routes.js): Shop, the cart, the policy pages and the named product
-//   URLs, which only exist where the store pages are on the same host.
-export const TEST_SITE_BRAND_ENV = {
+//   URLs, which only work where the Worker serves the whole site.
+export const TEST_SITE_ENV = {
   NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false",
   NEXT_PUBLIC_APGO_US_GTM_ID: "",
   NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "",
   NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true",
 };
 
-async function files(root, base = root) {
-  const entries = await readdir(root, { withFileTypes: true });
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const full = path.join(root, entry.name);
-    if (entry.isDirectory()) return files(full, base);
-    return entry.isFile() ? [path.relative(base, full).split(path.sep).join("/")] : [];
-  }));
-  return nested.flat();
-}
+// What the Worker needs from the export: the pages it serves, the back office page, the store's pixel script, the
+// brand 404 page (not_found_handling) and the list of Pages-only files it must not upload.
+export const REQUIRED_FILES = [
+  "index.html",
+  "404.html",
+  "products.html",
+  "cart.html",
+  "checkout.html",
+  "contact.html",
+  "admin/index.html",
+  "admin/admin.js",
+  "js/meta-pixel.js",
+  ".assetsignore",
+];
 
-// Copies brand + store into out. Returns { brand, store } file counts; throws on any shared path.
-export async function buildSite({ brand, store, out }) {
-  for (const [name, dir] of [["brand export", brand], ["store pages", store]]) {
-    const info = await stat(dir).catch(() => null);
-    if (!info?.isDirectory()) throw new Error(`${name} not found at ${dir}`);
+// Throws when the export is missing a file the Worker needs, or would upload _redirects.
+export async function checkSite(dir = SITE_DIR) {
+  const missing = [];
+  for (const file of REQUIRED_FILES) {
+    const info = await stat(path.join(dir, file)).catch(() => null);
+    if (!info?.isFile()) missing.push(file);
   }
-  const brandFiles = (await files(brand)).filter((file) => !BRAND_SKIP.has(file));
-  const storeFiles = await files(store);
-  const storeSet = new Set(storeFiles);
-  const shared = brandFiles.filter((file) => storeSet.has(file));
-  if (shared.length) throw new Error(`brand export and store pages both contain: ${shared.join(", ")}`);
-
-  await rm(out, { recursive: true, force: true });
-  await mkdir(out, { recursive: true });
-  for (const file of brandFiles) await cp(path.join(brand, file), path.join(out, file));
-  await cp(store, out, { recursive: true });
-  return { brand: brandFiles.length, store: storeFiles.length };
-}
-
-function option(name, fallback) {
-  const index = process.argv.indexOf(name);
-  return index === -1 ? fallback : process.argv[index + 1];
+  if (missing.length) throw new Error(`site export at ${dir} is missing: ${missing.join(", ")}`);
+  const ignored = (await readFile(path.join(dir, ".assetsignore"), "utf8")).split(/\r?\n/).map((line) => line.trim());
+  if (!ignored.includes("_redirects")) throw new Error(".assetsignore must keep _redirects out of the Worker's assets");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.includes("--build-brand")) {
+  if (!process.argv.includes("--check")) {
     // A fixed command string (npm is a .cmd on Windows, so it needs a shell); nothing user-supplied is interpolated.
     const result = spawnSync("npm --prefix .. run build", {
       cwd: COMMERCE,
-      env: { ...process.env, ...TEST_SITE_BRAND_ENV },
+      env: { ...process.env, ...TEST_SITE_ENV },
       stdio: "inherit",
       shell: true,
     });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
-  // Defaults live next to this package; explicit paths are relative to the current directory (CI runs from the root).
-  const brand = path.resolve(option("--brand", path.join(COMMERCE, "..", "out")));
-  const store = path.resolve(option("--store", path.join(COMMERCE, "prototype")));
-  const out = path.resolve(option("--out", path.join(COMMERCE, "site")));
-  const counts = await buildSite({ brand, store, out });
-  console.log(`site: ${counts.brand} brand files + ${counts.store} store files -> ${out}`);
+  await checkSite();
+  console.log(`site: ${SITE_DIR} has everything the Worker needs`);
 }

@@ -3,7 +3,7 @@ import ProductPage from "@/components/shop/ProductPage";
 import { PRODUCT_SLUGS, SEO, SKUS } from "@/lib/shop/catalog";
 
 // /products/atomic-colored-glaze and /products/atomic-glaze-coating (D39). The Worker answers the old
-// /products/d204 and /products/d215 with a 301 to these (commerce/worker/root-page.js).
+// /products/d204 and /products/d215 with a 301 to these (commerce/worker/redirects.js).
 export const dynamicParams = false;
 
 const skuFor = (slug) => SKUS.find((sku) => PRODUCT_SLUGS[sku] === slug);

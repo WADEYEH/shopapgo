@@ -24,7 +24,7 @@ try {
     const checkout = await browser.newPage({ viewport });
     await mockStore(checkout, { orderStatus: "pending", paymentFailure: { message: "Card verification wasn't completed. Try again or use another payment method." } });
     await seedCart(checkout, [{ sku: "d204", qty: 1 }]);
-    await checkout.goto(`${BASE_URL}/checkout.html`);
+    await checkout.goto(`${BASE_URL}/checkout`);
     await fillToPayment(checkout);
     await fillCard(checkout);
     await checkout.locator("[data-place-order]").click();

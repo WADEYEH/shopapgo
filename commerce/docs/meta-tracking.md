@@ -1,6 +1,6 @@
 # Meta tracking: Pixel + Conversions API (CAPI)
 
-The browser Pixel (front end, `prototype/js/meta-pixel.js`, owned by the web engineer) and this Worker's server-side Conversions API send the **same events with the same
+The browser Pixel (front end, `public/js/meta-pixel.js`, owned by the web engineer) and this Worker's server-side Conversions API send the **same events with the same
 `event_id`**, so Meta deduplicates them. This document covers the Worker (backend) half. Code: `worker/meta-capi.js`, `worker/meta-attribution.js`, wiring in `worker/index.js`.
 
 **Production only.** `META_DATASET_ID` is set only in `[env.production.vars]` of `wrangler.toml`. Staging and local dev have no dataset id, so the whole CAPI path is skipped:

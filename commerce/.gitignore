@@ -6,7 +6,6 @@ review/tmp/
 *.log
 .dev.vars
 .wrangler/
-site/
 
 .dev.vars.*
 !.dev.vars.example

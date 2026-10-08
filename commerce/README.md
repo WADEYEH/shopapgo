@@ -15,8 +15,8 @@ Imported from `WADEYEH/apgo-us-amazon-landing`, branch
 
 Required older dependencies (product images, full application videos and
 Amazon link configuration) are included. V1/V2 landing pages, their tests and
-old Shopify/blueprint documents are not imported. V3 and its style board remain
-available at `/v3.html` and `/v3-style.html`; the Worker root serves V3.
+old Shopify/blueprint documents are not imported. V3 and its style board were
+retired in the D41 cleanup (2026-10-08); `/v3` answers 301 to the home page.
 
 **Sync point 1 (2026-10-06).** The landing repo kept developing after the import. Its
 `main` at `cbdf77e` was merged into `commerce/` with history (`9a30bfc` recorded as already
@@ -29,32 +29,37 @@ drafts, email/password admin login and the live production settings. The legacy 
 
 ## Two applications, one repository
 
-- Root: existing Next.js brand site and its guides, still exported for Pages.
-- `commerce/`: standalone package, Worker and storefront.
+- Root: the Next.js site: the brand pages, the guides and every page shoppers see (D41). Its static export
+  (`out/`) is exactly what the store Worker serves; the brand host (Pages / Vercel) still serves the brand pages on
+  www until the cutover. The back office page (`public/admin/`), the store's Meta Pixel script (`public/js/`) and the
+  Apple Pay folder (`public/apple-pay/`) ship with the site's files; images and videos are in `public/us/assets/`,
+  one copy for the brand and store pages.
+- `commerce/`: standalone package: the Worker (API, back office API, redirects, crons), its tests and tools. The
+  store code it shares with the pages (product data, checkout and contact rules, payment helpers) is in
+  `lib/shop/*.mjs`: plain ES modules both import.
 - Brand-site product CTAs link to the same-host store pages. On the live site,
   `www.shopapgo.com` serves those store paths (`/products/*`, `/cart`, `/checkout`,
   `/api/*`, the policy pages and their assets) from the production store Worker
   (routes in `wrangler.toml`, see `docs/ops/production-config.md`).
 - Single-site switch `NEXT_PUBLIC_APGO_US_SINGLE_SITE` (`lib/us/routes.js`), on only in
-  builds served together with the store pages (`scripts/build-site.mjs` sets it for the
-  test site; www gets it at the cutover): Shop and the cart count in the brand header,
+  builds the Worker serves (`scripts/build-site.mjs` sets it for the test site; www gets it at
+  the cutover): Shop and the cart count in the brand header,
   Shop/Cart and the policy pages in its footer, and the named product URLs
   `/products/atomic-colored-glaze` and `/products/atomic-glaze-coating` (D39). Off, the
   brand pages keep `/products/d204` and `/products/d215`; the Worker answers those, and
-  `/v3`, with a 301 to the new URLs (`worker/root-page.js`).
-- Every page shoppers see is moving into the Next.js site (D41, `docs/commerce-plan.md` §6). Done:
+  `/v3`, with a 301 to the new URLs (`worker/redirects.js`).
+- Every page shoppers see is a page of the Next.js site (D41, `docs/commerce-plan.md` §6):
   `/products`, the two product pages, `/cart`, `/checkout`, the policy pages (`/privacy`, `/terms`, `/returns`,
   `/shipping`, read from the drafts in `docs/legal`) and `/contact` with its form (`app/(us)/(shop)`,
   components in `components/shop`, shared store code in `lib/shop`), in the site's own header and footer (on
-  the checkout only the logo and the cart). Of the store's customer pages only v3 is still plain HTML. Because the store pages now come from the Next.js build,
-  do not deploy `main` to production before the cutover moves all of www to this Worker.
-- Store footers link back to the brand site and guides. `SITE_HOME_URL` selects
-  the destination, defaulting to `https://www.shopapgo.com/us` (which now redirects to `/`).
+  the checkout only the logo and the cart). The old plain HTML store pages, v3 and their copies of the images are gone;
+  old URLs (`/cart.html`, `/checkout.html`, `/assets/*`, …) answer 301. Because the store pages come from the
+  Next.js build, do not deploy `main` to production before the cutover moves all of www to this Worker.
 
 ## Local review
 
-Node 22.5+ is required to exercise the SQLite-backed tests. Python 3 regenerates
-the policy drafts; Node serves the browser test assets on Windows and Linux.
+Node 22.5+ is required to exercise the SQLite-backed tests. Node serves the browser
+test assets on Windows and Linux.
 
 From the repository root:
 
@@ -67,11 +72,11 @@ npm run commerce:test:e2e
 npm run commerce:verify
 ```
 
-The browser tests run against the built single site (`commerce/site`: the Next.js export plus
-the store pages), so run `build:site` again after changing either. The single-site checks
-(`tests/brand-store.spec.mjs`) also need the Worker in front of it; the header of that file has
-the commands (`wrangler dev` on `./site`, then Playwright with `APGO_SITE_URL`). They are skipped
-in the standalone suite.
+The browser tests run against the built site (`out/`: the Next.js export, built by `build:site`
+with the test-site settings), so run `build:site` again after changing the site. The single-site
+checks (`tests/brand-store.spec.mjs`) also need the Worker in front of it; the header of that file
+has the commands (`wrangler dev`, then Playwright with `APGO_SITE_URL`). They are skipped in the
+standalone suite.
 
 Start the Worker with `npm run commerce:dev` (port 8799). Initialize only its
 local D1 with `npm --prefix commerce run db:migrate:local`. Copy
@@ -80,13 +85,13 @@ your sandbox credentials when testing actual sandbox payment. Without those
 credentials, quote/cart work but a payment cannot be created.
 
 The brand site's Shop and cart links are same-host paths, so preview them on the
-single site above rather than on `npm run dev`. Browser tests mock
+Worker (`npm run commerce:dev` after `build:site`) rather than on `npm run dev`. Browser tests mock
 Airwallex/Resend/Amazon and take no real payment or shipment.
 
 ## Integration adjustments
 
 - All asset requests run through the Worker in every environment. Host split,
-  admin authentication, root-page override and staging protection consequently
+  admin authentication, redirects for moved URLs and staging protection consequently
   apply to static pages as well as API requests.
 - Test site: `staging.shopapgo.com` + `admin-staging.shopapgo.com` (`[env.staging]`: own Worker
   and D1, Airwallex/PayPal sandbox, Basic-auth gate, emails only to the approved test address,

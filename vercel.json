@@ -10,6 +10,16 @@
       "source": "/us/",
       "destination": "/",
       "permanent": true
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/admin",
+      "destination": "/",
+      "permanent": false
     }
   ]
 }

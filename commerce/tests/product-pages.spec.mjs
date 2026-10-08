@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { PRODUCT_SLUGS } from "../prototype/js/commerce/product-data.js";
+import { PRODUCT_SLUGS } from "../../lib/shop/product-data.mjs";
 import { mockStore, seedCart } from "./helpers/store-mock.mjs";
+
+// The built site the tests run against (playwright.config.js).
+const SITE_DIR = path.resolve(process.env.APGO_SITE_DIR || "../out");
 
 // The store's Next.js pages (D41): the /products overview and the two product pages (D204 DRY / D215 WET), inside the
 // site's own header and footer. /api is answered by the real Worker modules (store-mock), so every price below comes from
@@ -57,9 +61,9 @@ for (const sku of SKUS) {
       await expect(page.locator("[data-sku-tag]")).toHaveText(sku.toUpperCase());
       await expect(page).toHaveTitle(`${WORD[sku]} · ${NAME[sku]} (${sku.toUpperCase()}) | APGO`);
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `${SITE}${pathOf(sku)}`);
-      await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", `${SITE}/assets/products/${sku}-packshot.webp`);
+      await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", `${SITE}/us/assets/products/${sku}-packshot.webp`);
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
-      await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", `/assets/products/${sku}-packshot.webp`);
+      await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", `/us/assets/products/${sku}-packshot.webp`);
       await expect(page.locator(".us-site-header")).toBeVisible();
       await expect(page.locator(".us-site-footer")).toBeVisible();
       const broken = await page.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.src));
@@ -71,7 +75,7 @@ for (const sku of SKUS) {
     test("prices come from /api/store/config and nowhere else", async ({ page }) => {
       await open(page, pathOf(sku));
       // The exported page's markup (its scripts carry React's "$1"-style references, not prices).
-      const html = readFileSync(new URL(`../site${pathOf(sku)}.html`, import.meta.url), "utf8").replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
+      const html = readFileSync(path.join(SITE_DIR, `${pathOf(sku)}.html`), "utf8").replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
       expect(html).toContain(NAME[sku]);
       expect(html).not.toMatch(/\$\d/);
       const own = sku === "d204" ? "$59.99" : "$29.99";
@@ -200,7 +204,7 @@ test.describe("the other routine is its own page", () => {
   test("the .html form of the address works the same (a plain static server, links from the HTML store pages)", async ({ page }) => {
     const errors = await open(page, `${pathOf("d215")}.html`);
     await expect(page.locator("h1")).toHaveText("Atomic Glaze Coating");
-    await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", "/assets/products/d215-packshot.webp");
+    await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", "/us/assets/products/d215-packshot.webp");
     expect(await page.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth === 0).length)).toBe(0);
     expect(errors).toEqual([]);
   });
@@ -268,7 +272,7 @@ test.describe("structured data", () => {
     const data = JSON.parse(await page.locator("#pdp-jsonld").textContent());
     expect(data).toMatchObject({ "@type": "Product", sku: "D204", brand: { name: "APGO" } });
     expect(data.offers).toBeUndefined();
-    expect(data.image[0]).toBe(`${SITE}/assets/products/d204-packshot.webp`);
+    expect(data.image[0]).toBe(`${SITE}/us/assets/products/d204-packshot.webp`);
   });
 
   test("approved pricing: offers carry the config price", async ({ page }) => {
@@ -362,7 +366,7 @@ test.describe("keyboard and touch targets", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator(".faq details").first()).toHaveAttribute("open", "");
     await page.locator('[data-thumb="1"]').click();
-    await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", "/assets/application/d215-step-1.webp");
+    await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", "/us/assets/application/d215-step-1.webp");
     await expect(page.locator('[data-thumb="1"]')).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -370,21 +374,19 @@ test.describe("keyboard and touch targets", () => {
     await open(page, pathOf("d204"));
     await expect(page.locator("video")).toHaveCount(0);
     await page.locator("[data-video-play]").click();
-    await expect(page.locator("video[data-video-player]")).toHaveAttribute("src", "/assets/video/d204-application.mp4");
-    await expect(page.locator("video track[kind='captions']")).toHaveAttribute("src", "/assets/video/d204-v3-captions-en.vtt");
+    await expect(page.locator("video[data-video-player]")).toHaveAttribute("src", "/us/assets/video/d204-application.mp4");
+    await expect(page.locator("video track[kind='captions']")).toHaveAttribute("src", "/us/assets/video/d204-captions-en.vtt");
     expect(await events(page, "video_play")).toEqual([expect.objectContaining({ sku: "d204", placement: "pdp" })]);
   });
 });
 
 test.describe("entry points", () => {
-  test("v3 landing: header link and each product's detail link lead to the product pages", async ({ page }) => {
-    await page.goto("/v3.html#d215");
-    await page.locator("html[data-apgo-v3-ready='true']").waitFor();
-    const link = page.locator('[data-product-panel="d215"] [data-product-link="d215"]');
-    await expect(link).toHaveAttribute("href", "products/atomic-glaze-coating.html");
-    await expect(page.locator('.v3-nav a[href="products.html"]')).toHaveText("Shop");
+  test("home: the header's Shop link leads to the overview, and each product card to its page", async ({ page }) => {
     await mockStore(page);
-    await link.click();
+    await page.goto("/");
+    await page.locator('header a[href="/products"]:visible').first().click();
+    await expect(page).toHaveURL(/\/products$/);
+    await page.locator('[data-shop-card="d215"] a[href="/products/atomic-glaze-coating"]').first().click();
     await expect(page.locator("h1")).toHaveText("Atomic Glaze Coating");
   });
 

@@ -7,7 +7,7 @@
 // or when Google does not answer in time, the address passes on the field rules alone and is recorded as
 // "unverified"; the paid-order alert tells the team (worker/notify.js).
 
-import { MESSAGES, checkShipping } from "../prototype/js/commerce/address-rules.js";
+import { MESSAGES, checkShipping } from "../../lib/shop/address-rules.mjs";
 import { QuoteError } from "./catalog.js";
 
 const ENDPOINT = "https://addressvalidation.googleapis.com/v1:validateAddress";

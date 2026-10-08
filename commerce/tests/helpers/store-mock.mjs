@@ -4,8 +4,8 @@ import { QuoteError, publicConfig, quote } from "../../worker/catalog.js";
 import { validateCheckout } from "../../worker/checkout.js";
 import { ADDRESS_MESSAGES } from "../../worker/address-check.js";
 import { resolvePricing } from "../../worker/pricing.js";
-import { checkShipping } from "../../prototype/js/commerce/address-rules.js";
-import { CONTACT_MESSAGES, checkContactMessage } from "../../prototype/js/commerce/contact-rules.js";
+import { checkShipping } from "../../../lib/shop/address-rules.mjs";
+import { CONTACT_MESSAGES, checkContactMessage } from "../../../lib/shop/contact-rules.mjs";
 
 // The static test server has no Worker, so /api/* is answered here with the real
 // catalog/validation modules, and Airwallex.js is replaced by a local stub whose

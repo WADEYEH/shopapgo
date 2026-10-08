@@ -23,7 +23,7 @@ const check = (name, pass, detail = "") => { console.log(`  ${pass ? "âœ”" : "âœ
 
 const pages = ["/", "/products", "/privacy", "/terms", "/returns", "/shipping", "/contact", "/cart", "/checkout"];
 mkdirSync(path.join(root, "review"), { recursive: true });
-for (const p of [...pages, "/api/store/config", "/css/commerce.css", ...(adminBase ? [] : ["/admin/"])]) {
+for (const p of [...pages, "/api/store/config", "/js/meta-pixel.js", ...(adminBase ? [] : ["/admin/"])]) {
   const anon = await fetch(base + p, { redirect: "manual" });
   check(`no credentials -> 401  ${p}`, anon.status === 401 && anon.headers.get("x-robots-tag") === NOINDEX, `HTTP ${anon.status}`);
 }
@@ -44,7 +44,7 @@ if (adminBase) {
   check("admin host: /admin/ without ADMIN_TOKEN -> 401 + noindex", adminPage.status === 401 && /noindex/.test(adminPage.headers.get("x-robots-tag") || ""), `HTTP ${adminPage.status}`);
   const adminApi = await fetch(`${adminBase}/admin/api/orders`);
   check("admin host: API without ADMIN_TOKEN -> 401", adminApi.status === 401, `HTTP ${adminApi.status}`);
-  const adminShop = await fetch(`${adminBase}/v3.html`);
+  const adminShop = await fetch(`${adminBase}/products`);
   check("admin host: storefront page -> 404", adminShop.status === 404, `HTTP ${adminShop.status}`);
 } else {
   const adminApi = await fetch(`${base}/admin/api/orders`);

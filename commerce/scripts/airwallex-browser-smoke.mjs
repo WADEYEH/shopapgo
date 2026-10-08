@@ -9,7 +9,7 @@
 // --credentials FILE (KEY=VALUE lines) supplies STAGING_BASIC_AUTH_USER / STAGING_BASIC_AUTH_PASSWORD (whole-site Basic gate) and
 // ADMIN_TOKEN (for /admin/); with it, .dev.vars is not read. Screenshots then get the prefix "staging-" (--shot-prefix to override).
 //
-// Flow: /v3.html Add to cart → cart.html → checkout (contact → shipping → payment) →
+// Flow: product page Add to cart → /cart → checkout (contact → shipping → payment) →
 //       type the sandbox test card into the Airwallex iframes → Place order →
 //       confirmation page → /admin/ (Basic auth with ADMIN_TOKEN) shows the order as "paid".
 // Screenshots: review/airwallex-browser-*.png. ADMIN_TOKEN is read from .dev.vars and never printed
@@ -120,27 +120,23 @@ async function typeInElement(containerSelector, text) {
 }
 
 try {
-  // 1. v3 → add to cart
-  await page.goto(`${base}/v3.html`, { waitUntil: "domcontentloaded" });
+  // 1. product page → add to cart
+  await page.goto(`${base}/products/atomic-colored-glaze`, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator('label[for="selector-d204"]').scrollIntoViewIfNeeded();
-  await page.locator('label[for="selector-d204"]').click(); // choose the dry route → reveals its panel
-  const add = page.locator('button[data-add-to-cart="d204"][data-placement="selected"]');
+  await page.reload({ waitUntil: "load" });
+  const add = page.locator('button[data-pdp-add][data-placement="buybox"]');
   await add.scrollIntoViewIfNeeded();
   await add.click();
-  await page.locator('[data-cart-status][data-sku="d204"][data-placement="selected"]').filter({ hasText: /in cart/i }).waitFor({ timeout: 10_000 });
-  await shot(page, "1-v3-added");
-  ok("v3 Add to cart");
+  await shot(page, "1-product-added");
+  ok("product page Add to cart");
 
   // 2. cart
-  await page.goto(`${base}/cart.html`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${base}/cart`, { waitUntil: "domcontentloaded" });
   await page.locator("[data-cart-lines] li").first().waitFor({ timeout: 10_000 });
   await shot(page, "2-cart");
   ok("cart shows line item");
   await page.locator("[data-checkout-button]").click();
   await page.waitForURL(/\/checkout(\.html)?(\?|$)/);
-  // A deployed Worker redirects /checkout.html -> /checkout: wait for the page to finish loading and the flow to render.
   await page.waitForLoadState("load");
   await page.locator("[data-checkout-flow]:not([hidden]) #email").waitFor({ timeout: 15_000 });
   // checkout.js un-hides the form, awaits /api/cart/quote, THEN calls goTo("contact"): on a slow network, typing earlier

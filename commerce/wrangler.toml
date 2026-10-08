@@ -3,12 +3,14 @@ main = "worker/index.js"
 compatibility_date = "2026-09-01"
 workers_dev = true
 
-# prototype/ is served as-is; the Worker runs first for /api/*, the protected /admin/* back office and the
-# Apple Pay domain-verification path (wrangler skips dot-folders, so the file lives in prototype/apple-pay/).
+# The site is the Next.js export (../out, built by `npm run build:site`) served as-is: every customer page, the back office
+# page (public/admin/) and the files in public/. The Worker runs first for every path: /api/*, the protected /admin/*
+# back office, the 301s for moved URLs (worker/redirects.js) and the Apple Pay domain-verification path (wrangler skips
+# dot-folders, so the file lives in public/apple-pay/). public/.assetsignore keeps Pages-only files out.
 [assets]
-directory = "./prototype"
+directory = "../out"
 binding = "ASSETS"
-not_found_handling = "404-page"   # with --assets ./site (the single site) unknown paths get the brand 404 page
+not_found_handling = "404-page"   # unknown paths get the site's 404 page
 run_worker_first = true
 
 # Create once with `npx wrangler d1 create apgo-us-store`, then paste the id here.
@@ -22,8 +24,6 @@ database_id = "00000000-0000-0000-0000-000000000000"
 # "demo" = Airwallex sandbox. Switch to "prod" only after prices, shipping and
 # tax in worker/catalog.js are approved.
 AIRWALLEX_ENV = "demo"
-ROOT_PAGE = "/v3"
-SITE_HOME_URL = "http://127.0.0.1:3012"   # local brand dev server (next dev); only its origin is used
 
 # Optional, non-secret store settings (all have safe defaults; see docs/commerce.md):
 #   PRICING_JSON      partial override of worker/pricing.js DEFAULT_PRICING (prices, shipping, tax)
@@ -50,8 +50,8 @@ enabled = true
 # Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit
 # bindings / vars / assets into [env.*], so each environment repeats them. Secrets are per environment too.
 #
-#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; this repo's test site and the single site (brand pages +
-#               store from one Worker): npm run deploy:staging builds site/ (scripts/build-site.mjs) and deploys it
+#   staging     staging.shopapgo.com + admin-staging.shopapgo.com; this repo's test site, the whole site from one Worker:
+#               npm run deploy:staging builds the site (scripts/build-site.mjs, test settings) and deploys it
 #   production  store.shopapgo.com + admin.shopapgo.com; checkout stays 503 until PRICING_APPROVED (see docs/commerce.md "Go-live checklist").
 # ---------------------------------------------------------------------------------------------------------------
 
@@ -68,8 +68,8 @@ routes = [
 ]
 
 [env.staging.assets]
-# The single site: the brand's Next.js export plus the store pages, combined by scripts/build-site.mjs (npm run build:site).
-directory = "./site"
+# The site: the Next.js export built for a test site by scripts/build-site.mjs (npm run build:site).
+directory = "../out"
 binding = "ASSETS"
 not_found_handling = "404-page"   # unknown paths get the brand site's 404 page
 # true = the Worker runs first for EVERY path, so static pages/images also get the Basic-auth gate and X-Robots-Tag
@@ -85,8 +85,6 @@ database_id = "246c3158-a70e-420e-a165-cda01b4ca434"
 [env.staging.vars]
 AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
-SITE_HOME_URL = "https://staging.shopapgo.com"   # worker/site.js: the store's Home/Guides links stay on the single site
-# No ROOT_PAGE: "/" is the brand home from the brand export (index.html).
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
 CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
@@ -146,12 +144,13 @@ routes = [
   { pattern = "shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
 ]
 
-# Do NOT deploy main here before the cutover (docs/commerce-plan.md §6, stage 4). The overview and the product pages are
-# Next.js pages now (D41): they are not in ./prototype, and they need www's /_next/* from the same build. The cutover
-# switches this to the single site and moves all of www to this Worker in the same deploy.
+# Do NOT deploy main here before the cutover (docs/commerce-plan.md §6, stage 4). Every customer page is a Next.js page
+# now (D41) and needs www's /_next/* from the same build, so the deploy that brings this site to production also moves
+# all of www to this Worker (the routes above change then). Until that deploy nothing below takes effect.
 [env.production.assets]
-directory = "./prototype"
+directory = "../out"
 binding = "ASSETS"
+not_found_handling = "404-page"
 run_worker_first = true
 
 # Production D1 (created with `npx wrangler d1 create apgo-us-store`; the id is not a secret).
@@ -162,9 +161,7 @@ database_id = "b409b132-2f2d-4da8-970c-2cf5560ac830"
 
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
-ROOT_PAGE = "/v3"                   # worker/root-page.js: "/" serves the v3 store entry (this repo has no legacy index.html)
 ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
-SITE_HOME_URL = "https://www.shopapgo.com"
 # Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.

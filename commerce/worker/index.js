@@ -1,4 +1,4 @@
-// APGO US store Worker: serves prototype/ as static assets and owns /api/* and /admin/*.
+// APGO US store Worker: serves the site (the Next.js export, ../out) as static assets and owns /api/* and /admin/*.
 //
 //   GET  /api/store/config         prices, shipping methods, tax status, wallets, states, Airwallex env, Airwallex Pay, PayPal
 //   GET  /.well-known/apple-developer-merchantid-domain-association   Apple Pay domain check
@@ -27,7 +27,7 @@ import { PricingConfigError, resolvePricing, storeReadiness, taxStatus } from ".
 import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociation } from "./wallets.js";
 import { ORDER_ID_PATTERN, newOrderId, validateCheckout, validatePaypalCheckout } from "./checkout.js";
 import { ADDRESS_MESSAGES, checkAddress, enforceAddress } from "./address-check.js";
-import { checkShipping } from "../prototype/js/commerce/address-rules.js";
+import { checkShipping } from "../../lib/shop/address-rules.mjs";
 import { recordPaymentFailure, publicPaymentFailure } from "./payment-failures.js";
 import {
   AirwallexError,
@@ -77,7 +77,7 @@ import { metaEnabled, metaEventId, scheduledMetaRetry, sendMetaEvent } from "./m
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
-import { rootPageOverride, siteRedirect } from "./root-page.js";
+import { siteRedirect } from "./redirects.js";
 import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 
@@ -525,7 +525,7 @@ async function dispatch(request, env, ctx) {
   const { pathname, origin } = new URL(request.url);
   if (isAdminPath(pathname)) return handleAdmin(request, env);
   if (pathname === APPLE_PAY_DOMAIN_PATH) return serveAppleDomainAssociation(request, env);
-  if (!pathname.startsWith("/api/")) return siteRedirect(request) || env.ASSETS.fetch(rootPageOverride(request, env) || request);
+  if (!pathname.startsWith("/api/")) return siteRedirect(request) || env.ASSETS.fetch(request);
   try {
     // "New paid order" notifications link to the back-office hostname when one is configured.
     const adminOrigin = adminHost(env) ? `https://${adminHost(env)}` : origin;

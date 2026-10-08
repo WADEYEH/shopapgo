@@ -4,8 +4,8 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { PRODUCT_SLUGS, PRODUCTS, QUIZ, SEO, SHOP_PATH, SKUS, productPath } from "../prototype/js/commerce/product-data.js";
-import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, REVIEWS } from "../prototype/js/commerce/product-reviews.js";
+import { PRODUCT_SLUGS, PRODUCTS, QUIZ, SEO, SHOP_PATH, SKUS, productPath } from "../../lib/shop/product-data.mjs";
+import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, REVIEWS } from "../../lib/shop/product-reviews.mjs";
 
 // The store's Next.js pages (D41): the /products overview and the two product pages, in app/(us)/(shop) with their
 // components in components/shop and the shared store code in lib/shop. What they do in a browser is in
@@ -14,8 +14,8 @@ import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, REVIEWS } from "../prototype/js/com
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 const site = join(repo, "..");
 const read = (path) => readFileSync(join(site, path), "utf8");
-const proto = (path) => join(repo, "prototype", path);
-const readProto = (path) => readFileSync(proto(path), "utf8");
+// A URL path on the site -> the file in public/ that serves it.
+const publicFile = (url) => join(site, "public", url.replace(/^\//, ""));
 
 const LAYOUT = "app/(us)/(shop)/layout.js";
 const OVERVIEW = "app/(us)/(shop)/products/page.js";
@@ -30,7 +30,7 @@ const SOURCES = [
   "lib/shop/catalog.js", "lib/shop/cart.js", "lib/shop/store-config.js", "lib/shop/reviews.js", "lib/shop/api.js",
   "lib/shop/checkout.js", "lib/shop/payment-sdk.js", "lib/shop/attribution.js",
 ];
-const DATA = ["commerce/prototype/js/commerce/product-data.js", "commerce/prototype/js/commerce/product-reviews.js"];
+const DATA = ["lib/shop/product-data.mjs", "lib/shop/product-reviews.mjs"];
 // What shoppers read: the code without its comments.
 const visible = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
@@ -44,10 +44,8 @@ test("named product URLs (D39): one exported page per product, the overview at /
   const page = read(PRODUCT);
   assert.match(page, /export const dynamicParams = false;/, "no product URL beyond the list");
   assert.match(page, /return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
-  // The plain HTML versions would collide with the export (scripts/build-site.mjs stops on a duplicate path).
-  for (const file of ["product.html", "products.html", ...SKUS.map((sku) => `products/${PRODUCT_SLUGS[sku]}.html`), "js/commerce/product.js", "js/commerce/products-overview.js", "css/product.css"]) {
-    assert.equal(existsSync(proto(file)), false, `prototype/${file} is gone`);
-  }
+  // The plain HTML versions and their generator are gone with the old store folder (D41 step 7).
+  assert.equal(existsSync(join(repo, "prototype")), false);
   assert.equal(existsSync(join(repo, "scripts/build-product-pages.mjs")), false);
 });
 
@@ -56,7 +54,7 @@ test("each page: its own title, description, canonical and og tags, not indexabl
     const seo = SEO[key];
     assert.ok(seo.title.endsWith("| APGO"), `${key}: title`);
     assert.ok(seo.description.length >= 40, `${key}: description`);
-    assert.ok(existsSync(proto(seo.image.slice(1))), `${key}: ${seo.image}`);
+    assert.ok(existsSync(publicFile(seo.image)), `${key}: ${seo.image}`);
   }
   assert.equal(SEO.default, undefined, "the one-page-for-both /product is gone (301 to /products)");
   for (const file of [OVERVIEW, PRODUCT]) {
@@ -100,20 +98,20 @@ test("no runtime leftovers from the design export", () => {
 
 test("every image, video and caption file the pages use exists", () => {
   const page = read(PAGE);
-  // The paths ProductPage.js builds, expanded for both products. Served from commerce/prototype/assets until the
-  // assets move with the cleanup (D41 step 7).
-  for (const pattern of ["`/assets/application/${file}.webp`", "`/assets/video/${sku}-poster.webp`", "`/assets/video/${sku}-application.mp4`", "`/assets/video/${sku}-v3-captions-en.vtt`"]) {
+  // The paths ProductPage.js builds (asset() from lib/us/routes.js: the site's files in public/us/assets), expanded
+  // for both products. The brand pages use the same files.
+  for (const pattern of ["asset(`application/${file}.webp`)", "asset(`video/${sku}-poster.webp`)", "asset(`video/${sku}-application.mp4`)", "asset(`video/${sku}-captions-en.vtt`)"]) {
     assert.ok(page.includes(pattern), pattern);
   }
   const missing = [];
   for (const sku of SKUS) {
     const refs = [
-      ...PRODUCTS[sku].steps.map(([file]) => `/assets/application/${file}.webp`),
-      `/assets/video/${sku}-poster.webp`, `/assets/video/${sku}-application.mp4`, `/assets/video/${sku}-v3-captions-en.vtt`, SEO[sku].image,
+      ...PRODUCTS[sku].steps.map(([file]) => `/us/assets/application/${file}.webp`),
+      `/us/assets/video/${sku}-poster.webp`, `/us/assets/video/${sku}-application.mp4`, `/us/assets/video/${sku}-captions-en.vtt`, SEO[sku].image,
     ];
-    for (const ref of refs) if (!existsSync(proto(ref.slice(1)))) missing.push(ref);
+    for (const ref of refs) if (!existsSync(publicFile(ref))) missing.push(ref);
   }
-  assert.ok(existsSync(proto("js/meta-pixel.js")), "the shop layout's pixel script");
+  assert.ok(existsSync(publicFile("/js/meta-pixel.js")), "the shop layout's pixel script");
   assert.deepEqual(missing, []);
 });
 
@@ -150,14 +148,14 @@ test("the store pages use the site's own header and footer (Shop, cart count) an
 test("no unconfirmed promises or [TO CONFIRM] copy reach shoppers; nothing is invented", () => {
   // The store is live (PRICING_APPROVED): unconfirmed terms are left out, not shown with a marker.
   const unconfirmed = [/data-to-confirm/, /TO CONFIRM/i, /pair price/i, /free (us )?shipping/i, /30[- ]day/i, /30 days/i, /full refund/i, /pending brand confirmation/i, /placeholder/i, /data-placement="guarantee"/, /toConfirm/, /real photo pending/];
-  for (const file of [OVERVIEW, PAGE, CARD, "commerce/prototype/js/commerce/product-data.js"]) {
+  for (const file of [OVERVIEW, PAGE, CARD, "lib/shop/product-data.mjs"]) {
     const text = visible(read(file));
     for (const pattern of unconfirmed) assert.doesNotMatch(text, pattern, `${file}: ${pattern}`);
   }
   for (const sku of SKUS) {
     assert.ok(REVIEWS[sku].every((review) => review.verified === true), "only verified reviews may ever be listed");
     if (BEFORE_AFTER[sku]) {
-      assert.ok(existsSync(proto(BEFORE_AFTER[sku].before.src.replace(/^\//, ""))) && existsSync(proto(BEFORE_AFTER[sku].after.src.replace(/^\//, ""))));
+      assert.ok(existsSync(publicFile(BEFORE_AFTER[sku].before.src)) && existsSync(publicFile(BEFORE_AFTER[sku].after.src)));
     }
   }
   assert.equal(MIN_VERIFIED_REVIEWS, 3);
@@ -183,13 +181,7 @@ test("design copy is kept: routine-first names, quiz, steps, section titles", ()
   assert.ok(read(OVERVIEW).includes("Same finish. Pick your moment."));
 });
 
-test("the landing page, cart lines and checkout summary link to the product pages", () => {
-  const v3 = readProto("v3.html");
-  for (const sku of SKUS) {
-    assert.ok(v3.includes(`href="products/${PRODUCT_SLUGS[sku]}.html"`), `v3 links to ${sku}`);
-    assert.equal((v3.match(new RegExp(`data-product-link="${sku}"`, "g")) || []).length, 2, `${sku}: selected panel + final choice`);
-  }
-  assert.ok(v3.includes('<a href="products.html">Shop</a>'), "header link to the overview");
+test("cart lines and the checkout summary link to the product pages", () => {
   // Cart lines and the checkout summary (new tab there) link each product name to its page.
   assert.match(read("components/shop/ui.js"), /href=\{productPath\(line\.id\)\}/);
   assert.match(read(CART), /<ProductName line=\{line\} \/>/);
@@ -216,11 +208,7 @@ test("the overview lists every product with its own Add to cart, price slot and 
 });
 
 test("the store's pages link to the overview (Shop) next to the cart; checkout stays focused", () => {
-  // Every Next.js store page has the site header (Shop and the cart, components/us/SiteChrome.js); v3 is the one
-  // plain HTML store page left.
-  const v3 = readProto("v3.html").split("</header>")[0];
-  assert.ok(v3.includes('<a href="products.html">Shop</a>'), "v3: Shop");
-  assert.ok(v3.includes("data-cart-count"), "v3: cart count");
+  // Every store page has the site header (Shop and the cart, components/us/SiteChrome.js).
   // The checkout keeps the site header with only the logo and the cart (components/us/SiteChrome.js).
   assert.match(read("components/us/SiteChrome.js"), /const focused = singleSite && pathname === routes\.checkout;/);
   assert.ok(read(CART).includes('<a className="btn btn--sm" href="/products">Choose Dry or Wet'), "an empty cart leads to the overview");
