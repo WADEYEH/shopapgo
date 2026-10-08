@@ -171,8 +171,8 @@ SITE_HOME_URL = "https://www.shopapgo.com"
 META_DATASET_ID = "2606879866471418"
 # Contact us form (worker/contact.js, D28): messages go to the customer-service inbox, sent with the order-email sender
 # (RESEND_API_KEY + CUSTOMER_EMAIL_FROM). Turnstile (bot check) once the owner sets TURNSTILE_SITE_KEY here and the secret
-# TURNSTILE_SECRET_KEY.
-CONTACT_EMAIL_TO = "services@apgo.com.tw"
+# TURNSTILE_SECRET_KEY. The receiving inbox is the owner's choice (2026-10-08).
+CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
 # ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Admin login is
 # ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
