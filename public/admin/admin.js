@@ -4,6 +4,10 @@
 // (POST .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync), all JSON.
 import { el, money, notice, priceRows } from "./ui.js";
 
+// The back office only works on its own host (commerce/worker/hosts.js). Until the cutover the brand host (Cloudflare
+// Pages) builds the same site files, this page among them, so leave for the home page there.
+if (["www.shopapgo.com", "shopapgo.com"].includes(location.hostname)) location.replace("/");
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const STATUSES = ["all", "paid", "pending", "review", "cancelled"];
 const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });

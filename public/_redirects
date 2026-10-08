@@ -1,12 +1,11 @@
 # Cloudflare Pages redirects
 # https://developers.cloudflare.com/pages/configuration/redirects/
 #
+# The store Worker's asset server reads these rules too (Workers static assets), so only add a rule the Worker already
+# answers itself, before its assets (commerce/worker/redirects.js; a test checks this). Anything else would apply on
+# the Worker as well: an /admin rule, for one, sent the back office round in circles there.
+#
 # Exact /us (and trailing slash) → domain root. Do NOT splat /us/* —
 # /us/guides and /us/assets must keep serving at their current paths.
 /us https://www.shopapgo.com/ 301
 /us/ https://www.shopapgo.com/ 301
-#
-# The order back office (public/admin/) only works on the store Worker's admin host. This host builds the same export
-# until the cutover, so /admin is sent away here (on Pages a redirect wins over a file at the same path).
-/admin / 302
-/admin/* / 302

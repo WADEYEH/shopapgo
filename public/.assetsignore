@@ -1,5 +1,2 @@
-# Files in the site export (out/) that the Worker must not upload as static assets (wrangler reads this file).
-# _redirects is for Cloudflare Pages / the brand host until the cutover; the Worker answers those URLs itself
-# (commerce/worker/redirects.js), and with it uploaded the Worker host would apply Pages' rules too.
-_redirects
+# Files in the site export (out/) the Worker must not upload as static assets (wrangler reads this file).
 apple-pay/README.txt

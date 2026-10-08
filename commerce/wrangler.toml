@@ -6,7 +6,8 @@ workers_dev = true
 # The site is the Next.js export (../out, built by `npm run build:site`) served as-is: every customer page, the back office
 # page (public/admin/) and the files in public/. The Worker runs first for every path: /api/*, the protected /admin/*
 # back office, the 301s for moved URLs (worker/redirects.js) and the Apple Pay domain-verification path (wrangler skips
-# dot-folders, so the file lives in public/apple-pay/). public/.assetsignore keeps Pages-only files out.
+# dot-folders, so the file lives in public/apple-pay/). The asset server also applies public/_redirects, which holds only
+# rules the Worker answers first (worker/redirects.js).
 [assets]
 directory = "../out"
 binding = "ASSETS"

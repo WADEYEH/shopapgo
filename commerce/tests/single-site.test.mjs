@@ -1,6 +1,6 @@
 // The single site (D41, docs/commerce-plan.md §6 step 7): the Worker serves the Next.js export (../out) as it is, with no
 // combining step. scripts/build-site.mjs builds it with the test-site settings and checks it has what the Worker needs;
-// Pages-only files stay out (public/.assetsignore); the old store folder and its duplicate images are gone; and URLs that
+// the brand host's redirect rules are safe on the Worker too; the old store folder and its duplicate images are gone; and URLs that
 // moved (/us, /v3, /product, /products/d204|d215, /cart.html, /checkout.html, /assets/*) answer 301 (worker/redirects.js).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -11,7 +11,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { REQUIRED_FILES, TEST_SITE_ENV, checkSite } from "../scripts/build-site.mjs";
+import { REQUIRED_FILES, TEST_SITE_ENV, checkSite, unsafeRedirectRules } from "../scripts/build-site.mjs";
 import worker from "../worker/index.js";
 import { siteRedirect } from "../worker/redirects.js";
 
@@ -44,7 +44,7 @@ async function files(root, base = root) {
 }
 
 test("the export check passes with everything the Worker needs and names what is missing", () => withDir(async (dir) => {
-  const complete = Object.fromEntries(REQUIRED_FILES.map((file) => [file, file === ".assetsignore" ? "# Pages only\n_redirects\n" : "x"]));
+  const complete = Object.fromEntries(REQUIRED_FILES.map((file) => [file, "x"]));
   await tree(dir, complete);
   await checkSite(dir);
 
@@ -52,8 +52,8 @@ test("the export check passes with everything the Worker needs and names what is
   await rm(path.join(dir, "js", "meta-pixel.js"));
   await assert.rejects(checkSite(dir), /missing: admin\/index\.html, js\/meta-pixel\.js/);
 
-  await tree(dir, { "admin/index.html": "x", "js/meta-pixel.js": "x", ".assetsignore": "apple-pay/README.txt\n" });
-  await assert.rejects(checkSite(dir), /_redirects/, "the Worker host must not apply the brand host's redirects");
+  await tree(dir, { "admin/index.html": "x", "js/meta-pixel.js": "x", "_redirects": "/us / 301\n/admin/* / 302\n" });
+  await assert.rejects(checkSite(dir), /\/admin\/\* \/ 302/, "a rule the Worker would apply to its own back office");
 }));
 
 test("the export checked: the back office, the pixel, the 404 page and the store pages are all site files", () => {
@@ -65,16 +65,13 @@ test("the export checked: the back office, the pixel, the 404 page and the store
   }
 });
 
-test("Pages-only files stay off the Worker; the brand host sends /admin away until the cutover", async () => {
-  const ignored = (await read("public/.assetsignore")).split(/\r?\n/);
-  assert.ok(ignored.includes("_redirects"));
-  const pages = await read("public/_redirects");
-  assert.match(pages, /^\/admin \/ 302\r?$/m);
-  assert.match(pages, /^\/admin\/\* \/ 302\r?$/m);
-  const vercel = JSON.parse(await read("vercel.json"));
-  for (const source of ["/admin", "/admin/:path*"]) {
-    assert.ok(vercel.redirects.some((rule) => rule.source === source && rule.destination === "/" && rule.permanent === false), source);
-  }
+test("the brand host's redirect rules are ones the Worker answers itself, so they cannot loop it; the admin page leaves the brand host", async () => {
+  // The Worker's asset server applies public/_redirects too: an /admin rule once sent the back office round in circles.
+  assert.deepEqual(unsafeRedirectRules(await read("public/_redirects")), []);
+  assert.deepEqual(unsafeRedirectRules("# note\n/us / 301\n/us/ / 301\n/v3 / 301\n"), []);
+  assert.deepEqual(unsafeRedirectRules("/admin / 302\n/admin/* / 302\n/us/guides/* / 301"), ["/admin / 302", "/admin/* / 302", "/us/guides/* / 301"]);
+  const admin = await read("public/admin/admin.js");
+  assert.ok(admin.includes('if (["www.shopapgo.com", "shopapgo.com"].includes(location.hostname)) location.replace("/");'));
 });
 
 test("test-site builds force GA4, GTM and the Meta Pixel off and turn on the single-site links", () => {

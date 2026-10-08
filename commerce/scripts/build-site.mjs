@@ -9,6 +9,8 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { siteRedirect } from "../worker/redirects.js";
+
 const COMMERCE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const SITE_DIR = path.join(COMMERCE, "..", "out");
 
@@ -25,7 +27,7 @@ export const TEST_SITE_ENV = {
 };
 
 // What the Worker needs from the export: the pages it serves, the back office page, the store's pixel script, the
-// brand 404 page (not_found_handling) and the list of Pages-only files it must not upload.
+// brand 404 page (not_found_handling) and the list of files it must not upload.
 export const REQUIRED_FILES = [
   "index.html",
   "404.html",
@@ -39,7 +41,20 @@ export const REQUIRED_FILES = [
   ".assetsignore",
 ];
 
-// Throws when the export is missing a file the Worker needs, or would upload _redirects.
+// The Worker's asset server applies _redirects (the brand host's file) too. A rule is safe there only when the Worker
+// already answers that path itself before its assets (worker/redirects.js); returns the rules that are not.
+export function unsafeRedirectRules(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .filter((line) => {
+      const [source] = line.split(/\s+/);
+      return !siteRedirect(new Request(new URL(source, "https://site.example")));
+    });
+}
+
+// Throws when the export is missing a file the Worker needs, or carries a redirect rule the Worker host would trip on.
 export async function checkSite(dir = SITE_DIR) {
   const missing = [];
   for (const file of REQUIRED_FILES) {
@@ -47,8 +62,9 @@ export async function checkSite(dir = SITE_DIR) {
     if (!info?.isFile()) missing.push(file);
   }
   if (missing.length) throw new Error(`site export at ${dir} is missing: ${missing.join(", ")}`);
-  const ignored = (await readFile(path.join(dir, ".assetsignore"), "utf8")).split(/\r?\n/).map((line) => line.trim());
-  if (!ignored.includes("_redirects")) throw new Error(".assetsignore must keep _redirects out of the Worker's assets");
+  const rules = await readFile(path.join(dir, "_redirects"), "utf8").catch(() => "");
+  const unsafe = unsafeRedirectRules(rules);
+  if (unsafe.length) throw new Error(`_redirects has rules the Worker does not answer first, which its assets would apply too: ${unsafe.join(" | ")}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

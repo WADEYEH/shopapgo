@@ -2,8 +2,9 @@ import { PRODUCT_SLUGS } from "../../lib/shop/product-data.mjs";
 
 // Old URLs that moved answer 301 to the new one on the same host, keeping the query string (ad tags, payment returns):
 // - /us and /us/ -> /: the brand home moved from /us to / (main #26). The guides keep their /us/guides/* URLs, so
-//   nothing below /us is redirected. Cloudflare Pages and Vercel do this with public/_redirects and vercel.json; the
-//   Worker leaves _redirects out (public/.assetsignore) and answers here instead.
+//   nothing below /us is redirected. Cloudflare Pages and Vercel do this with public/_redirects and vercel.json. The
+//   Worker answers here, before its assets; its asset server reads public/_redirects too, so that file may only hold
+//   rules this map already answers (scripts/build-site.mjs checks it).
 // - /products/d204 and /products/d215 (also with .html or a trailing slash) -> the named product URLs (D39).
 // - /v3 (the old store home, also /v3.html) -> /, the brand home (D39).
 // - /product (the old one-page-for-both product page, also /product.html) -> /products, the overview (D41).
