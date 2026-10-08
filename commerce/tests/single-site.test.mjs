@@ -74,6 +74,17 @@ test("the brand host's redirect rules are ones the Worker answers itself, so the
   assert.ok(admin.includes('if (["www.shopapgo.com", "shopapgo.com"].includes(location.hostname)) location.replace("/");'));
 });
 
+test("unknown paths get the site's own 404 page: one <html> for two root layouts", async () => {
+  // The Worker serves out/404.html for any unknown path (not_found_handling); Next builds it from app/global-not-found.js
+  // only with the experimental flag, because the site has two root layouts ((us) and (tw)).
+  assert.match(await read("next.config.mjs"), /experimental: \{ globalNotFound: true \}/);
+  const page = await read("app/global-not-found.js");
+  assert.match(page, /<html lang="en"/);
+  assert.ok(page.includes("<SiteChrome footer={<SiteFooter />}>"), "the site header and footer");
+  assert.ok(page.includes("Page not found."));
+  assert.ok(page.includes("robots: { index: false, follow: true }"));
+});
+
 test("test-site builds force GA4, GTM and the Meta Pixel off and turn on the single-site links", () => {
   assert.deepEqual(TEST_SITE_ENV, {
     NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false",

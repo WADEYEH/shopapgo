@@ -104,6 +104,11 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
 .us-footer-bottom p { margin: 0; }
 .us-footer-bottom nav { display: flex; gap: 24px; }
 .us-footer-bottom a { color: #a8afb8; }
+.us-site-footer--slim { padding-top: 0; }
+.us-site-footer--slim .us-footer-bottom { margin-top: 0; border-top: 0; }
+.us-footer-more { display: none; }
+.us-not-found-link { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #fbf8f4; font-weight: 700; text-decoration: none; border-bottom: 1px solid #3a4048; }
+.us-not-found-link:hover { color: #f08417; border-color: #f08417; }
 @media (max-width: 1099px) {
   .us-article-layout { display: block; }
   .us-article-sidebar { display: none; }
@@ -126,6 +131,9 @@ a:hover .us-btn-outline, .us-btn-outline:hover { background: #F08417; color: #08
   .us-toc a { min-height: 44px; display: flex; align-items: center; padding: 8px 0; box-sizing: border-box; }
   .us-toc-home { display: block; padding: 0; }
   .us-toc-home ol { flex-direction: column; gap: 0; }
+  /* The footer's guide list: Home and All guides, the rest behind a button (components/us/FooterExplore.js). */
+  .us-footer-explore:not(.is-open) li:nth-child(n+3) { display: none; }
+  .us-footer-more { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 4px; padding: 0; border: 0; background: none; color: #fbf8f4; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 }
 @media (max-width: 540px) {
   .us-footer-grid { grid-template-columns: 1fr; gap: 28px; }

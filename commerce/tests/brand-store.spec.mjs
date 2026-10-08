@@ -90,7 +90,8 @@ test("moved URLs answer 301 with the query string; the guides and unknown paths 
   expect(guide.status()).toBe(200);
   const missing = await request.get(`${site}/no-such-page`);
   expect(missing.status()).toBe(404);
-  expect(await missing.text()).toContain("<html");
+  // The site's own 404 page (app/global-not-found.js), not a blank one.
+  expect(await missing.text()).toContain("Page not found.");
 });
 
 test("a test-site build loads no GA4, GTM or Meta Pixel", async ({ page }) => {
