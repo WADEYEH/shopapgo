@@ -24,6 +24,7 @@ export const FAKE_AMAZON_ENV = {
   MCF_SKU_MAP_JSON: JSON.stringify({ D204: "AMZ-SKU-D204", D215: "AMZ-SKU-D215" }),
   MCF_RETRY_DELAY_MS: "0",
   MCF_TIMEOUT_MS: "2000",
+  ORDER_COOLING_OFF_MINUTES: "0", // no cooling-off in these tests: a paid order goes to Amazon right away
 };
 
 const reply = (status, body, headers = {}) =>

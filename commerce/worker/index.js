@@ -58,8 +58,6 @@ import {
   attachPaymentIntent,
   attachPaypalOrder,
   cancelUnpayableOrder,
-  claimNotification,
-  finishNotification,
   getOrder,
   getOrderByIntent,
   getOrderByPaypalOrderId,
@@ -70,13 +68,13 @@ import {
   settleIntent,
   settlePaypalOrder,
 } from "./orders.js";
-import { notifyOrderPaid } from "./notify.js";
-import { processConfirmationJob, processMessageJob } from "./customer-email.js";
+import { processMessageJob } from "./customer-email.js";
 import { handleRefundEvent } from './refunds.js';
 import { handleResendWebhook } from "./email-delivery.js";
-import { submitOrderToMcf } from "./mcf.js";
 import { attributionMetadata, readAttribution, saveAttribution } from "./meta-attribution.js";
-import { metaEnabled, metaEventId, sendMetaEvent } from "./meta-capi.js";
+import { metaEnabled, metaEventId } from "./meta-capi.js";
+import { runMetaEvent, settleFollowUps } from "./after-payment.js";
+import { applyRefundsToOrder } from "./order-core.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
@@ -318,16 +316,6 @@ async function captureAttribution(env, request, body, orderId, origin) {
   }
 }
 
-// Meta CAPI event for one order, once. Reads the order fresh; never throws.
-async function runMetaEvent(env, orderId, eventName) {
-  if (!metaEnabled(env)) return;
-  try {
-    await sendMetaEvent(env, await getOrder(env.DB, orderId), eventName);
-  } catch (error) {
-    console.error("meta_capi_error", { eventName, reason: error?.name });
-  }
-}
-
 // Runs background work after the response when the runtime allows it (ctx.waitUntil), otherwise inline.
 function deferred(services, work) {
   if (services?.ctx?.waitUntil) {
@@ -337,37 +325,11 @@ function deferred(services, work) {
   return work;
 }
 
-// Runs the one-time "new paid order" notification. The claim row makes it fire at
-// most once per order; failures are recorded, never thrown.
-async function runNotification(env, order, origin) {
-  try {
-    if (!(await claimNotification(env.DB, order.id))) return;
-    const results = await notifyOrderPaid(env, order, { adminUrl: `${origin}/admin/` });
-    await finishNotification(env.DB, order.id, results);
-  } catch (error) {
-    console.error("order_notification_error", { orderId: order.id, reason: error?.message });
-  }
-}
-
-// The task is already durable when payment commits; immediate processing is optional.
-async function runCustomerConfirmation(env, order) {
-  await processConfirmationJob(env, order);
-}
-
-// Amazon MCF: only when MCF_AUTO_SUBMIT=true and everything is configured (otherwise just a log line). Runs after
-// payment settled, so a failure here can never affect the payment; submitOrderToMcf never throws.
-async function runMcfSubmit(env, order) {
-  await submitOrderToMcf(env, order, { actor: "mcf-auto" });
-}
-
+// After a payment settled (worker/after-payment.js): notification, confirmation email, Purchase event and the
+// cooling-off queue for a paid order; a team alert for one that needs review. After the response when possible.
 function afterSettle(settled, { env, ctx, adminOrigin }) {
-  if (!settled.changed || settled.status !== "paid") return undefined;
-  const work = Promise.all([
-    runNotification(env, settled.order, adminOrigin),
-    runCustomerConfirmation(env, settled.order),
-    runMcfSubmit(env, settled.order),
-    runMetaEvent(env, settled.order.id, "Purchase"),
-  ]);
+  if (!settled?.changed) return undefined;
+  const work = settleFollowUps(settled, { env, adminOrigin });
   if (ctx?.waitUntil) {
     ctx.waitUntil(work);
     return undefined;
@@ -449,7 +411,9 @@ async function handleWebhook(request, env, services) {
     if (intent) await afterSettle(await settleIntent(env.DB, intent), services);
   }
   const firstDelivery = await recordWebhookEvent(env.DB, event);
-  if (refundMessage) {
+  // A full refund before shipping cancels the order; any other refund holds it (worker/order-core.js).
+  if (refundMessage?.order) await applyRefundsToOrder(env, refundMessage.order.id, { adminUrl: `${services.adminOrigin}/admin/` });
+  if (refundMessage?.kind) {
     const kinds = refundMessage.kind.startsWith('refund:failed:')
       ? [refundMessage.kind,refundMessage.kind.replace('refund:failed:','refund:team-failed:')]
       : [refundMessage.kind];

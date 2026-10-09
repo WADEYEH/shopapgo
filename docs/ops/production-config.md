@@ -15,7 +15,7 @@
 | www.shopapgo.com（另有 shopapgo.pages.dev） | 品牌站（首页 `/`、指南 `/us/guides`） | Pages 专案 `shopapgo` | **手动上传**：这个 Pages 专案没有接 GitHub，是在某个人的电脑上建置后直接上传 | shopapgo `main` |
 | www.shopapgo.com 上的商店路径：`/products/*`、`/cart`、`/checkout`、`/api/*`、政策页及其 css/js/图片 | 商品页、购物车、结账（品牌站的购买按钮连到这里） | Worker `apgo-us-store`（跟 store.shopapgo.com 同一个） | 网域路由直接在 Cloudflare 设定，**不在任何 repo 里** | landing（同上） |
 | store.shopapgo.com、admin.shopapgo.com | landing 线上店与后台 | Worker `apgo-us-store` | 从本机用 wrangler 部署 | landing `codex/v2-content-blueprint`（同步点 1：`cbdf77e`） |
-| staging.shopapgo.com、admin-staging.shopapgo.com | 测试站，也是单一网站的预览：品牌首页、指南、商品页、购物车、结账都由同一个 Worker 提供 | Worker `apgo-us-store-staging` | 10/6 起只由 shopapgo 部署（D38）。PR 3-1 起：CI 通过后由 GitHub 的 Deploy 工作自动部署（要先设金钥，`docs/ops/runbook.md`），也可以从本机 `npm run deploy:staging`；都会先建置网站、套用新的数据库迁移档。出货送到假 Amazon（`MCF_FAKE`），不会真的出货 | shopapgo（10/9 部署阶段 3 PR 3-2（后台成员与操作纪录），版本 `c6d17c69`；上一版 `98d0ccf5`（PR 3-1）、`ff98a90d`（阶段 2 PR 五）、`5e73e8b0`（PR 四）、`e0d4b669`（PR 三）、`a2becbbd`（PR 二）、`be0a435d`（PR 一）、`3b2b8b11`（M3）、`af3a1ff8`（第一部分）、`46631cf5`（PR #29）、`e1cafee9`，landing 旧版 `b6a48a8c`，都可回退） |
+| staging.shopapgo.com、admin-staging.shopapgo.com | 测试站，也是单一网站的预览：品牌首页、指南、商品页、购物车、结账都由同一个 Worker 提供 | Worker `apgo-us-store-staging` | 10/6 起只由 shopapgo 部署（D38）。PR 3-1 起：CI 通过后由 GitHub 的 Deploy 工作自动部署（要先设金钥，`docs/ops/runbook.md`），也可以从本机 `npm run deploy:staging`；都会先建置网站、套用新的数据库迁移档。出货送到假 Amazon（`MCF_FAKE`），不会真的出货 | shopapgo（10/9 部署阶段 3 PR 3-3（订单核心与冷静期），版本 `c07e0284`；上一版 `c6d17c69`（PR 3-2）、`98d0ccf5`（PR 3-1）、`ff98a90d`（阶段 2 PR 五）、`5e73e8b0`（PR 四）、`e0d4b669`（PR 三）、`a2becbbd`（PR 二）、`be0a435d`（PR 一）、`3b2b8b11`（M3）、`af3a1ff8`（第一部分）、`46631cf5`（PR #29）、`e1cafee9`，landing 旧版 `b6a48a8c`，都可回退） |
 | next.shopapgo.com、admin-next.shopapgo.com | 停用 | Worker `apgo-us-store-next`、D1 `apgo-us-store-next` | 10/6 建立，当天改回 staging（D38） | 待你在 Cloudflare 删除 |
 
 **10/6 下午更正**：上午盘点时漏了上面第二列。实测 www 的 `/products/d204`、`/cart`、`/api/store/config`、`/privacy` 都由线上店的 Worker 回应（没有 Pages 的回应标头），首页和指南仍是 Pages。品牌站 `main` 的 #25（购买按钮改连 `/products/*`）、#26（首页改成 `/`，`/us` 转到 `/`）已经上线。也就是说，D9「所有顾客页面都在 www」已经由 landing 那边部分上线。确切的路由清单见下一段。
@@ -73,7 +73,9 @@
 | 后台登录 | Cloudflare Access 设定（新增） |
 | 联络表单防机器人 | Turnstile 金钥（新增） |
 
-**PR 3-2 新增的设定**（切换那次部署生效）：一般设定 `ADMIN_OWNER_EMAIL`（第一位拥有者）。打开 Cloudflare Access 时再加：一般设定 `ADMIN_ACCESS`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`CLOUDFLARE_ACCOUNT_ID`、`ACCESS_LIST_ID`，密钥 `ACCESS_LIST_API_TOKEN`（`docs/ops/runbook.md` 第 12 节）。
+**PR 3-3 新增的设定**：可选的一般设定 `ORDER_COOLING_OFF_MINUTES`（冷静期分钟数，不设就是 60）。切换后只有「付款时自动送单是打开的」订单会自动送 Amazon，切换前的订单不会。
+
+**PR 3-2 新增的设定**（切换那次部署生效）：一般设定 `ADMIN_OWNER_EMAIL`（第一位拥有者）。打开 Cloudflare Access 时再加：一般设定 `ADMIN_ACCESS`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`CLOUDFLARE_ACCOUNT_ID`、`ACCESS_LIST_ID`，密钥 `ACCESS_LIST_API_TOKEN`（`docs/ops/runbook.md` 第 11 节）。
 
 **之后要移除的**（企划 O10）：`META_TEST_EVENT_CODE`（先确认用途）；切换到 Cloudflare Access 后的 `ADMIN_LOGIN_EMAIL`、`ADMIN_LOGIN_PASSWORD`；`ADMIN_TOKEN` 只留给脚本或移除。
 

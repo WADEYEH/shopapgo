@@ -12,7 +12,11 @@
 //     A create that hit a network error is only ever repeated with the SAME id, after asking Amazon whether the
 //     first attempt landed.
 //   * Sync: COMPLETE + a tracking number -> markShipped() (idempotent INSERT) -> shipment email (claimed once).
-import { refundHold } from './refunds.js';
+//   * When (M4 §3.6, PR 3-3): never at payment. A paid order is queued (worker/order-core.js queueForAmazon) and the cron
+//     sends it once its cooling-off period is over and nothing holds it (submitDueOrders). The back-office button
+//     also waits for the end of the cooling-off period.
+import { coolingOff, orderHolds, orderState } from "./order-core.js";
+import { alertTeam } from "./team-alerts.js";
 
 import {
   McfError,
@@ -74,13 +78,15 @@ export async function mcfView(env, order, fulfillment) {
     console.error("mcf_record_unreadable", { orderId: order.id, reason: error?.message });
   }
   const readiness = mcfReadiness(env, order);
-  const held = await refundHold(env.DB, order.id);
-  const eligible = order.status === "paid" && !fulfillment && !held;
+  const holds = await orderHolds(env.DB, order);
+  const cooling = coolingOff(env, order);
+  const eligible = order.status === "paid" && !fulfillment && !holds.length;
   const retryable = !row || RETRYABLE.includes(row.status) || isStaleSubmitting(row);
   return {
     mode: readiness.mode, // off | not_configured | ready
-    reason: held ? 'Refund registered; review fulfillment before submitting to Amazon.' : readiness.reason,
-    canSubmit: readiness.ok && eligible && retryable,
+    reason: holds.find((hold) => hold.code === "refund") ? "Refund registered; review fulfillment before submitting to Amazon." : holds[0]?.message ?? readiness.reason,
+    coolingOffEndsAt: cooling.active ? cooling.endsAt : null,
+    canSubmit: readiness.ok && eligible && retryable && !cooling.active,
     canSync: Boolean(row) && ["submitted", "submitting"].includes(row.status) && readiness.config.connectionOk,
     record: publicRecord(row),
   };
@@ -131,9 +137,10 @@ async function claim(db, orderId, tier) {
     .prepare(
       `INSERT OR IGNORE INTO order_mcf (order_id, seller_order_id, status, attempts, service_tier, created_at, updated_at)
        SELECT ?, ?, 'submitting', 1, ?, ?, ? WHERE NOT EXISTS
-         (SELECT 1 FROM order_refunds WHERE order_id = ? AND status != 'FAILED')`,
+         (SELECT 1 FROM order_refunds WHERE order_id = ? AND status != 'FAILED')
+         AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'paid')`,
     )
-    .bind(orderId, orderId, tier, timestamp, timestamp, orderId)
+    .bind(orderId, orderId, tier, timestamp, timestamp, orderId, orderId)
     .run();
   if (inserted.meta.changes > 0) return { claimed: true, row: null, sellerOrderId: orderId, attempts: 1 };
 
@@ -148,7 +155,8 @@ async function claim(db, orderId, tier) {
       `UPDATE order_mcf SET status = 'submitting', seller_order_id = ?, attempts = ?, service_tier = ?, mcf_status = '',
          error_kind = '', error_message = '', note = '', updated_at = ?
        WHERE order_id = ? AND status = ? AND updated_at = ?
-         AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_mcf.order_id AND r.status!='FAILED')`,
+         AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_mcf.order_id AND r.status!='FAILED')
+         AND EXISTS (SELECT 1 FROM orders o WHERE o.id = order_mcf.order_id AND o.status = 'paid')`,
     )
     .bind(sellerOrderId, attempts, tier, now(), orderId, row.status, row.updated_at)
     .run();
@@ -178,7 +186,7 @@ const failure = (error) => ({
 
 // Sends one paid order to MCF. Never throws. Returns { outcome, ... }:
 //   skipped (off / not configured / not eligible) | duplicate (someone else holds the claim) | submitted | failed
-export async function submitOrderToMcf(env, order, { actor = "mcf-auto" } = {}) {
+export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs = Date.now() } = {}) {
   const orderId = order.id;
   try {
     const readiness = mcfReadiness(env, order);
@@ -187,8 +195,12 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto" } = {}) 
       return { outcome: "skipped", mode: readiness.mode, reason: readiness.reason };
     }
     const fresh = (await getOrder(env.DB, orderId)) ?? order;
-    if (await refundHold(env.DB, orderId)) return { outcome:'skipped', mode:readiness.mode, reason:'Refund registered; review fulfillment before submitting to Amazon.' };
+    const holds = await orderHolds(env.DB, fresh);
+    if (holds.some((hold) => hold.code === "refund")) return { outcome:'skipped', mode:readiness.mode, reason:'Refund registered; review fulfillment before submitting to Amazon.' };
     if (fresh.status !== "paid") return { outcome: "skipped", mode: "ready", reason: "Only paid orders are sent to MCF." };
+    if (holds.length) return { outcome: "skipped", mode: readiness.mode, reason: holds[0].message };
+    const cooling = coolingOff(env, fresh, nowMs);
+    if (cooling.active) return { outcome: "skipped", mode: readiness.mode, reason: `The cooling-off period ends at ${cooling.endsAt}; the order is sent to Amazon after that.` };
     const shipped = await env.DB.prepare("SELECT 1 AS x FROM order_fulfillments WHERE order_id = ?").bind(orderId).first();
     if (shipped) return { outcome: "skipped", mode: "ready", reason: "The order is already marked shipped." };
 
@@ -361,6 +373,69 @@ export async function syncAllMcf(env, { actor = "admin" } = {}) {
     console.error("mcf_sync_all_failed", { reason: error?.message });
   }
   return summary;
+}
+
+// ---------- the cooling-off queue (M4 §3.6) ----------
+
+const SUBMIT_BATCH = 10;
+const dropQueued = (db, orderId) => db.prepare("DELETE FROM mcf_submission_queue WHERE order_id = ?").bind(orderId).run();
+
+// Sends the queued orders whose cooling-off period is over (oldest first, a bounded batch). An order that was
+// cancelled, shipped or already sent leaves the queue; a held one waits. When automatic submission was switched off
+// or is not configured any more, the order leaves the queue and the team is told to send it by hand. Never throws.
+export async function submitDueOrders(env, { nowMs = Date.now(), orderId = null, adminUrl = null } = {}) {
+  const summary = { checked: 0, submitted: 0, failed: 0, held: 0, dropped: 0 };
+  try {
+    const { results } = await env.DB
+      .prepare(`SELECT order_id FROM mcf_submission_queue WHERE due_at <= ? ${orderId ? "AND order_id = ?" : ""} ORDER BY due_at LIMIT ?`)
+      .bind(...[new Date(nowMs).toISOString(), ...(orderId ? [orderId] : []), SUBMIT_BATCH])
+      .all();
+    for (const { order_id: id } of results) {
+      summary.checked += 1;
+      const state = await orderState(env, id, nowMs);
+      if (!state || state.stage !== "paid" || state.mcf) {
+        await dropQueued(env.DB, id);
+        summary.dropped += 1;
+        continue;
+      }
+      if (state.holds.length || state.cooling.active) {
+        summary.held += 1;
+        continue;
+      }
+      const result = await submitOrderToMcf(env, state.order, { actor: "mcf-auto", nowMs });
+      if (result.outcome === "skipped" && result.mode !== "ready") {
+        await dropQueued(env.DB, id);
+        summary.dropped += 1;
+        await alertTeam(env, {
+          key: `not-sent:${id}`, kind: "mcf_not_sent", orderId: id, adminUrl,
+          subject: `Order ${id} was not sent to Amazon`,
+          lines: [`Order ${id} was due to go to Amazon, but automatic sending is off or not set up: ${result.reason}`, "Ship it by hand, or send it from the back office once Amazon is set up."],
+        });
+        continue;
+      }
+      if (result.outcome === "skipped") {
+        summary.held += 1;
+        continue;
+      }
+      await dropQueued(env.DB, id);
+      if (result.outcome === "failed") {
+        summary.failed += 1;
+        await alertTeam(env, {
+          key: `mcf-failed:${id}`, kind: "mcf_failed", orderId: id, adminUrl,
+          subject: `Order ${id}: sending to Amazon failed`,
+          lines: [`Amazon did not accept order ${id}: ${result.record?.errorMessage ?? result.reason ?? "unknown error"}`, "Fix the cause, then use Retry send in the back office."],
+        });
+      } else summary.submitted += 1;
+    }
+  } catch (error) {
+    console.error("mcf_submit_due_failed", { reason: error?.message });
+  }
+  return summary;
+}
+
+// Cron job: always on (the queue only holds orders paid while automatic submission was ready).
+export async function scheduledMcfSubmissions(env) {
+  return submitDueOrders(env);
 }
 
 // Optional cron (wrangler [triggers] crons): only does anything when MCF_SYNC_CRON=true.

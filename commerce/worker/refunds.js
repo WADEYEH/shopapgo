@@ -25,6 +25,8 @@ export async function saveRefund(db, order, refund) {
   if (previous && (previous.order_id !== order.id || previous.amount_cents !== cents || previous.currency !== refund.currency)) {
     throw new Error('Refund identity conflicts with its stored record.');
   }
+  // Notices go to a paid order, and to one cancelled after payment (worker/order-core.js): the refund is the money back.
+  const noticeStatus = order.status === "cancelled" && order.paid_at ? "paid" : order.status;
   const updated = new Date(refund.updated_at).toISOString();
   const timestamp = new Date().toISOString();
   const failureCode = safeCode(refund.failure_details?.code);
@@ -39,7 +41,7 @@ export async function saveRefund(db, order, refund) {
       AND NOT EXISTS (SELECT 1 FROM order_refunds WHERE id=? AND
         (status='SETTLED' OR provider_updated_at>? OR order_id!=? OR amount_cents!=? OR currency!=?))`)
     .bind(order.id,`refund:${audience}:${refund.id}`,refund.id,cents,refund.currency,failureCode,
-      timestamp,timestamp,refund.status,order.status,refund.id,updated,order.id,cents,refund.currency));
+      timestamp,timestamp,refund.status,noticeStatus,refund.id,updated,order.id,cents,refund.currency));
   // A newly accepted refund owns one instruction. Its amount/cumulative total
   // freeze at that transition; accepted -> settled and historical replays do
   // not create another notice. Commit this with the observation, never after it.
@@ -53,7 +55,7 @@ export async function saveRefund(db, order, refund) {
         AND NOT EXISTS (SELECT 1 FROM order_refunds WHERE id=? AND
           (status IN ('ACCEPTED','SETTLED') OR provider_updated_at>? OR order_id!=? OR amount_cents!=? OR currency!=?))`)
       .bind(order.id,`refund:${refund.id}`,refund.id,cents,refund.currency,cents,order.id,
-        timestamp,timestamp,refund.status,order.status,refund.id,updated,order.id,cents,refund.currency),
+        timestamp,timestamp,refund.status,noticeStatus,refund.id,updated,order.id,cents,refund.currency),
     ...failureJobs,
     db.prepare(`INSERT INTO order_refunds
     (id,order_id,payment_intent_id,amount_cents,currency,status,failure_code,provider_created_at,provider_updated_at,received_at)
@@ -97,7 +99,7 @@ export async function handleRefundEvent(env, event) {
   const current = await retrieveRefund(env, snapshot.id);
   if (current.id !== snapshot.id) throw new Error('Refund response identity does not match.');
   const kind = await saveRefund(env.DB, order, current);
-  return kind ? { order, kind } : null;
+  return { order, kind };
 }
 
 export async function syncOrderRefunds(env, order) {

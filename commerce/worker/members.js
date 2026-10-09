@@ -12,8 +12,7 @@
 import { isEmail } from "../../lib/shop/contact-rules.mjs";
 import { recordAdminAudit, updateAdminAuditDetail } from "./activity.js";
 import { syncAccessList } from "./access-list.js";
-import { customerEmailConfig } from "./customer-email.js";
-import { allowedEmailRecipient } from "./email-delivery.js";
+import { emailOwners } from "./team-alerts.js";
 
 export const ROLES = ["owner", "member"];
 const SYSTEM = { id: "system", via: "system", role: "owner" };
@@ -193,42 +192,17 @@ const ACTION_TEXT = {
   "member.removed": (c) => `${c.email} was removed`,
 };
 
-// Emails every active owner (through Resend, like the other team emails; staging only to its allowlist).
-// Returns { sent, skipped, failed } counts. Never throws: the change itself is already saved.
-async function notifyOwners(env, change, fetchImpl) {
-  const counts = { sent: 0, skipped: 0, failed: 0 };
-  const config = customerEmailConfig({ ...env, CUSTOMER_EMAIL_ENABLED: "true" });
-  const { results } = await env.DB.prepare("SELECT email FROM admin_members WHERE role = 'owner' AND status = 'active' ORDER BY email").all();
+// Emails every active owner (worker/team-alerts.js). Returns { sent, skipped, failed }. Never throws: the change itself
+// is already saved.
+function notifyOwners(env, change, fetchImpl) {
   const what = ACTION_TEXT[change.action]?.(change) ?? `${change.email}: ${change.action}`;
-  for (const { email } of results) {
-    if (!config || !allowedEmailRecipient(env, email)) {
-      counts.skipped += 1;
-      continue;
-    }
-    try {
-      const response = await fetchImpl(config.apiUrl, {
-        method: "POST",
-        redirect: "manual",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}`, "Idempotency-Key": `member-${change.auditId}-${email}` },
-        body: JSON.stringify({
-          from: config.from,
-          to: [email],
-          subject: `Back office: ${what}`.slice(0, 150),
-          text: [
-            `${what}.`,
-            `By: ${change.actor.id}`,
-            `When: ${change.at}`,
-            change.reason ? `Reason: ${change.reason}` : "Reason: (none given)",
-            "",
-            "You get this because you are an owner of the APGO back office. Members and the full history are on the Members and Activity sections of the back office.",
-          ].join("\n"),
-        }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      counts[response.ok ? "sent" : "failed"] += 1;
-    } catch {
-      counts.failed += 1;
-    }
-  }
-  return counts;
+  const text = [
+    `${what}.`,
+    `By: ${change.actor.id}`,
+    `When: ${change.at}`,
+    change.reason ? `Reason: ${change.reason}` : "Reason: (none given)",
+    "",
+    "You get this because you are an owner of the APGO back office. Members and the full history are on the Members and Activity sections of the back office.",
+  ].join("\n");
+  return emailOwners(env, { subject: `Back office: ${what}`, text, idempotencyKey: `member-${change.auditId}` }, fetchImpl);
 }

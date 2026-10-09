@@ -8,11 +8,12 @@
 //   can poll it.
 // - HEALTHCHECK_PING_URL (secret, optional, https only; e.g. a Healthchecks.io check) is pinged at the end of every run,
 //   with "/fail" appended when a job failed. When the pings stop, that service emails the team.
-import { scheduledMcfSync } from "./mcf.js";
+import { scheduledMcfSubmissions, scheduledMcfSync } from "./mcf.js";
 import { scheduledCustomerEmailRetry } from "./customer-email.js";
 import { scheduledMetaRetry } from "./meta-capi.js";
 
 export const CRON_JOBS = {
+  mcf_submit: scheduledMcfSubmissions,
   mcf_sync: scheduledMcfSync,
   email_retry: scheduledCustomerEmailRetry,
   meta_retry: scheduledMetaRetry,

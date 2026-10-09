@@ -13,6 +13,9 @@
 //   POST /admin/api/members/role             owners only: { email, role, reason }
 //   POST /admin/api/members/remove           owners only: { email, reason }
 //   POST /admin/api/members/sync             owners only: copy the list to Cloudflare Access again
+//   POST /admin/api/orders/:id/confirm       a review order is fine: { reason } (worker/order-core.js, T5)
+//   POST /admin/api/orders/:id/cancel        { reason: customer_request | out_of_stock | ... | other, note } (T6, T8, T10)
+//   POST /admin/api/orders/:id/address       in the cooling-off period: { shipping, reason, noUnit }
 //
 // Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync, members) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
@@ -31,6 +34,8 @@ import { accessMode, resolveAdmin } from "./admin-identity.js";
 import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember } from "./members.js";
 import { accessListStatus, syncAccessList } from "./access-list.js";
 import { activityActors, listActivity } from "./activity.js";
+import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView } from "./order-core.js";
+import { runAfterPaid } from "./after-payment.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
@@ -83,7 +88,7 @@ async function adminOrderView(env, orderId) {
   const order = await adminOrder(env.DB, orderId);
   if (!order) return null;
   const row = await getOrder(env.DB, orderId);
-  return { ...order, sandboxRefundChecks:sandboxRefundChecksEnabled(env), mcf: await mcfView(env, row, order.fulfillment) };
+  return { ...order, sandboxRefundChecks:sandboxRefundChecksEnabled(env), mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId) };
 }
 
 async function readJsonObject(request) {
@@ -184,6 +189,35 @@ async function handleTeamApi(request, env, pathname, actor) {
   }
 }
 
+// POST .../confirm | .../cancel | .../address (worker/order-core.js). Every action carries a reason and is logged
+// under the signed-in person.
+async function handleOrderAction(request, env, orderId, action, actor) {
+  if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+  const blocked = csrfProblem(request);
+  if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+  const body = await readJsonObject(request);
+  if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+  const adminOrigin = new URL(request.url).origin;
+  try {
+    let result;
+    if (action === "confirm") {
+      result = await confirmOrder(env, orderId, { actor, reason: body.reason });
+      // The same follow-ups as a payment that matched: notification, confirmation email, Purchase, Amazon queue.
+      if (result.changed) await runAfterPaid(env, result.order, { adminOrigin });
+    } else if (action === "cancel") {
+      result = await cancelOrder(env, orderId, { actor, reasonCode: body.reason, note: body.note }, { adminUrl: `${adminOrigin}/admin/` });
+    } else {
+      result = await changeAddress(env, orderId, { actor, shipping: body.shipping, reason: body.reason, noUnit: body.noUnit === true });
+    }
+    return json({ result: { changed: result.changed, payment: result.payment ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
+  } catch (error) {
+    if (error instanceof OrderError) {
+      return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, error.status, NO_INDEX);
+    }
+    throw error;
+  }
+}
+
 export async function handleAdminApi(request, env, pathname) {
   const auth = await resolveAdmin(request, env);
   if (auth.response) return auth.response;
@@ -224,6 +258,12 @@ export async function handleAdminApi(request, env, pathname) {
     await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: actor.id, detail: { kind, result: email.status } });
     return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
+  const orderAction = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address)$/);
+  if (orderAction) {
+    const id = decodeURIComponent(orderAction[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    return handleOrderAction(request, env, id, orderAction[2], actor);
+  }
   const ship = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/ship$/);
   const refundSync = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refunds\/sync$/);
   if (refundSync) {
@@ -238,6 +278,7 @@ export async function handleAdminApi(request, env, pathname) {
     if (!order.payment_intent_id) return fail(409,'no_payment_intent','This order has no payment intent.',NO_INDEX);
     try {
       await syncOrderRefunds(env,order);
+      await applyRefundsToOrder(env, id, { adminUrl: `${url.origin}/admin/` });
     } catch {
       return fail(502,'refund_sync_failed','Could not verify refunds with Airwallex. Try again or review the provider dashboard.',NO_INDEX);
     }
