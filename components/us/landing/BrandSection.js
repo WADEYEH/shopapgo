@@ -6,8 +6,8 @@ const stat = { fontFamily: CONDENSED, fontWeight: 800, fontSize: "clamp(56px,5vw
 const statLabel = { fontSize: 14, letterSpacing: ".12em", textTransform: "uppercase", color: color.tertiary };
 const cell = { background: color.bg, padding: "clamp(20px,2.6vw,36px)", display: "flex", flexDirection: "column", gap: 10 };
 const marker = { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: color.bg, padding: "0 12px" };
-const markerLabel = { fontSize: 11, letterSpacing: ".2em", textTransform: "uppercase", color: color.quiet, fontWeight: 700 };
-const hollowDot = { width: 11, height: 11, borderRadius: "50%", border: `2px solid ${color.quiet}`, boxSizing: "border-box" };
+const markerLabel = { fontSize: 11, letterSpacing: ".2em", textTransform: "uppercase", color: color.quiet2, fontWeight: 700 };
+const hollowDot = { width: 11, height: 11, borderRadius: "50%", border: `2px solid ${color.quiet2}`, boxSizing: "border-box" };
 
 export default function BrandSection() {
   return (
@@ -48,7 +48,7 @@ export default function BrandSection() {
         >
           EST.<span style={{ color: color.orange, WebkitTextStroke: 0 }}> 2011</span>
         </span>
-        <span style={{ fontSize: 12, letterSpacing: ".24em", textTransform: "uppercase", color: color.quiet, fontWeight: 700 }}>Taipei, Taiwan</span>
+        <span style={{ fontSize: 12, letterSpacing: ".24em", textTransform: "uppercase", color: color.quiet2, fontWeight: 700 }}>Taipei, Taiwan</span>
       </div>
       <div
         style={{
@@ -103,7 +103,7 @@ export default function BrandSection() {
           <div style={cell}>
             <span style={stat}>No.1</span>
             <span style={statLabel}>Best-selling car-care brand in Taiwan</span>
-            <span style={{ fontSize: 12, color: color.quiet, lineHeight: 1.4 }}>{config.rankSource}</span>
+            <span style={{ fontSize: 12, color: color.quiet2, lineHeight: 1.4 }}>{config.rankSource}</span>
           </div>
           <div style={cell}>
             <span style={stat}>

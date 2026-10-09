@@ -59,7 +59,7 @@ const PANEL = {
   },
 };
 
-const specKey = { color: color.quiet, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 11, paddingTop: 2 };
+const specKey = { color: color.quiet2, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 11, paddingTop: 2 };
 
 function ProductCard({ sku, selected, onPick }) {
   const p = PANEL[sku];
@@ -121,7 +121,7 @@ function ProductCard({ sku, selected, onPick }) {
       <span style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 44, lineHeight: 1, color: p.accent, letterSpacing: ".04em" }}>{p.word}</span>
         <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 20, textTransform: "uppercase", lineHeight: 1 }}>{p.name}</span>
-        <span style={{ fontSize: 11, letterSpacing: ".14em", color: color.quiet, border: `1px solid ${color.border}`, padding: "2px 6px", borderRadius: 4 }}>{p.tag}</span>
+        <span style={{ fontSize: 11, letterSpacing: ".14em", color: color.quiet2, border: `1px solid ${color.border}`, padding: "2px 6px", borderRadius: 4 }}>{p.tag}</span>
       </span>
       <span style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 18px", fontSize: 14, lineHeight: 1.35 }}>
         <span style={specKey}>When</span>
@@ -200,7 +200,7 @@ function VideoCard({ sku, playing, onPlay }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontSize: 13, letterSpacing: ".12em", textTransform: "uppercase", color: color.tertiary }}>{p.footageLabel}</span>
-        <span style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet }}>
+        <span style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet2 }}>
           {videoReady ? "Real footage · English captions" : "Real application video pending approval"}
         </span>
       </div>
@@ -246,7 +246,7 @@ function Panel({ sku, playing, onPlay }) {
           {p.steps.map((s) => (
             <figure key={s.cap} style={{ margin: 0, display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
               <img src={asset(s.img)} alt={s.alt} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
-              <figcaption style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet }}>{s.cap}</figcaption>
+              <figcaption style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: color.quiet2 }}>{s.cap}</figcaption>
             </figure>
           ))}
         </div>
@@ -340,7 +340,7 @@ export default function RoutineSection({ sku, onPick }) {
           <ProductCard sku="d215" selected={sku === "d215"} onPick={onPick} />
         </div>
         <Panel key={sku} sku={sku} playing={playing === sku} onPlay={setPlaying} />
-        <p style={{ margin: 0, fontSize: 13, color: color.quiet, lineHeight: 1.5 }}>Use only as directed. Read and follow the current product label before use.</p>
+        <p style={{ margin: 0, fontSize: 13, color: color.quiet2, lineHeight: 1.5 }}>Use only as directed. Read and follow the current product label before use.</p>
       </div>
     </section>
   );
