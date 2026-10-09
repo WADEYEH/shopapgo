@@ -1,24 +1,10 @@
-import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./us.css";
+import { barlow, barlowCondensed } from "./fonts";
 import SiteChrome from "@/components/us/SiteChrome";
 import SiteFooter from "@/components/us/SiteFooter";
 import GtmScripts from "@/components/us/GtmScripts";
 import MetaPixel from "@/components/us/MetaPixel";
 import { SITE_URL } from "@/lib/site";
-
-const barlow = Barlow({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-barlow",
-  display: "swap",
-});
-
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-  variable: "--font-barlow-condensed",
-  display: "swap",
-});
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),

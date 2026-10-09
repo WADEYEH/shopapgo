@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { asset, routes, singleSite } from "@/lib/us/routes";
 import { guideGroups, homeLink } from "@/lib/us/navigation";
 import CartLink, { CartRow } from "@/components/us/CartLink";
+import { CheckoutFooter } from "@/components/us/SiteFooter";
 
 // The orange call to action. On the single site it is Shop, the product overview (D39), next to the cart; elsewhere
 // it scrolls to the comparison on the home page. Store pages are not Next routes, so they get plain links.
@@ -44,7 +45,8 @@ export default function SiteChrome({ children, footer }) {
   const dialog = useRef(null);
   const menuButton = useRef(null);
   const inGuides = pathname === routes.guides || pathname.startsWith(`${routes.guides}/`);
-  // Checkout keeps the shopper on the form (M1): the same header with only the logo and the cart.
+  // Checkout keeps the shopper on the form (M1): the same header with only the logo and the cart, and a footer with
+  // only the policies and Contact.
   const focused = singleSite && pathname === routes.checkout;
 
   useEffect(() => {
@@ -162,7 +164,7 @@ export default function SiteChrome({ children, footer }) {
         </nav>
       </dialog>
       {children}
-      {footer}
+      {focused ? <CheckoutFooter /> : footer}
     </MenuContext.Provider>
   );
 }

@@ -34,7 +34,7 @@ function Cell({ sku, accent, word, name, meta, cta }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
         <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 44, lineHeight: 1, color: accent, letterSpacing: ".04em" }}>{word}</span>
         <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 20, textTransform: "uppercase" }}>{name}</span>
-        <span style={{ fontSize: 12, letterSpacing: ".12em", textTransform: "uppercase", color: color.quiet }}>{meta}</span>
+        <span style={{ fontSize: 12, letterSpacing: ".12em", textTransform: "uppercase", color: color.quiet2 }}>{meta}</span>
       </div>
       <ProductCta sku={sku} placement="final" style={ctaStyle}>
         {cta}

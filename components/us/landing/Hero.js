@@ -142,7 +142,7 @@ export default function Hero() {
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ ...specNum, textTransform: "uppercase" }}>{products.d204.name}</span>
-            <span style={{ fontSize: 12, letterSpacing: ".14em", color: color.quiet, border: `1px solid ${color.border}`, padding: "3px 8px", borderRadius: 4 }}>
+            <span style={{ fontSize: 12, letterSpacing: ".14em", color: color.quiet2, border: `1px solid ${color.border}`, padding: "3px 8px", borderRadius: 4 }}>
               {products.d204.tag}
             </span>
           </div>
