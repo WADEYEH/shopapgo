@@ -8,7 +8,7 @@ import { recordAudit } from './fulfillment.js';
 export const sandboxRefundChecksEnabled = env => env.SITE_ENV === 'staging' && env.AIRWALLEX_ENV === 'demo'
   && apiBase(env) === 'https://api.sandbox.airwallex.com';
 
-export async function runSandboxRefundCheck(env,order,scenario) {
+export async function runSandboxRefundCheck(env,order,scenario,actor='admin') {
   if (!sandboxRefundChecksEnabled(env) || !allowedEmailRecipient(env,order.email)
     || order.status !== 'paid' || !order.payment_intent_id || !['above_limit','fully_refunded'].includes(scenario)) {
     return { outcome:'blocked',detail:'Only approved, paid sandbox test orders support these fixed negative checks.' };
@@ -36,6 +36,6 @@ export async function runSandboxRefundCheck(env,order,scenario) {
     result={outcome:passed ? 'rejected' : 'unverified',scenario,httpStatus:error.status,code,
       detail:passed ? 'Airwallex rejected the fixed invalid request. No refund was created.' : 'The expected rejection was not proven; review provider access and response.'};
   }
-  await recordAudit(env.DB,{orderId:order.id,actor:'admin',action:'staging.refund.check',detail:result});
+  await recordAudit(env.DB,{orderId:order.id,actor,action:'staging.refund.check',detail:result});
   return result;
 }

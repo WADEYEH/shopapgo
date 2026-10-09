@@ -17,6 +17,8 @@ const all = await migrations();
 
 // Tables that exist only in this repo: the production upgrade adds them.
 const ADDED = [
+  "admin_audit",
+  "admin_members",
   "contact_messages",
   "cron_runs",
   "customer_email_events",

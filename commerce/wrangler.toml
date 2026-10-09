@@ -127,6 +127,13 @@ AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but 
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
+# Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
+ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
+# Cloudflare Access sign-in (worker/admin-identity.js), switched on once Zero Trust is set up (docs/ops/runbook.md):
+#   ADMIN_ACCESS = "true", ACCESS_TEAM_DOMAIN = "https://<team>.cloudflareaccess.com", ACCESS_AUD = "<application audience tag>"
+# and, to keep Cloudflare's allowed-email list equal to the member list (worker/access-list.js):
+#   CLOUDFLARE_ACCOUNT_ID = "<account id>", ACCESS_LIST_ID = "<Zero Trust email list id>", secret ACCESS_LIST_API_TOKEN
+#   (wrangler secret put ACCESS_LIST_API_TOKEN --env staging; a token that can only edit Zero Trust lists).
 CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
@@ -229,6 +236,13 @@ simple = { limit = 60, period = 60 }
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
 ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
+# Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
+ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
+# Cloudflare Access sign-in (worker/admin-identity.js), switched on once Zero Trust is set up (docs/ops/runbook.md):
+#   ADMIN_ACCESS = "true", ACCESS_TEAM_DOMAIN = "https://<team>.cloudflareaccess.com", ACCESS_AUD = "<application audience tag>"
+# and, to keep Cloudflare's allowed-email list equal to the member list (worker/access-list.js):
+#   CLOUDFLARE_ACCOUNT_ID = "<account id>", ACCESS_LIST_ID = "<Zero Trust email list id>", secret ACCESS_LIST_API_TOKEN
+#   (wrangler secret put ACCESS_LIST_API_TOKEN --env production; a token that can only edit Zero Trust lists).
 # Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
@@ -237,8 +251,8 @@ META_DATASET_ID = "2606879866471418"
 # (RESEND_API_KEY + CUSTOMER_EMAIL_FROM). Turnstile (bot check) once the owner sets TURNSTILE_SITE_KEY here and the secret
 # TURNSTILE_SECRET_KEY. The receiving inbox is the owner's choice (2026-10-08).
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
-# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Admin login is
-# ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
+# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Until ADMIN_ACCESS is on, admin
+# login is ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
 # prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
 # Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),

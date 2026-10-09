@@ -11,6 +11,7 @@
   font-weight: 700;
 }
 .admin-main { max-width: 1240px; }
+.admin-whoami { color: var(--text-tertiary); font-size: 13px; overflow-wrap: anywhere; }
 .admin-title { font-size: clamp(36px, 6vw, 64px); }
 
 .admin-toolbar { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; }
@@ -101,3 +102,26 @@
 .admin-message__head a { color: var(--accent); overflow-wrap: anywhere; }
 .admin-message__head small { color: var(--text-quiet); }
 .admin-message__text { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary); line-height: 1.55; }
+
+/* Activity and Members (team.js) */
+.admin-filters { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; justify-self: stretch; }
+.admin-filters .field { flex: 1 1 180px; max-width: 280px; }
+.admin-filters .btn { min-height: 44px; }
+.admin-activity-list { list-style: none; margin: 0; padding: 0; }
+.admin-activity { padding: 14px 0; border-top: 1px solid var(--border-hairline); overflow-wrap: anywhere; }
+.admin-activity .admin-message__head a { color: var(--accent); }
+.admin-activity p { margin: 6px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.admin-activity__who { color: var(--text-tertiary); }
+.admin-activity__why { font-style: italic; }
+[data-admin-members] { display: grid; gap: 16px; justify-self: stretch; }
+.admin-member { padding: 14px 0; border-top: 1px solid var(--border-hairline); }
+.admin-member__change summary, .admin-member-former summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; color: var(--accent); }
+.admin-member__controls { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 12px 16px; align-items: end; margin-top: 8px; }
+.admin-member__controls .admin-mcf__actions { grid-column: 1 / -1; margin-top: 0; }
+.admin-member-add { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr) auto; gap: 12px 16px; align-items: end; }
+.admin-members__sync { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+.admin-subhead { margin: 8px 0 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-tertiary); }
+@media (max-width: 720px) {
+  .admin-member__controls, .admin-member-add { grid-template-columns: minmax(0, 1fr); }
+  .admin-filters .field { max-width: none; }
+}

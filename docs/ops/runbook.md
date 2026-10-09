@@ -19,6 +19,7 @@
 | 新增数据库变更 | 新增一个编号迁移档，只增不改（第 7 节） | 工程 | — |
 | 网站出错 | Workers Issues 收集错误（第 8 节） | 自动 | — |
 | 排程停了 | 健康检查服务没收到心跳就寄信（第 9 节） | 自动 | 最慢 15 分钟内 |
+| 加人、移除后台成员 | 后台「Members」（拥有者）；打开 Cloudflare Access 的步骤见第 12 节 | 拥有者 | 1 分钟 |
 
 ```mermaid
 flowchart LR
@@ -195,6 +196,37 @@ Amazon 出货服务没有测试环境，staging 的订单如果真的送出去�
 | 出货快一点 | staging 的设定加 `FAKE_MCF_SHIP_MINUTES = "1"` 后重新部署 | 1 分钟后出货 |
 
 安全设计：`MCF_FAKE` 只有在 `SITE_ENV = "staging"` 时才有效；如果有人在正式环境或本机设了它，**所有送单都停止**（不会改送真的 Amazon），后台显示原因。CI 检查正式环境的设定里没有 `MCF_FAKE`。
+
+---
+
+## 12. 后台登录：成员名单与 Cloudflare Access（PR 3-2）
+
+**现在的状态**：成员名单、成员页、全站操作纪录都已经在用；登录还是共用帐密（staging 另可用网站的 Basic 登录）。共用帐密登录的人算「拥有者」，操作纪录记在那组帐号的 email 下。第一位拥有者是 `ADMIN_OWNER_EMAIL`（wadeyeh@apgo.com.tw），第一次打开成员页时自动建立。
+
+**规则**（M9 §1）：
+- 拥有者：所有功能，加上管理成员；成员：日常操作，看不到成员页。
+- 最后一位拥有者不能被移除，也不能改成成员。
+- 每次加人、改角色、移除都写进操作纪录（谁、何时、改前改后、原因），并寄信给所有拥有者。
+- 打开 Access 之后，后台每个请求都会重新查名单：移除的人下一个动作就进不来，不用等登录过期。
+
+**打开 Cloudflare Access 登录**（你能登录 Cloudflare 后台时一起做，约 15 分钟；先做 staging，切换时再做正式环境）：
+
+| # | 在哪里 | 做什么 |
+|---|---|---|
+| 1 | Cloudflare → Zero Trust（第一次进入会请你选 team 名称和方案） | team 名称例如 `apgo`，登录网址就是 `apgo.cloudflareaccess.com`；方案选 Free（50 人以内免费） |
+| 2 | Zero Trust → Settings → Authentication | 登录方式加 Google；内建的「One-time PIN」（email 验证码）保留，给没有 Google 帐号的人用 |
+| 3 | Zero Trust → Reusable components → Lists → Create list | 类型 **Emails**，名称 `apgo-backoffice-members`，先放 wadeyeh@apgo.com.tw。复制名单的 ID |
+| 4 | Zero Trust → Access controls → Applications → Add → Self-hosted | 网域 `admin-staging.shopapgo.com`；Session 24 小时；Policy：Allow，Include「Emails in list」选第 3 步的名单。存好后复制 **Application Audience (AUD) Tag** |
+| 5 | My Profile → API Tokens → Create Token → Custom | 只给「Zero Trust 名单编辑」一项权限（画面上的名称我会在旁边确认），只限公司帐号；名称例如 `backoffice-member-list` |
+| 6 | 终端机（我打指令，金钥由你贴上） | `npx wrangler secret put ACCESS_LIST_API_TOKEN --env staging` |
+| 7 | 我 | 在 `wrangler.toml` 的 staging 设定加 `ADMIN_ACCESS = "true"`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`CLOUDFLARE_ACCOUNT_ID`、`ACCESS_LIST_ID`（都不是密钥），部署 staging |
+| 8 | 你和一位同事 | 你用 Google 登录 admin-staging，应该看得到成员页；同事（还不在名单）应该被挡下；你在成员页加他，他再试应该进得来；移除后他下一个动作就被挡下 |
+
+打开之后，共用帐密和 staging 的网站登录都不再能进后台；`ADMIN_TOKEN` 只给脚本用（角色是成员，不能管理成员）。
+
+**技术备注**：Cloudflare 有一个直接把登录身分交给 Worker 的功能（`ctx.access`），但它不支援同时提供网页档案的 Worker（我们就是），所以 Worker 自己验证 Access 送来的登录凭证：用 team 的公开金钥验签章，比对 AUD、发行者和有效时间。这是 Cloudflare 文件建议的标准做法。
+
+**名单同步失败时**：成员页会显示「Cloudflare list not updated」和原因，按「Update Cloudflare list now」重试。就算同步失败，后台本身仍然只认名单上的人（移除的人一样进不来），只是 Cloudflare 那层可能还放他到登录画面。
 
 ---
 

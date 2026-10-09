@@ -1,13 +1,20 @@
 // Protected order back office: /admin/ (static page) and /admin/api/* (JSON). The API
 // lives under /admin/ so the browser's Basic-auth credentials cover both.
 //
-// Auth (see worker/admin-auth.js): browsers get the native Basic-auth prompt.
-// Primary: username = ADMIN_LOGIN_EMAIL, password = ADMIN_LOGIN_PASSWORD.
-// Fallback: ADMIN_TOKEN (>= 16 chars) as Bearer, or as the Basic password (any username).
-// Staging may also accept the website Basic login (ADMIN_ACCEPT_SITE_BASIC). If neither
-// the login pair nor a long-enough ADMIN_TOKEN is configured, everything answers 503.
+// Who may use it (worker/admin-identity.js): with ADMIN_ACCESS="true", Cloudflare Access signs people in and only
+// active members (worker/members.js) get in; until then the shared login (ADMIN_LOGIN_EMAIL / ADMIN_LOGIN_PASSWORD,
+// browsers get the native Basic prompt), ADMIN_TOKEN for scripts, and on staging the website Basic login. Every
+// action is recorded under the signed-in person (order_audit for orders, admin_audit for the rest; worker/activity.js).
 //
-// Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync) need the same credentials plus browser-CSRF
+//   GET  /admin/api/me                       who is signed in, and the role
+//   GET  /admin/api/activity                 the site-wide activity log (?actor=&from=&to=&cursor=)
+//   GET  /admin/api/members                  owners only: members and the Cloudflare list sync status
+//   POST /admin/api/members                  owners only: add { email, role, reason }
+//   POST /admin/api/members/role             owners only: { email, role, reason }
+//   POST /admin/api/members/remove           owners only: { email, reason }
+//   POST /admin/api/members/sync             owners only: copy the list to Cloudflare Access again
+//
+// Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync, members) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
 // application/json (forces a CORS preflight for cross-site pages), and a request that
 // carries Origin / Sec-Fetch-Site must be same-origin. Scripts using a Bearer token
@@ -19,8 +26,11 @@ import { FULFILLMENT_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, get
 import { FulfillmentError, markShipped, validateShipment, recordAudit } from "./fulfillment.js";
 import { processMessageJob, retryCustomerEmail } from "./customer-email.js";
 import { validEmailKind } from './email-delivery.js';
-import { siteBasicOpensAdmin } from "./staging.js";
-import { adminConfigured, matchesAdminLogin, matchesAdminToken, MIN_ADMIN_TOKEN_LENGTH } from "./admin-auth.js";
+import { MIN_ADMIN_TOKEN_LENGTH } from "./admin-auth.js";
+import { accessMode, resolveAdmin } from "./admin-identity.js";
+import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember } from "./members.js";
+import { accessListStatus, syncAccessList } from "./access-list.js";
+import { activityActors, listActivity } from "./activity.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
@@ -30,27 +40,26 @@ import { listContactMessages } from "./contact.js";
 export { MIN_ADMIN_TOKEN_LENGTH };
 
 const NO_INDEX = { "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "no-store" };
-const CHALLENGE = { "WWW-Authenticate": 'Basic realm="APGO orders", charset="UTF-8"' };
 
 // Returns null when the request may proceed, otherwise the response to send.
 export async function requireAdmin(request, env) {
-  if (!adminConfigured(env)) {
-    return fail(503, "admin_not_configured", "The order back office is not configured.", NO_INDEX);
-  }
-  if (await matchesAdminLogin(request, env)) return null;
-  if (await matchesAdminToken(request, env)) return null;
-  // Staging only (ADMIN_ACCEPT_SITE_BASIC): the website's Basic user + password is accepted on the admin host too.
-  if (await siteBasicOpensAdmin(request, env)) return null;
-  return fail(401, "unauthorized", "Authentication required.", { ...NO_INDEX, ...CHALLENGE });
+  return (await resolveAdmin(request, env)).response ?? null;
 }
 
 export const isAdminPath = (pathname) => pathname === "/admin" || pathname.startsWith("/admin/");
 
+// The page itself: a refusal other than the sign-in prompt is shown as a short sentence, not JSON.
+async function pageRefusal(response) {
+  if (response.status === 401) return response;
+  const message = (await response.clone().json().catch(() => null))?.error?.message ?? "The back office is unavailable.";
+  return new Response(`${message}\n`, { status: response.status, headers: { "Content-Type": "text/plain; charset=utf-8", ...NO_INDEX } });
+}
+
 export async function handleAdmin(request, env) {
   const { pathname } = new URL(request.url);
   if (pathname.startsWith("/admin/api/")) return handleAdminApi(request, env, pathname);
-  const denied = await requireAdmin(request, env);
-  if (denied) return denied;
+  const auth = await resolveAdmin(request, env);
+  if (auth.response) return pageRefusal(auth.response);
   const url = new URL(request.url);
   if (url.pathname === "/admin") return Response.redirect(`${url.origin}/admin/`, 301);
   const response = await env.ASSETS.fetch(request);
@@ -88,25 +97,25 @@ async function readJsonObject(request) {
 }
 
 // POST .../mcf/submit: (re)send a paid order to Amazon MCF. Needs the same admin + CSRF guards as shipping.
-async function handleMcfSubmit(request, env, orderId) {
+async function handleMcfSubmit(request, env, orderId, actor) {
   const blocked = csrfProblem(request);
   if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
   if (!(await readJsonObject(request))) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
   const row = await getOrder(env.DB, orderId);
   if (!row) return fail(404, "not_found", "Order not found.", NO_INDEX);
   if (row.status !== "paid") return fail(409, "not_paid", "Only paid orders can be sent to MCF.", NO_INDEX);
-  const result = await submitOrderToMcf(env, row, { actor: "admin" });
+  const result = await submitOrderToMcf(env, row, { actor: actor.id });
   return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
 }
 
 // POST .../mcf/sync (one order) and POST /admin/api/mcf/sync (every order waiting on Amazon).
-async function handleMcfSync(request, env, orderId) {
+async function handleMcfSync(request, env, orderId, actor) {
   const blocked = csrfProblem(request);
   if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
   if (!(await readJsonObject(request))) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
-  if (!orderId) return json({ summary: await syncAllMcf(env, { actor: "admin" }) }, 200, NO_INDEX);
+  if (!orderId) return json({ summary: await syncAllMcf(env, { actor: actor.id }) }, 200, NO_INDEX);
   if (!(await getOrder(env.DB, orderId))) return fail(404, "not_found", "Order not found.", NO_INDEX);
-  const result = await syncMcfOrder(env, orderId, { actor: "admin" });
+  const result = await syncMcfOrder(env, orderId, { actor: actor.id });
   return json(
     { result: { outcome: result.outcome, shipped: Boolean(result.shipped), email: result.email ?? null, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) },
     200,
@@ -114,7 +123,7 @@ async function handleMcfSync(request, env, orderId) {
   );
 }
 
-async function handleShip(request, env, orderId) {
+async function handleShip(request, env, orderId, actor) {
   const blocked = csrfProblem(request);
   if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
   let body;
@@ -127,7 +136,7 @@ async function handleShip(request, env, orderId) {
   try {
     const shipment = validateShipment(body);
     if (await refundHold(env.DB, orderId)) return fail(409, 'refund_hold', 'Refund registered; review fulfillment in Airwallex and Amazon before shipping.', NO_INDEX);
-    const order = await markShipped(env.DB, orderId, shipment, { actor: "admin" });
+    const order = await markShipped(env.DB, orderId, shipment, { actor: actor.id });
     // Emailed after the shipment is saved; a failure is recorded and never undoes it.
     const email = await processMessageJob(env, (await getOrder(env.DB, orderId)) ?? order, 'shipment');
     return json({ order: await adminOrderView(env, orderId), email: { status: email.status } }, 200, NO_INDEX);
@@ -137,9 +146,51 @@ async function handleShip(request, env, orderId) {
   }
 }
 
+// Members and the activity log. Returns null when the path is not one of theirs.
+async function handleTeamApi(request, env, pathname, actor) {
+  const url = new URL(request.url);
+  if (pathname === "/admin/api/me" && request.method === "GET") {
+    return json({ actor: { id: actor.id, email: actor.email, role: actor.role, via: actor.via }, accessSignIn: accessMode(env) }, 200, NO_INDEX);
+  }
+  if (pathname === "/admin/api/activity" && request.method === "GET") {
+    const page = await listActivity(env.DB, {
+      actor: url.searchParams.get("actor") || null,
+      from: url.searchParams.get("from") || null,
+      to: url.searchParams.get("to") || null,
+      cursor: url.searchParams.get("cursor") || null,
+    });
+    return json({ ...page, actors: url.searchParams.get("cursor") ? undefined : await activityActors(env.DB) }, 200, NO_INDEX);
+  }
+  if (!pathname.startsWith("/admin/api/members")) return null;
+  if (actor.role !== "owner") return fail(403, "owner_only", "Only an owner can manage members.", NO_INDEX);
+  if (pathname === "/admin/api/members" && request.method === "GET") {
+    await ensureOwner(env);
+    return json({ members: await listMembers(env.DB), accessSignIn: accessMode(env), accessList: await accessListStatus(env) }, 200, NO_INDEX);
+  }
+  const action = { "/admin/api/members": addMember, "/admin/api/members/role": changeRole, "/admin/api/members/remove": removeMember }[pathname];
+  if (!action && pathname !== "/admin/api/members/sync") return fail(404, "not_found", "Not found.", NO_INDEX);
+  if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+  const blocked = csrfProblem(request);
+  if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+  const body = await readJsonObject(request);
+  if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+  if (!action) return json({ sync: await syncAccessList(env, { actor }), accessList: await accessListStatus(env) }, 200, NO_INDEX);
+  try {
+    const result = await action(env, actor, body);
+    return json({ ...result, members: await listMembers(env.DB), accessList: await accessListStatus(env) }, 200, NO_INDEX);
+  } catch (error) {
+    if (error instanceof MemberError) return fail(error.status, error.code, error.message, NO_INDEX);
+    throw error;
+  }
+}
+
 export async function handleAdminApi(request, env, pathname) {
-  const denied = await requireAdmin(request, env);
-  if (denied) return denied;
+  const auth = await resolveAdmin(request, env);
+  if (auth.response) return auth.response;
+  const { actor } = auth;
+
+  const team = await handleTeamApi(request, env, pathname, actor);
+  if (team) return team;
 
   const url = new URL(request.url);
   const sandboxCheck = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refunds\/sandbox-check$/);
@@ -154,7 +205,7 @@ export async function handleAdminApi(request, env, pathname) {
     if (!ORDER_ID_PATTERN.test(id)) return fail(404,'not_found','Order not found.',NO_INDEX);
     const order = await getOrder(env.DB,id);
     if (!order) return fail(404,'not_found','Order not found.',NO_INDEX);
-    const result = await runSandboxRefundCheck(env,order,body.scenario);
+    const result = await runSandboxRefundCheck(env,order,body.scenario,actor.id);
     return json({result,order:await adminOrderView(env,id)},result.outcome === 'blocked' ? 409 : 200,NO_INDEX);
   }
   const emailRetry = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/emails\/([^/]+)\/retry$/);
@@ -170,7 +221,7 @@ export async function handleAdminApi(request, env, pathname) {
     const order = await getOrder(env.DB, id);
     if (!order) return fail(404, "not_found", "Order not found.", NO_INDEX);
     const email = await retryCustomerEmail(env, order, kind);
-    await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: "admin", detail: { kind, result: email.status } });
+    await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: actor.id, detail: { kind, result: email.status } });
     return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
   const ship = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/ship$/);
@@ -196,18 +247,18 @@ export async function handleAdminApi(request, env, pathname) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
     const id = decodeURIComponent(ship[1]);
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
-    return handleShip(request, env, id);
+    return handleShip(request, env, id, actor);
   }
   const mcf = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync)$/);
   if (mcf) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
     const id = decodeURIComponent(mcf[1]);
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
-    return mcf[2] === "submit" ? handleMcfSubmit(request, env, id) : handleMcfSync(request, env, id);
+    return mcf[2] === "submit" ? handleMcfSubmit(request, env, id, actor) : handleMcfSync(request, env, id, actor);
   }
   if (pathname === "/admin/api/mcf/sync") {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
-    return handleMcfSync(request, env, null);
+    return handleMcfSync(request, env, null, actor);
   }
   if (request.method !== "GET") return fail(405, "method_not_allowed", "Method not allowed.", { ...NO_INDEX, Allow: "GET" });
 
