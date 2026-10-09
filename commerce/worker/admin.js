@@ -16,6 +16,7 @@
 //   POST /admin/api/orders/:id/confirm       a review order is fine: { reason } (worker/order-core.js, T5)
 //   POST /admin/api/orders/:id/cancel        { reason: customer_request | out_of_stock | ... | other, note } (T6, T8, T10)
 //   POST /admin/api/orders/:id/address       in the cooling-off period: { shipping, reason, noUnit }
+//   GET  /admin/api/checkouts                unpaid checkouts (?status=open|expired|all&q=&before=; D36, M9-22)
 //
 // Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync, members) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
@@ -36,6 +37,7 @@ import { accessListStatus, syncAccessList } from "./access-list.js";
 import { activityActors, listActivity } from "./activity.js";
 import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView } from "./order-core.js";
 import { runAfterPaid } from "./after-payment.js";
+import { listCheckouts } from "./checkouts.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
 import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
@@ -311,6 +313,13 @@ export async function handleAdminApi(request, env, pathname) {
   if (intentLookup) return lookupAirwallexIntent(env, intentLookup[1], NO_INDEX);
   const paypalLookup = pathname.match(PAYPAL_ORDER_LOOKUP);
   if (paypalLookup) return lookupPaypalOrder(env, paypalLookup[1], NO_INDEX);
+
+  // Unpaid checkouts (D36): not orders, so not in the order list, counts or reports.
+  if (pathname === "/admin/api/checkouts") {
+    const status = url.searchParams.get("status") || "all";
+    if (!["all", "open", "expired"].includes(status)) return fail(400, "invalid_status", "Unknown status.", NO_INDEX);
+    return json(await listCheckouts(env.DB, { status, q: url.searchParams.get("q") || "", before: url.searchParams.get("before") || null }), 200, NO_INDEX);
+  }
 
   // Messages from the Contact us form (worker/contact.js), newest first.
   if (pathname === "/admin/api/contact-messages") {

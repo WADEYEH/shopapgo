@@ -329,17 +329,19 @@ async function handlePaypalCapture(request, env, services) {
   }
   const payment = await env.DB.prepare("SELECT status FROM checkout_payments WHERE provider = 'paypal' AND ref = ?").bind(paypalId).first();
   // Already paid with this PayPal order: report it (a return page reload, a double click).
-  if (storeOrder.status !== "pending" && storeOrder.payment_intent_id === paypalId) {
+  const paidByThis = storeOrder.payment_intent_id === paypalId
+    && (payment?.status === "succeeded" || (!payment && ["paid", "review"].includes(storeOrder.status)));
+  if (paidByThis) {
     return json({ orderId: storeOrder.id, status: storeOrder.status, paypal: { id: paypalId, status: "COMPLETED" }, eventIds: eventIdsFor(storeOrder.id) });
   }
-  // Never capture a PayPal order that was replaced, or one for a checkout that is paid another way or expired: no
-  // second charge to refund later (M3-13).
-  if (payment?.status === "voided") return fail(409, "payment_replaced", "This PayPal payment was replaced by a newer one. Please choose PayPal again.");
+  // Never capture for a checkout that is paid another way or expired, nor a PayPal order that was replaced: no second
+  // charge to refund later (M3-13).
   if (storeOrder.status !== "pending") {
     return storeOrder.status === "expired"
       ? fail(409, "checkout_expired", "This checkout expired. Your cart is still here; please start the payment again.")
       : fail(409, "checkout_closed", "This order is already paid.");
   }
+  if (payment?.status === "voided") return fail(409, "payment_replaced", "This PayPal payment was replaced by a newer one. Please choose PayPal again.");
 
   const result = await captureAndSettle(env, storeOrder, paypalId, services);
   if (result.error) return result.error;

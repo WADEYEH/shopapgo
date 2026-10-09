@@ -66,6 +66,17 @@
         <div data-admin-messages aria-live="polite"></div>
       </section>
 
+      <section class="admin-messages" aria-labelledby="checkouts-heading" data-admin-checkouts-section>
+        <h2 class="heading-guide-h2" id="checkouts-heading">Unfinished checkouts</h2>
+        <p class="body body--sm">Checkouts nobody has paid for yet; they expire after 24 hours and their personal details are deleted after 30 days. They are not orders, so they are not in the list above. No reminder emails are sent.</p>
+        <form class="admin-filters" data-admin-checkouts-filter role="search">
+          <div class="field"><label class="field__label" for="checkouts-status">Status</label><span class="select"><select id="checkouts-status" name="status"><option value="all">All</option><option value="open">Open</option><option value="expired">Expired</option></select></span></div>
+          <div class="field"><label class="field__label" for="checkouts-q">Email</label><input id="checkouts-q" type="search" name="q" autocomplete="off" placeholder="Part of an email"></div>
+          <button class="btn btn--sm" type="submit">Show checkouts</button>
+        </form>
+        <div data-admin-checkouts aria-live="polite"></div>
+      </section>
+
       <section class="admin-messages" aria-labelledby="activity-heading" data-admin-activity-section hidden>
         <h2 class="heading-guide-h2" id="activity-heading">Activity</h2>
         <p class="body body--sm">Everything done in the back office and by the system: who, when, what and why. Newest first.</p>

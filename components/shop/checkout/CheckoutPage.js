@@ -13,6 +13,7 @@ import {
   checkContact,
   checkShipping,
   clearCheckoutDraft,
+  clearCheckoutId,
   dropInOptions,
   dropInUpdate,
   formatUsPhone,
@@ -20,9 +21,11 @@ import {
   paypalOrderPayload,
   paypalSdkUrl,
   readCheckoutDraft,
+  readCheckoutId,
   readPaypalOrder,
   resolveDraftStep,
   shippingComplete,
+  storeCheckoutId,
   storePaypalOrder,
   suggestEmail,
   walletOptions,
@@ -397,7 +400,15 @@ export default function CheckoutPage() {
     const fresh = s.session && s.sessionKey === key && Date.now() - s.session.createdAt < SESSION_MAX_AGE_MS;
     if (fresh) return s.session;
 
-    const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, attribution: readAttribution() } });
+    const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, checkoutId: readCheckoutId(), attribution: readAttribution() } });
+    storeCheckoutId(session.orderId);
+    // This checkout was already paid (another tab, an earlier try) or its payment is processing: show the order.
+    if (session.settled) {
+      s.placing = true;
+      window.history.replaceState(null, "", orderUrl(session.orderId));
+      await showOrder(session.orderId);
+      throw Object.assign(new Error("This checkout is already paid."), { settled: true });
+    }
     s.session = { ...session, createdAt: Date.now() };
     s.sessionKey = key;
     showQuote(session.quote);
@@ -582,8 +593,10 @@ export default function CheckoutPage() {
         method: s.method,
         addressReview: s.addressReview,
         attribution: readAttribution(),
+        checkoutId: readCheckoutId(),
       }),
     });
+    storeCheckoutId(data.orderId);
     storePaypalOrder(data);
     s.paypal.order = data;
     if (data.quote) showQuote(data.quote);
@@ -664,6 +677,13 @@ export default function CheckoutPage() {
               await onPaypalApprove(data);
             } catch (error) {
               setPlacing(false);
+              // Paid another way meanwhile (another tab): PayPal was not charged; show the order instead.
+              const orderId = s.paypal.order?.orderId ?? readPaypalOrder()?.orderId;
+              if (error.code === "checkout_closed" && orderId) {
+                window.history.replaceState(null, "", orderUrl(orderId));
+                await showOrder(orderId);
+                return;
+              }
               showPaymentMessage("warning", "Payment not completed", error.message || "Payment could not be completed.");
             }
           },
@@ -734,7 +754,7 @@ export default function CheckoutPage() {
     let result = null;
     for (let attempt = 0; attempt < ORDER_POLL_ATTEMPTS; attempt += 1) {
       result = await api(`/api/orders/${encodeURIComponent(orderId)}`);
-      const failedAttempt = result.paymentStatus === "REQUIRES_PAYMENT_METHOD" && attempt > 0;
+      const failedAttempt = (result.paymentStatus === "REQUIRES_PAYMENT_METHOD" && attempt > 0) || result.paymentStatus === "CANCELLED";
       if (result.status !== "pending" || failedAttempt) return result;
       await sleep(ORDER_POLL_INTERVAL_MS);
     }
@@ -772,13 +792,15 @@ export default function CheckoutPage() {
     setSummary(result);
     if (result.status === "paid") {
       clearCheckoutDraft();
+      clearCheckoutId();
       clearCart();
       trackPurchaseOnce(result);
       setOrder({ kind: "paid", order: result });
     } else if (result.status === "review") {
       clearCheckoutDraft();
+      clearCheckoutId();
       setOrder({ kind: "review", order: result });
-    } else if (result.status === "cancelled" || result.paymentStatus === "REQUIRES_PAYMENT_METHOD") {
+    } else if (["cancelled", "expired"].includes(result.status) || ["REQUIRES_PAYMENT_METHOD", "CANCELLED"].includes(result.paymentStatus)) {
       setTitle("Payment not completed.");
       setOrder({ kind: "failed", order: result });
     } else {

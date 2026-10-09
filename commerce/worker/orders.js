@@ -254,7 +254,11 @@ export function publicOrder(order) {
 
 // ---------- Admin views (only ever returned behind admin auth) ----------
 
-export const ORDER_STATUSES = ["pending", "paid", "review", "cancelled"];
+// The order list shows orders only (D36, M9-22): paid, review, and cancelled after payment. Unpaid checkouts (pending,
+// expired, or closed before any payment) are in the Unfinished checkouts list (worker/checkouts.js listCheckouts).
+export const ORDER_STATUSES = ["paid", "review", "cancelled"];
+const IS_ORDER = `(o.status IN ('paid', 'review') OR (o.status = 'cancelled' AND (o.paid_at IS NOT NULL
+  OR EXISTS (SELECT 1 FROM order_cancellations c WHERE c.order_id = o.id))))`;
 
 const ADMIN_LIST_LIMIT = 100;
 
@@ -280,7 +284,7 @@ function adminSummary(row) {
 }
 
 export async function listOrders(db, { status, fulfillment, q, limit = 50, before } = {}) {
-  const clauses = [];
+  const clauses = [IS_ORDER];
   const args = [];
   if (status && ORDER_STATUSES.includes(status)) {
     clauses.push("o.status = ?");
@@ -299,7 +303,7 @@ export async function listOrders(db, { status, fulfillment, q, limit = 50, befor
     args.push(String(before));
   }
   const pageSize = Math.max(1, Math.min(ADMIN_LIST_LIMIT, Number(limit) || 50));
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const where = `WHERE ${clauses.join(" AND ")}`;
   const { results } = await db
     .prepare(
       `SELECT o.*, n.status AS notification_status,
@@ -319,7 +323,7 @@ export async function listOrders(db, { status, fulfillment, q, limit = 50, befor
 }
 
 export async function orderCounts(db) {
-  const { results } = await db.prepare("SELECT status, COUNT(*) AS n FROM orders GROUP BY status").all();
+  const { results } = await db.prepare(`SELECT o.status, COUNT(*) AS n FROM orders o WHERE ${IS_ORDER} GROUP BY o.status`).all();
   const counts = Object.fromEntries(ORDER_STATUSES.map((status) => [status, 0]));
   for (const row of results) counts[row.status] = row.n;
   return counts;

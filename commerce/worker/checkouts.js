@@ -143,6 +143,63 @@ export async function voidPayments(env, checkoutId, { provider = null, keep = nu
   return voided;
 }
 
+// ---------- the Unfinished checkouts list (M9-22, I14) ----------
+
+const CHECKOUT_ROWS = `(o.status IN ('pending', 'expired') OR (o.status = 'cancelled' AND o.paid_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM order_cancellations c WHERE c.order_id = o.id)))`;
+const LIST_MAX = 100;
+
+// Unpaid checkouts, newest first: { checkouts, nextBefore, counts }. status: open | expired | all. q: part of an email.
+// No reminder emails are sent from here (I14).
+export async function listCheckouts(db, { status = "all", q = "", before = null, limit = 50 } = {}) {
+  const clauses = [CHECKOUT_ROWS];
+  const args = [];
+  if (status === "open") clauses.push("o.status = 'pending'");
+  else if (status === "expired") clauses.push("o.status != 'pending'");
+  const needle = String(q ?? "").trim().toLowerCase().slice(0, 100);
+  if (needle) {
+    clauses.push("instr(lower(o.email), ?) > 0");
+    args.push(needle);
+  }
+  if (before) {
+    clauses.push("o.created_at < ?");
+    args.push(String(before));
+  }
+  const size = Math.max(1, Math.min(LIST_MAX, Number(limit) || 50));
+  const { results } = await db
+    .prepare(
+      `SELECT o.*,
+         (SELECT f.failure_code FROM order_payment_failures f WHERE f.order_id = o.id ORDER BY f.occurred_at DESC LIMIT 1) AS failure_code,
+         (SELECT f.message FROM order_payment_failures f WHERE f.order_id = o.id ORDER BY f.occurred_at DESC LIMIT 1) AS failure_message,
+         (SELECT COUNT(*) FROM order_payment_failures f WHERE f.order_id = o.id) AS failures
+       FROM orders o WHERE ${clauses.join(" AND ")} ORDER BY o.created_at DESC LIMIT ?`,
+    )
+    .bind(...args, size + 1)
+    .all();
+  const page = results.slice(0, size);
+  const counts = await db.prepare(`SELECT SUM(CASE WHEN o.status = 'pending' THEN 1 ELSE 0 END) AS open, SUM(CASE WHEN o.status != 'pending' THEN 1 ELSE 0 END) AS expired FROM orders o WHERE ${CHECKOUT_ROWS}`).first();
+  return {
+    checkouts: page.map((row) => {
+      const lines = JSON.parse(row.lines_json || "[]");
+      return {
+        id: row.id,
+        status: row.status === "pending" ? "open" : "expired",
+        email: row.purged_at ? null : row.email,
+        state: JSON.parse(row.shipping_json || "{}").state ?? null,
+        items: lines.map((line) => ({ sku: line.sku, name: line.name, qty: line.qty })),
+        currency: row.currency,
+        totalCents: row.total_cents,
+        createdAt: row.created_at,
+        expiredAt: row.expired_at ?? null,
+        purged: Boolean(row.purged_at),
+        lastFailure: row.failures ? { code: row.failure_code || null, message: row.failure_message || null, count: row.failures } : null,
+      };
+    }),
+    nextBefore: results.length > size ? page.at(-1).created_at : null,
+    counts: { open: counts?.open ?? 0, expired: counts?.expired ?? 0 },
+  };
+}
+
 // ---------- a second successful payment (C11, M5-08) ----------
 
 // Refunds in full a payment that succeeded on a checkout that is already paid with another one. Claimed once per
