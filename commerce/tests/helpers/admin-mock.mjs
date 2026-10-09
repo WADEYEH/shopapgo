@@ -39,7 +39,10 @@ const summary = (o) => ({
   itemCount: o.lines.reduce((n, l) => n + l.qty, 0), currency: o.currency, totalCents: o.totalCents,
   createdAt: o.createdAt, paidAt: o.paidAt, notification: o.notification?.status ?? null,
   fulfillmentStatus: o.fulfillment ? "shipped" : "unfulfilled", shippedAt: o.fulfillment?.shippedAt ?? null,
+  disputed: openDisputes(o).length > 0, disputeDueAt: openDisputes(o).map((d) => d.dueAt).sort()[0] ?? null,
 });
+// Disputes as worker/disputes.js disputesForOrder() returns them.
+const openDisputes = (o) => (o.disputes ?? []).filter((d) => d.status === "open");
 
 // MCF block as worker/mcf.js mcfView() returns it. mode: off | not_configured | ready.
 const mcfBlock = (o, mcf) => {
@@ -79,6 +82,8 @@ const view = (o, mcf = { mode: "off" }) => ({
   ...o,
   fulfillmentStatus: o.fulfillment ? "shipped" : "unfulfilled",
   fulfillment: o.fulfillment ?? null,
+  paymentProvider: o.paymentProvider ?? (o.paymentIntentId ? "airwallex" : null),
+  disputes: o.disputes ?? [],
   emails: o.emails ?? [],
   audit: o.audit ?? [],
   mcf: mcfBlock(o, mcf),
@@ -146,7 +151,7 @@ function teamMock(team, writes) {
 // orderCore: { [orderId]: { stage, coolingOffEndsAt, holds, payment } } adds the order core block to those orders;
 // orderActionError: { status, code, message } makes the next confirm / cancel / address fail like the Worker would.
 // checkouts: the Unfinished checkouts list (worker/checkouts.js listCheckouts shape).
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [] } = {}) {
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {} } = {}) {
   const requests = [];
   requests.writes = [];
   requests.mcf = [];
@@ -157,6 +162,8 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
   for (const [id, failures] of Object.entries(paymentFailures)) orders.find((o) => o.id === id).paymentFailures = structuredClone(failures);
   for (const [id, record] of Object.entries(mcfRecords)) orders.find((o) => o.id === id).mcfRecord = structuredClone(record);
   for (const [id, core] of Object.entries(orderCore)) orders.find((o) => o.id === id).core = structuredClone(core);
+  for (const [id, list] of Object.entries(disputes)) orders.find((o) => o.id === id).disputes = structuredClone(list);
+  for (const [id, provider] of Object.entries(providers)) orders.find((o) => o.id === id).paymentProvider = provider;
   requests.orderActions = [];
   let actionError = orderActionError;
   let submitFails = mcf.submitFails ?? 0;
@@ -264,10 +271,12 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     if (url.pathname === "/admin/api/orders") {
       const filter = url.searchParams.get("status");
       const fulfillment = url.searchParams.get("fulfillment");
+      const issue = url.searchParams.get("issue");
       const q = (url.searchParams.get("q") || "").toLowerCase();
       const rows = orders.filter(
         (o) =>
           (!filter || o.status === filter) &&
+          (!issue || openDisputes(o).length > 0) &&
           (!fulfillment || (fulfillment === "shipped" ? Boolean(o.fulfillment) : o.status === "paid" && !o.fulfillment)) &&
           (!q || JSON.stringify(o).toLowerCase().includes(q)),
       );
@@ -277,7 +286,10 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
         unfulfilled: orders.filter((o) => o.status === "paid" && !o.fulfillment).length,
         shipped: orders.filter((o) => o.fulfillment).length,
       };
-      return reply(200, { orders: rows.map(summary), nextBefore: null, counts, fulfillmentCounts });
+      const issueCounts = { disputes: orders.filter((o) => openDisputes(o).length > 0).length };
+      const listed = rows.map(summary);
+      if (issue) listed.sort((a, b) => String(a.disputeDueAt).localeCompare(String(b.disputeDueAt)));
+      return reply(200, { orders: listed, nextBefore: null, counts, fulfillmentCounts, issueCounts });
     }
     const match = url.pathname.match(/^\/admin\/api\/orders\/(.+)$/);
     const order = match && orders.find((o) => o.id === decodeURIComponent(match[1]));

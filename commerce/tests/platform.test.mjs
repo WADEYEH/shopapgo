@@ -181,7 +181,9 @@ test("staging order: payment sends it to the fake, the sync marks it shipped wit
     assert.deepEqual(sent.items.map((item) => item.sellerSku).sort(), ["FAKE-D204", "FAKE-D215"]);
     assert.equal(sent.fulfillment_action, "Ship");
 
-    // The staging cron (MCF_SYNC_CRON=true) picks it up.
+    // The staging cron (MCF_SYNC_CRON=true) picks it up. (Today's payment check already ran: tests/payment-events.test.mjs
+    // covers it, and it would ask Airwallex, which this world does not answer.)
+    db.raw.prepare("INSERT INTO ops_state (key, value, updated_at) VALUES ('payments.reconciled_at', ?, ?)").run(new Date().toISOString(), new Date().toISOString());
     const ctx = ctxStub();
     await worker.scheduled({}, env, ctx);
     await ctx.settled();
@@ -375,7 +377,7 @@ test("cron: no ping without an https HEALTHCHECK_PING_URL; a failing ping or mis
   } finally {
     console.error = original;
   }
-  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "email_retry", "mcf_submit", "mcf_sync", "meta_retry"]);
+  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "email_retry", "mcf_submit", "mcf_sync", "meta_retry", "payments"]);
 });
 
 test("health: 503 until the cron has run, 200 after, 503 again once the last run is older than 30 minutes", { skip }, async () => {

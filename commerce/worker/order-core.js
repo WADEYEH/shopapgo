@@ -13,7 +13,7 @@
 //   cancelled   status cancelled
 //
 // Cooling-off (M4 §3.6, D23): ORDER_COOLING_OFF_MINUTES after payment (default 60) before an order goes to Amazon.
-// Holds (M4 §3.5): review, a registered refund (failed ones excepted); disputes join in PR 3-5.
+// Holds (M4 §3.5): review, a registered refund (failed ones excepted), an open dispute (worker/disputes.js).
 import { cancelFulfillmentOrder, McfError, mcfReadiness } from "./amazon-mcf.js";
 import { getFulfillment, recordAudit } from "./fulfillment.js";
 import { getOrder, getOrderPayment } from "./orders.js";
@@ -85,7 +85,21 @@ export async function orderHolds(db, order) {
   if (order.status === "review") holds.push({ code: "review", message: "The amount paid did not match the order. Confirm or cancel it." });
   const refund = await db.prepare("SELECT id FROM order_refunds WHERE order_id = ? AND status != 'FAILED' LIMIT 1").bind(order.id).first();
   if (refund) holds.push({ code: "refund", message: "A refund is registered. Review before shipping." });
+  const dispute = await openDisputeOf(db, order.id);
+  if (dispute) {
+    const where = dispute.provider === "paypal" ? "PayPal" : "Airwallex";
+    holds.push({ code: "dispute", message: `A dispute is open with ${where}${dispute.due_at ? ` (respond by ${new Date(dispute.due_at).toUTCString()})` : ""}. The order waits until it is won.` });
+  }
   return holds;
+}
+
+// async: a database without order_disputes yet (before migration 0006) has no disputes.
+async function openDisputeOf(db, orderId) {
+  try {
+    return await db.prepare("SELECT provider, due_at FROM order_disputes WHERE order_id = ? AND status = 'open' ORDER BY due_at LIMIT 1").bind(orderId).first();
+  } catch {
+    return null;
+  }
 }
 
 // async: a database without the order_mcf table yet reads as "never sent" instead of failing.

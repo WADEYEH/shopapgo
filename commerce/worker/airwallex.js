@@ -171,6 +171,11 @@ export function refundDuplicatePayment(env, { intentId, amount, requestId }) {
   }, { idempotent: true });
 }
 
+// A dispute (chargeback, pre-arbitration, RFI) as Airwallex has it now (worker/disputes.js).
+export function retrievePaymentDispute(env, disputeId) {
+  return request(env, "GET", `/api/v1/pa/payment_disputes/${encodeURIComponent(disputeId)}`, undefined, { idempotent: true });
+}
+
 export function retrieveRefund(env, refundId) {
   return request(env, 'GET', `/api/v1/pa/refunds/${encodeURIComponent(refundId)}`, undefined, { idempotent:true });
 }

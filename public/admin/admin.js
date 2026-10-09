@@ -19,7 +19,8 @@ const formatDate = (iso) => (iso ? dateTime.format(new Date(iso)) : "—");
 
 const FULFILLMENT_TABS = [["all", "Any shipping"], ["unfulfilled", "To ship"], ["shipped", "Shipped"]];
 
-const state = { status: "all", fulfillment: "all", q: "", fulfillmentCounts: {}, orders: [], nextBefore: null, counts: {}, selected: null, loading: false };
+const state = { status: "all", fulfillment: "all", issue: null, q: "", fulfillmentCounts: {}, issueCounts: {}, orders: [], nextBefore: null, counts: {}, selected: null, loading: false };
+const providerName = (provider) => (provider === "paypal" ? "PayPal" : "Airwallex");
 
 async function adminApi(path, { method = "GET", body } = {}) {
   let response;
@@ -107,6 +108,27 @@ function renderFulfillmentTabs() {
   );
 }
 
+// Orders with an open dispute, earliest response deadline first (worker/disputes.js).
+function renderIssueTabs() {
+  $("[data-admin-issue-tabs]").replaceChildren(
+    el(
+      "button",
+      {
+        type: "button",
+        class: "admin-tab",
+        "data-issue": "disputes",
+        "aria-pressed": String(state.issue === "disputes"),
+        onclick: () => {
+          state.issue = state.issue === "disputes" ? null : "disputes";
+          load({ reset: true });
+        },
+      },
+      "Disputes",
+      el("span", { class: "admin-tab__n" }, String(state.issueCounts.disputes ?? 0)),
+    ),
+  );
+}
+
 function renderList() {
   const list = $("[data-admin-list]");
   if (state.orders.length === 0) {
@@ -126,9 +148,9 @@ function renderList() {
               "aria-current": String(state.selected === order.id),
               onclick: () => select(order.id),
             },
-            el("span", { class: "admin-row__id" }, statusBadge(order.status), shipBadge(order), order.id),
+            el("span", { class: "admin-row__id" }, statusBadge(order.status), order.disputed && el("span", { class: "status status--review" }, "dispute"), shipBadge(order), order.id),
             el("span", { class: "admin-row__total" }, money(order.totalCents)),
-            el("span", { class: "admin-row__meta" }, `${order.name} · ${order.email} · ${order.itemCount} item${order.itemCount === 1 ? "" : "s"} · ${order.state}`),
+            el("span", { class: "admin-row__meta" }, `${order.name} · ${order.email} · ${order.itemCount} item${order.itemCount === 1 ? "" : "s"} · ${order.state}${order.disputed && order.disputeDueAt ? ` · respond by ${formatDate(order.disputeDueAt)}` : ""}`),
             el("span", { class: "admin-row__when" }, formatDate(order.paidAt || order.createdAt)),
           ),
         ),
@@ -146,10 +168,12 @@ async function load({ reset = false } = {}) {
   state.loading = true;
   renderTabs();
   renderFulfillmentTabs();
+  renderIssueTabs();
   renderList();
   const params = new URLSearchParams();
   if (state.status !== "all") params.set("status", state.status);
   if (state.fulfillment !== "all") params.set("fulfillment", state.fulfillment);
+  if (state.issue) params.set("issue", state.issue);
   if (state.q) params.set("q", state.q);
   if (!reset && state.nextBefore) params.set("before", state.nextBefore);
   try {
@@ -158,6 +182,7 @@ async function load({ reset = false } = {}) {
     state.nextBefore = page.nextBefore;
     state.counts = page.counts;
     state.fulfillmentCounts = page.fulfillmentCounts ?? {};
+    state.issueCounts = page.issueCounts ?? {};
     $("[data-admin-message]").replaceChildren();
   } catch (error) {
     $("[data-admin-message]").replaceChildren(notice("warning", "Orders unavailable", error.message));
@@ -165,6 +190,7 @@ async function load({ reset = false } = {}) {
   state.loading = false;
   renderTabs();
   renderFulfillmentTabs();
+  renderIssueTabs();
   renderList();
 }
 
@@ -187,6 +213,10 @@ function renderFulfillment(order) {
         el("dt", {}, "By"), el("dd", {}, shipped.shippedBy),
       ),
     );
+  }
+  if (order.disputes?.some((dispute) => dispute.status === "open")) {
+    return el("section", { class: "admin-ship", "data-admin-fulfillment": "locked", "aria-label": "Fulfilment" },
+      el("h4", {}, "Fulfilment"), el("p", { class: "body body--sm" }, "A dispute is open. The order cannot be shipped until the dispute is won."));
   }
   if (order.refunds?.hold) {
     return el('section', {class:'admin-ship', 'data-admin-fulfillment':'locked', 'aria-label':'Fulfilment'},
@@ -450,6 +480,7 @@ function renderDetail(order) {
       money(order.totalCents),
     ),
     renderPaymentFailures(order),
+    ...[renderDisputes(order)].filter(Boolean),
     renderRefunds(order),
     ...[renderOrderActions(order, { adminApi, onChange: orderChanged })].filter(Boolean),
     ...[renderMcf(order)].filter(Boolean),
@@ -460,11 +491,28 @@ function renderDetail(order) {
   body.hidden = false;
 }
 
+// Disputes and chargebacks (worker/disputes.js): answered in the provider's dashboard; shown here with the deadline.
+function renderDisputes(order) {
+  if (!order.disputes?.length) return null;
+  return el("section", { class: "admin-history", "aria-label": "Disputes", "data-order-disputes": true },
+    el("h4", {}, "Disputes"),
+    el("p", { class: "body body--sm" }, `Respond in the ${providerName(order.disputes[0].provider)} dashboard with the order, payment and tracking details. An open dispute holds the order; a lost one cancels it if it has not shipped.`),
+    ...order.disputes.map((dispute) => el("dl", { class: "admin-facts" },
+      el("dt", {}, "Dispute"), el("dd", {}, `${providerName(dispute.provider)} ${dispute.id}`),
+      el("dt", {}, "Status"), el("dd", {}, dispute.status === "open" ? `Open (${dispute.providerStatus || "needs a response"})` : dispute.status === "won" ? "Won" : "Lost"),
+      el("dt", {}, "Amount"), el("dd", {}, money(dispute.amountCents)),
+      dispute.reason && el("dt", {}, "Reason"), dispute.reason && el("dd", {}, dispute.reason),
+      dispute.status === "open" && el("dt", {}, "Respond by"), dispute.status === "open" && el("dd", {}, formatDate(dispute.dueAt)),
+      el("dt", {}, "Updated"), el("dd", {}, formatDate(dispute.updatedAt)))));
+}
+
 function renderRefunds(order) {
   const refunds = order.refunds;
-  const button = el('button', {type:'button', class:'btn btn--md btn--text', disabled:!order.paymentIntentId}, 'Sync refunds');
+  const where = providerName(order.paymentProvider);
+  const paypal = order.paymentProvider === "paypal";
+  const button = paypal ? null : el('button', {type:'button', class:'btn btn--md btn--text', disabled:!order.paymentIntentId}, 'Sync refunds');
   const feedback = el('p', {class:'body body--sm', role:'status'});
-  button.addEventListener('click', async () => {
+  button?.addEventListener('click', async () => {
     button.disabled = true;
     feedback.textContent = 'Checking Airwallex…';
     try {
@@ -487,11 +535,13 @@ function renderRefunds(order) {
     })) : null;
   return el('section', {class:'admin-history', 'aria-label':'Refunds', 'data-order-refunds':true},
     el('h4', {}, 'Refunds'),
-    refunds?.records?.some(item=>item.status==='FAILED') && notice('warning','Refund failed — review required','A refund was rejected. Review its failure code and the payment in Airwallex. An earlier acceptance notice may already have been delivered. Check the customer failure notice and team alert in the email history; sending or delivery problems require manual follow-up. No financial refund is retried automatically.'),
-    el('p', {class:'body body--sm'}, 'Initiate refunds in Airwallex. This button only checks their status.'),
+    refunds?.records?.some(item=>item.status==='FAILED') && notice('warning','Refund failed — review required',`A refund was rejected. Review its failure code and the payment in ${where}. An earlier acceptance notice may already have been delivered. Check the customer failure notice and team alert in the email history; sending or delivery problems require manual follow-up. No financial refund is retried automatically.`),
+    el('p', {class:'body body--sm'}, paypal
+      ? 'Paid with PayPal. Initiate refunds in PayPal; refunds and reversals appear here automatically.'
+      : 'Initiate refunds in Airwallex. This button only checks their status.'),
     el('p', {class:'body body--sm'}, refunds?.records?.length
       ? `Refunded: ${money(refunds.refundedCents)} · Pending: ${money(refunds.pendingCents)}${refunds.hold ? ' · Fulfillment on hold' : ''}`
-      : 'No refunds recorded. Sync to check the provider.'),
+      : paypal ? 'No refunds recorded.' : 'No refunds recorded. Sync to check the provider.'),
     ...(refunds?.records ?? []).map(item => el('dl', {class:'admin-facts'},
       el('dt', {}, 'Refund'), el('dd', {}, item.id), el('dt', {}, 'Status'), el('dd', {}, item.status),
       el('dt', {}, 'Amount'), el('dd', {}, money(item.amountCents)),

@@ -26,7 +26,8 @@
 
 import { fail, json } from "./http.js";
 import { ORDER_ID_PATTERN } from "./checkout.js";
-import { FULFILLMENT_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, getOrder, listOrders, orderCounts } from "./orders.js";
+import { FULFILLMENT_FILTERS, ISSUE_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, getOrder, getOrderPayment, issueCounts, listOrders, orderCounts } from "./orders.js";
+import { disputesForOrder } from "./disputes.js";
 import { FulfillmentError, markShipped, validateShipment, recordAudit } from "./fulfillment.js";
 import { processMessageJob, retryCustomerEmail } from "./customer-email.js";
 import { validEmailKind } from './email-delivery.js';
@@ -35,7 +36,7 @@ import { accessMode, resolveAdmin } from "./admin-identity.js";
 import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember } from "./members.js";
 import { accessListStatus, syncAccessList } from "./access-list.js";
 import { activityActors, listActivity } from "./activity.js";
-import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView } from "./order-core.js";
+import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView, orderHolds } from "./order-core.js";
 import { runAfterPaid } from "./after-payment.js";
 import { listCheckouts } from "./checkouts.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
@@ -85,13 +86,22 @@ function csrfProblem(request) {
   return null;
 }
 
-// The order detail plus the Amazon MCF block (mode, reason, record, which buttons apply).
+// The order detail plus the Amazon MCF block (mode, reason, record, which buttons apply), how it was paid and its
+// disputes (worker/disputes.js).
 async function adminOrderView(env, orderId) {
   const order = await adminOrder(env.DB, orderId);
   if (!order) return null;
   const row = await getOrder(env.DB, orderId);
-  return { ...order, sandboxRefundChecks:sandboxRefundChecksEnabled(env), mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId) };
+  const paymentProvider = row.payment_intent_id ? (await getOrderPayment(env.DB, orderId))?.provider ?? "airwallex" : null;
+  return {
+    ...order, paymentProvider, disputes: await disputesForOrder(env.DB, orderId),
+    sandboxRefundChecks: sandboxRefundChecksEnabled(env) && paymentProvider !== "paypal",
+    mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId),
+  };
 }
+
+// PayPal refunds arrive by webhook (worker/payment-events.js); the refund check and sync buttons ask Airwallex.
+const paidWithPaypal = async (env, order) => Boolean(order.payment_intent_id) && (await getOrderPayment(env.DB, order.id))?.provider === "paypal";
 
 async function readJsonObject(request) {
   let body;
@@ -143,6 +153,8 @@ async function handleShip(request, env, orderId, actor) {
   try {
     const shipment = validateShipment(body);
     if (await refundHold(env.DB, orderId)) return fail(409, 'refund_hold', 'Refund registered; review fulfillment in Airwallex and Amazon before shipping.', NO_INDEX);
+    const order0 = await getOrder(env.DB, orderId);
+    if (order0 && (await orderHolds(env.DB, order0)).some((hold) => hold.code === "dispute")) return fail(409, "dispute_hold", "A dispute is open for this order; it cannot ship until the dispute is won.", NO_INDEX);
     const order = await markShipped(env.DB, orderId, shipment, { actor: actor.id });
     // Emailed after the shipment is saved; a failure is recorded and never undoes it.
     const email = await processMessageJob(env, (await getOrder(env.DB, orderId)) ?? order, 'shipment');
@@ -241,6 +253,7 @@ export async function handleAdminApi(request, env, pathname) {
     if (!ORDER_ID_PATTERN.test(id)) return fail(404,'not_found','Order not found.',NO_INDEX);
     const order = await getOrder(env.DB,id);
     if (!order) return fail(404,'not_found','Order not found.',NO_INDEX);
+    if (await paidWithPaypal(env,order)) return fail(409,'paypal_order','This order was paid with PayPal; refund checks run against Airwallex only.',NO_INDEX);
     const result = await runSandboxRefundCheck(env,order,body.scenario,actor.id);
     return json({result,order:await adminOrderView(env,id)},result.outcome === 'blocked' ? 409 : 200,NO_INDEX);
   }
@@ -278,6 +291,7 @@ export async function handleAdminApi(request, env, pathname) {
     const order = await getOrder(env.DB,id);
     if (!order) return fail(404,'not_found','Order not found.',NO_INDEX);
     if (!order.payment_intent_id) return fail(409,'no_payment_intent','This order has no payment intent.',NO_INDEX);
+    if (await paidWithPaypal(env,order)) return fail(409,'paypal_order','This order was paid with PayPal; its refunds arrive from PayPal automatically. Check the PayPal dashboard.',NO_INDEX);
     try {
       await syncOrderRefunds(env,order);
       await applyRefundsToOrder(env, id, { adminUrl: `${url.origin}/admin/` });
@@ -331,14 +345,17 @@ export async function handleAdminApi(request, env, pathname) {
     if (status && !ORDER_STATUSES.includes(status)) return fail(400, "invalid_status", "Unknown status.", NO_INDEX);
     const fulfillment = url.searchParams.get("fulfillment") || undefined;
     if (fulfillment && !FULFILLMENT_FILTERS.includes(fulfillment)) return fail(400, "invalid_fulfillment", "Unknown fulfilment status.", NO_INDEX);
+    const issue = url.searchParams.get("issue") || undefined;
+    if (issue && !ISSUE_FILTERS.includes(issue)) return fail(400, "invalid_issue", "Unknown issue filter.", NO_INDEX);
     const page = await listOrders(env.DB, {
       status,
       fulfillment,
+      issue,
       q: url.searchParams.get("q") || undefined,
       limit: url.searchParams.get("limit") || undefined,
       before: url.searchParams.get("before") || undefined,
     });
-    return json({ ...page, counts: await orderCounts(env.DB), fulfillmentCounts: await fulfillmentCounts(env.DB) }, 200, NO_INDEX);
+    return json({ ...page, counts: await orderCounts(env.DB), fulfillmentCounts: await fulfillmentCounts(env.DB), issueCounts: await issueCounts(env.DB) }, 200, NO_INDEX);
   }
 
   const match = pathname.match(/^\/admin\/api\/orders\/([^/]+)$/);
