@@ -48,7 +48,10 @@ const openDisputes = (o) => (o.disputes ?? []).filter((d) => d.status === "open"
 const mcfBlock = (o, mcf) => {
   const record = o.mcfRecord ?? null;
   const eligible = o.status === "paid" && !o.fulfillment;
+  const stockout = record?.stockoutAt && record.status === "rejected" && record.mcfStatus === "UNFULFILLABLE" && o.status === "paid";
   return {
+    stockout: stockout ? { since: record.stockoutAt, days: Math.floor((Date.parse("2026-10-09T03:00:00.000Z") - Date.parse(record.stockoutAt)) / 86_400_000), canCancelAndRefund: true } : null,
+    canCancelAtAmazon: Boolean(record) && record.status === "submitted",
     mode: mcf.mode,
     reason: mcf.mode === "off" ? 'MCF_AUTO_SUBMIT is not "true"; ship this order manually.' : mcf.mode === "not_configured" ? "missing OUTBOUND_INTERNAL_TOKEN" : null,
     canSubmit: mcf.mode === "ready" && eligible && (!record || ["failed", "rejected"].includes(record.status)),
@@ -84,6 +87,7 @@ const view = (o, mcf = { mode: "off" }) => ({
   fulfillment: o.fulfillment ?? null,
   paymentProvider: o.paymentProvider ?? (o.paymentIntentId ? "airwallex" : null),
   disputes: o.disputes ?? [],
+  refundRequest: o.refundRequest ?? null,
   emails: o.emails ?? [],
   audit: o.audit ?? [],
   mcf: mcfBlock(o, mcf),
@@ -165,6 +169,7 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
   for (const [id, list] of Object.entries(disputes)) orders.find((o) => o.id === id).disputes = structuredClone(list);
   for (const [id, provider] of Object.entries(providers)) orders.find((o) => o.id === id).paymentProvider = provider;
   requests.orderActions = [];
+  requests.holdTests = [];
   let actionError = orderActionError;
   let submitFails = mcf.submitFails ?? 0;
   const mcfState = { amazonShipped: Boolean(mcf.amazonShipped) };
@@ -183,7 +188,17 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     }
     const teamReply = teamRoute?.(url, route.request(), reply);
     if (teamReply) return teamReply;
-    const mcfMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync)$/);
+    if (url.pathname === "/admin/api/mcf/hold-test") {
+      const request = route.request();
+      requests.holdTests.push({ method: request.method(), contentType: request.headers()["content-type"], body: request.postDataJSON() });
+      const result = { id: "HOLDTEST-20261009030000", outcome: "passed", at: stamp, steps: [
+        { step: "create", ok: true, detail: "Amazon accepted HOLDTEST-20261009030000 on hold (1 × AMZ-SKU-D204)." },
+        { step: "check", ok: true, detail: "Items and address match; status RECEIVED, on hold." },
+        { step: "cancel", ok: true, detail: "Cancelled; Amazon now shows CANCELLED." },
+      ] };
+      return reply(200, { result, tests: [result] });
+    }
+    const mcfMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync|cancel)$/);
     if (mcfMatch || url.pathname === "/admin/api/mcf/sync") {
       const request = route.request();
       requests.mcf.push({ method: request.method(), path: url.pathname, contentType: request.headers()["content-type"], body: request.postDataJSON() });
@@ -192,6 +207,10 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       const order = orders.find((o) => o.id === decodeURIComponent(mcfMatch[1]));
       if (!order) return reply(404, { error: { code: "not_found", message: "Order not found." } });
       if (order.status !== "paid") return reply(409, { error: { code: "not_paid", message: "Only paid orders can be sent to MCF." } });
+      if (mcfMatch[2] === "cancel") {
+        order.mcfRecord = { ...order.mcfRecord, status: "rejected", mcfStatus: "CANCELLED", note: null, updatedAt: stamp };
+        return reply(200, { result: { outcome: "requested", reason: null }, order: view(order, mcf) });
+      }
       if (mcfMatch[2] === "submit") {
         if (mcf.mode !== "ready") return reply(200, { result: { outcome: "skipped", reason: "MCF is not enabled." }, order: view(order, mcf) });
         const attempts = (order.mcfRecord?.attempts ?? 0) + 1;
@@ -221,7 +240,7 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       order.emails = [...(order.emails ?? []), { kind: "shipment", status: email, detail: "", updatedAt: stamp }];
       return reply(200, { result: { outcome: "synced", shipped: true, email, reason: null }, order: view(order, mcf) });
     }
-    const actionMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address)$/);
+    const actionMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address|cancel-refund)$/);
     if (actionMatch) {
       const request = route.request();
       const body = request.postDataJSON();
@@ -233,6 +252,12 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       }
       const order = orders.find((o) => o.id === decodeURIComponent(actionMatch[1]));
       if (!order?.core) return reply(404, { error: { code: "not_found", message: "Order not found." } });
+      if (actionMatch[2] === "cancel-refund") {
+        order.status = "cancelled";
+        order.core = { ...(order.core ?? { stage: "paid" }), stage: "cancelled", holds: [], cancellation: { fromStage: "paid", reason: "out_of_stock", note: null, by: "staff@apgo.example", at: stamp, amazonCancel: null } };
+        order.refundRequest = { provider: "airwallex", amountCents: order.totalCents, currency: "USD", status: "requested", refundId: "rfd_demo", error: null, by: "staff@apgo.example", at: stamp };
+        return reply(200, { result: { changed: true, payment: null, refund: { cancelled: true, refund: "requested", refundId: "rfd_demo" } }, order: view(order, mcf) });
+      }
       if (actionMatch[2] === "confirm") {
         order.status = "paid";
         order.core = { ...order.core, stage: "paid", holds: [], coolingOffEndsAt: "2026-10-09T05:00:00.000Z" };

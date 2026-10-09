@@ -15,6 +15,10 @@
 //   dropReply     { create: n } process the create (order stored) but fail the reply n times (the "lost response" case)
 //   status        initial fulfillmentOrderStatus (default RECEIVED)
 //   listPages     list endpoint pages: how many empty pages (each with a nextToken) come before the real one
+//   failCancel    number of cancel calls answered 400 (Amazon already picking it)
+//   ignoreHold    store every order as "Ship" even when "Hold" was asked for (a connection that drops the flag)
+//
+//   amazon.editCopy(orderId, (view) => view)   change what getOrder returns (Amazon's copy) for the read-back check
 export const FAKE_OUTBOUND_TOKEN = "test-outbound-token-0123456789";
 export const FAKE_BASE_URL = "https://amazon-mcp.test.example";
 export const FAKE_AMAZON_ENV = {
@@ -38,6 +42,8 @@ export function createFakeAmazon(options = {}) {
   const orders = new Map();
   const calls = [];
   let emptyPagesLeft = options.listPages ?? 0;
+  let failCancel = options.failCancel ?? 0;
+  const copyEdits = new Map();
 
   const failure = (e) => reply(e.status, { error: e.error ?? "error", ...(e.spapiStatus ? { spapiStatus: e.spapiStatus } : {}), ...(e.details ? { details: e.details } : {}), ...(e.issues ? { issues: e.issues } : {}) });
 
@@ -53,6 +59,7 @@ export function createFakeAmazon(options = {}) {
         statusUpdatedDate: record.updatedAt,
         shippingSpeedCategory: record.request.shipping_speed_category,
         destinationAddress: record.request.destination_address,
+        fulfillmentAction: options.ignoreHold ? "Ship" : record.request.fulfillment_action ?? "Ship",
       },
       fulfillmentOrderItems: record.request.items.map((i) => ({ sellerSku: i.sellerSku, sellerFulfillmentOrderItemId: i.sellerFulfillmentOrderItemId, quantity: i.quantity })),
       fulfillmentShipments: record.shipments,
@@ -116,11 +123,13 @@ export function createFakeAmazon(options = {}) {
         record("get");
         if (networkErrors.get > 0) { networkErrors.get -= 1; throw new TypeError("fetch failed"); }
         if (!stored) return reply(404, { error: "Order not found", spapiStatus: 404 });
-        return reply(200, view(stored));
+        const edit = copyEdits.get(id);
+        return reply(200, edit ? edit(structuredClone(view(stored))) : view(stored));
       }
       if (method === "POST" && orderMatch[2]) {
         record("cancel");
         if (!stored) return reply(404, { error: "Order not found", spapiStatus: 404 });
+        if (failCancel > 0) { failCancel -= 1; return reply(400, { error: "Order cannot be cancelled", spapiStatus: 400, details: "PICKING" }); }
         if (!["RECEIVED", "PLANNING", "PROCESSING"].includes(stored.status)) return reply(400, { error: "Order cannot be cancelled", spapiStatus: 400, details: stored.status });
         stored.status = "CANCELLED";
         stored.updatedAt = new Date().toISOString();
@@ -146,6 +155,7 @@ export function createFakeAmazon(options = {}) {
     calls,
     fetch: handle,
     count: (op) => calls.filter((c) => c.op === op).length,
+    editCopy: (orderId, edit) => copyEdits.set(orderId, edit),
     setStatus(orderId, status) {
       const stored = orders.get(orderId);
       stored.status = status;

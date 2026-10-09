@@ -21,6 +21,8 @@ const FULFILLMENT_TABS = [["all", "Any shipping"], ["unfulfilled", "To ship"], [
 
 const state = { status: "all", fulfillment: "all", issue: null, q: "", fulfillmentCounts: {}, issueCounts: {}, orders: [], nextBefore: null, counts: {}, selected: null, loading: false };
 const providerName = (provider) => (provider === "paypal" ? "PayPal" : "Airwallex");
+const CHECK_LABEL = { ok: "matches what was sent", mismatch: "does not match", unreadable: "not read yet (checked at the next sync)" };
+const HOLD_STEP = { config: "Settings", create: "Create on hold", check: "Read back", cancel: "Cancel" };
 
 async function adminApi(path, { method = "GET", body } = {}) {
   let response;
@@ -293,12 +295,14 @@ async function mcfAction(order, action, button, message) {
     renderDetail(result.order);
     const outcome = result.result ?? {};
     const text =
-      action === "submit"
+      action === "cancel"
+        ? { requested: "Amazon cancelled it. Check the order, then Retry send to send it again.", skipped: outcome.reason || "Nothing to cancel.", failed: `Amazon did not cancel it: ${outcome.reason ?? "try again"}` }[outcome.outcome]
+      : action === "submit"
         ? { submitted: "Sent to Amazon MCF.", failed: "Amazon did not accept the order; see the error below.", duplicate: "Already being sent.", skipped: outcome.reason || "Nothing was sent." }[outcome.outcome]
         : outcome.shipped ? `Amazon shipped it. Order marked shipped${outcome.email === "sent" ? "; email accepted by the email service." : `; customer email: ${outcome.email ?? "none"}.`}`
         : outcome.outcome === "failed" ? `Sync failed: ${outcome.reason ?? "try again"}`
         : "Synced. Amazon has not shipped it yet.";
-    $("[data-admin-detail-body]").prepend(notice(outcome.outcome === "failed" ? "warning" : "success", action === "submit" ? "Amazon MCF" : "MCF status", text ?? "Done."));
+    $("[data-admin-detail-body]").prepend(notice(outcome.outcome === "failed" ? "warning" : "success", action === "sync" ? "MCF status" : "Amazon MCF", text ?? "Done."));
     load({ reset: true });
   } catch (error) {
     button.disabled = false;
@@ -325,6 +329,7 @@ function renderMcf(order) {
     fact("Tracking", record.trackingNumber);
     fact("Error", record.errorMessage && `${record.errorKind ? `${record.errorKind}: ` : ""}${record.errorMessage}`);
     fact("Note", record.note);
+    fact("Amazon's copy", record.check && (CHECK_LABEL[record.check.status] ?? record.check.status) + (record.check.status === "mismatch" ? `: ${record.check.detail}` : ""));
   }
   const children = [el("h4", {}, "Amazon MCF")];
   if (!record) {
@@ -342,7 +347,16 @@ function renderMcf(order) {
     children.push(el("dl", { class: "admin-facts", "data-mcf-record": record.status }, ...facts));
     if (mcf.mode !== "ready" && mcf.reason) children.push(el("p", { class: "field__hint", "data-mcf-mode": mcf.mode }, mcf.mode === "off" ? "MCF_AUTO_SUBMIT is off now; the record above is from earlier." : `MCF is not ready: ${mcf.reason}`));
   }
+  if (mcf.stockout) children.push(renderStockout(order, mcf.stockout, message));
+  else if (record?.check?.status === "mismatch") children.push(notice("warning", "Amazon's copy does not match", `${record.check.detail}. If Amazon has not started picking it, cancel it at Amazon, check the order, then send it again.`));
   const actions = [];
+  if (mcf.canCancelAtAmazon) {
+    const button = el("button", { class: "btn btn--md btn--text", type: "button", "data-mcf-cancel": true }, "Cancel at Amazon");
+    button.addEventListener("click", () => {
+      if (confirm(`Ask Amazon to cancel its order ${record.sellerOrderId}? The order stays paid; you can send it again afterwards.`)) mcfAction(order, "cancel", button, message);
+    });
+    actions.push(button);
+  }
   if (mcf.canSubmit && !order.refunds?.hold) {
     const button = el("button", { class: "btn btn--md", type: "button", "data-mcf-submit": true }, record ? "Retry send to Amazon" : "Send to Amazon MCF");
     button.addEventListener("click", () => mcfAction(order, "submit", button, message));
@@ -358,8 +372,34 @@ function renderMcf(order) {
   return el("section", { class: "admin-ship admin-mcf", "data-admin-mcf": mcf.mode, "aria-label": "Amazon MCF" }, ...children);
 }
 
+// Out of stock at Amazon (M6-06): how long, and the one-step Cancel and refund (the team decides after 3 days).
+function renderStockout(order, stockout, message) {
+  const button = el("button", { class: "btn btn--md", type: "button", "data-cancel-refund": true }, "Cancel and refund");
+  button.addEventListener("click", () => cancelAndRefund(order, button, message));
+  return el("div", { class: "admin-stockout", "data-stockout": stockout.days },
+    notice("warning", `Out of stock at Amazon for ${stockout.days} day${stockout.days === 1 ? "" : "s"}`,
+      `Since ${formatDate(stockout.since)}. Amazon could not fill it; it is sent again once a day and the customer was told it is delayed. After 3 days, cancel and refund it (or keep waiting if the customer agreed).`),
+    button);
+}
+
+async function cancelAndRefund(order, button, message) {
+  if (!confirm(`Cancel order ${order.id} and refund ${money(order.totalCents)} to the customer through ${providerName(order.paymentProvider)}? This cannot be undone.`)) return;
+  button.disabled = true;
+  message.replaceChildren();
+  try {
+    const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/cancel-refund`, { method: "POST", body: {} });
+    const refund = result.result?.refund ?? {};
+    orderChanged(result.order, refund.refund === "failed"
+      ? notice("warning", "Cancelled; the refund did not go through", `${refund.error ?? ""} Try the refund again, or refund it in ${providerName(result.order.paymentProvider)}.`)
+      : notice("success", "Cancelled and refunded", refund.refund === "already_requested" ? "The refund was already asked for." : "The full refund was asked for; the customer gets the refund notice."));
+  } catch (error) {
+    button.disabled = false;
+    message.replaceChildren(notice("warning", "Cancel and refund failed", error.message));
+  }
+}
+
 function renderHistory(order) {
-  const emailLabel = { confirmation: "Order confirmation", shipment: "Shipment notice" };
+  const emailLabel = { confirmation: "Order confirmation", shipment: "Shipment notice", "delay:stockout": "Delay notice (out of stock)" };
   const emails = order.emails ?? [];
   const audit = order.audit ?? [];
   if (!emails.length && !audit.length) return null;
@@ -508,6 +548,7 @@ function renderDisputes(order) {
 
 function renderRefunds(order) {
   const refunds = order.refunds;
+  const asked = order.refundRequest;
   const where = providerName(order.paymentProvider);
   const paypal = order.paymentProvider === "paypal";
   const button = paypal ? null : el('button', {type:'button', class:'btn btn--md btn--text', disabled:!order.paymentIntentId}, 'Sync refunds');
@@ -547,7 +588,18 @@ function renderRefunds(order) {
       el('dt', {}, 'Amount'), el('dd', {}, money(item.amountCents)),
       el('dt', {}, 'Updated'), el('dd', {}, formatDate(item.updatedAt)),
       item.failureCode && el('dt', {}, 'Failure code'), item.failureCode && el('dd', {}, item.failureCode))),
-    button,checks,feedback);
+    asked && renderRefundRequest(order, asked, feedback),button,checks,feedback);
+}
+
+// The refund the store asked for itself when cancelling (out of stock); a failed one can be asked again.
+function renderRefundRequest(order, asked, feedback) {
+  const state = asked.status === "requested" ? "accepted by the provider" : asked.status === "failed" ? `failed: ${asked.error ?? ""}` : "in progress";
+  const again = asked.status === "failed" && order.core?.cancellation?.reason === "out_of_stock"
+    ? el("button", { class: "btn btn--sm", type: "button", "data-cancel-refund": true }, "Try the refund again") : null;
+  again?.addEventListener("click", () => cancelAndRefund(order, again, feedback));
+  return el("div", { "data-refund-request": asked.status },
+    el("p", { class: "body body--sm" }, `Refund asked by the store when cancelling: ${money(asked.amountCents)} through ${providerName(asked.provider)} · ${state} · ${formatDate(asked.at)}`),
+    again);
 }
 
 // After a confirm / cancel / address change: show the new state with what happened, and refresh the list.
@@ -599,6 +651,23 @@ $("[data-admin-mcf-check]").addEventListener("click", async (event) => {
     }
   } catch (error) {
     result.replaceChildren(notice("warning", "MCF connection check failed", error.message));
+  } finally {
+    button.disabled = false;
+  }
+});
+// Owners only (the button is shown by team.js): the Hold test order (D26), before automatic sending is turned on.
+$("[data-admin-hold-test]").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const result = $("[data-admin-mcf-check-result]");
+  if (!confirm("Create a real Amazon order ON HOLD (nothing ships), read it back, and cancel it right away?")) return;
+  button.disabled = true;
+  result.replaceChildren(notice("info", "Hold test order", "Creating it at Amazon on hold…"));
+  try {
+    const { result: test } = await adminApi("/admin/api/mcf/hold-test", { method: "POST", body: {} });
+    result.replaceChildren(notice(test.outcome === "passed" ? "success" : "warning", test.outcome === "passed" ? `Hold test passed (${test.id})` : `Hold test failed (${test.id})`,
+      test.steps.map((step) => `${HOLD_STEP[step.step] ?? step.step}: ${step.ok ? "OK" : "FAILED"}. ${step.detail}`).join(" ")));
+  } catch (error) {
+    result.replaceChildren(notice("warning", "Hold test order failed", error.message));
   } finally {
     button.disabled = false;
   }

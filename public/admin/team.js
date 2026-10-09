@@ -44,6 +44,8 @@ export async function initTeam({ adminApi, openOrder }) {
   }
   initActivity({ adminApi, openOrder });
   if (me.role === "owner") initMembers({ adminApi, me });
+  // The Hold test order (admin.js) is for owners.
+  if (me.role === "owner") $("[data-admin-hold-test]")?.removeAttribute("hidden");
 }
 
 // ---------- Activity ----------

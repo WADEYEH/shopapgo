@@ -20,7 +20,7 @@
 
 import { getOrder, claimOrderEmail, finishOrderEmail } from "./orders.js";
 import { getFulfillment } from "./fulfillment.js";
-import { sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
+import { NOTICE_KINDS, sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
 
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
@@ -147,6 +147,19 @@ export function buildShipmentEmail(order, shipment, { policyNote } = {}) {
   return { subject, ...body };
 }
 
+// Amazon could not fill the order yet (M6-06): it is tried again daily; after 3 days without stock it is cancelled and
+// refunded in full.
+export function buildDelayEmail(order, { policyNote } = {}) {
+  const subject = `Your APGO order ${order.id} is delayed`;
+  const body = render({
+    heading: "Your order is delayed",
+    intro: "Sorry: an item in your order is temporarily out of stock at our warehouse, so it has not shipped yet. We'll email you the tracking number as soon as it ships. If it can't ship within 3 days, we'll cancel the order and refund you in full; you don't need to do anything. If you'd rather cancel now, reply to this email.",
+    order,
+    policyNote,
+  });
+  return { subject, ...body };
+}
+
 export function buildRefundEmail(order, refund, { policyNote } = {}) {
   const full = refund.refundedCents >= order.total_cents;
   const heading = full ? 'Your full refund was accepted' : 'Your partial refund was accepted';
@@ -216,7 +229,8 @@ export async function sendCustomerEmail(env, order, kind, options = {}) {
     return await sendOutboxEmail(env, order, kind, config, () => parsed?.failed
       ? buildRefundFailureEmail(order,refund,{policyNote:config.policyNote,team:parsed.team,adminUrl:refundAdminUrl(env,order.id)}) : refund
       ? buildRefundEmail(order,refund,{policyNote:config.policyNote}) : kind === "shipment"
-      ? buildShipmentEmail(order, options.shipment, { policyNote: config.policyNote })
+      ? buildShipmentEmail(order, options.shipment, { policyNote: config.policyNote }) : kind === "delay:stockout"
+      ? buildDelayEmail(order, { policyNote: config.policyNote })
       : buildConfirmationEmail(order, { policyNote: config.policyNote }), options);
   } catch {
     console.error("customer_email_error", { orderId: order.id, kind, reason: "delivery processing failed" });
@@ -292,6 +306,38 @@ export async function processMessageJob(env, order, kind, options = {}) {
   }
 }
 
+// ---------- customer notices (order_notice_jobs) ----------
+
+// Records that a notice is due, once per order and kind. Returns true for the call that created it.
+export async function queueNotice(db, orderId, kind, payload = {}) {
+  if (!NOTICE_KINDS.includes(kind)) throw new Error(`Unknown notice kind ${kind}.`);
+  const at = new Date().toISOString();
+  const result = await db.prepare("INSERT OR IGNORE INTO order_notice_jobs (order_id, kind, payload_json, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)")
+    .bind(orderId, kind, JSON.stringify(payload), at, at).run();
+  return result.meta.changes > 0;
+}
+
+// Hands a pending notice to the durable outbox (same lifecycle as processMessageJob). Never throws.
+export async function processNoticeJob(env, order, kind, options = {}) {
+  if (!NOTICE_KINDS.includes(kind)) return { status: 'blocked', detail: 'Invalid notice.' };
+  try {
+    const job = await env.DB.prepare('SELECT status FROM order_notice_jobs WHERE order_id=? AND kind=?').bind(order.id, kind).first();
+    if (!job || job.status !== 'pending') return { status: 'duplicate', detail: '' };
+    const result = await sendCustomerEmail(env, order, kind, { ...options, retry: false, resumeInitialJob: true });
+    const row = await getDelivery(env.DB, order.id, kind);
+    const projection = await env.DB.prepare('SELECT status FROM order_emails WHERE order_id=? AND kind=?').bind(order.id, kind).first();
+    const blocked = result.status === 'blocked';
+    const complete = row || (projection && projection.status !== 'pending') || blocked;
+    await env.DB.prepare("UPDATE order_notice_jobs SET status=?, next_attempt_at=?, updated_at=? WHERE order_id=? AND kind=? AND status='pending'")
+      .bind(complete ? (blocked || (projection?.status === 'skipped' && !row) ? 'skipped' : 'handed_off') : 'pending',
+        complete ? null : new Date(Date.now() + 60_000).toISOString(), new Date().toISOString(), order.id, kind).run();
+    return result;
+  } catch {
+    console.error('customer_notice_job_error', { orderId: order.id, kind, reason: 'notice handoff failed' });
+    return { status: 'failed', detail: 'Notice instruction retained for recovery.' };
+  }
+}
+
 export async function scheduledCustomerEmailRetry(env) {
   if (env.CUSTOMER_EMAIL_RETRY_CRON !== "true") return;
   const timestamp = new Date().toISOString();
@@ -304,6 +350,11 @@ export async function scheduledCustomerEmailRetry(env) {
   for (const item of messages) {
     const order = await getOrder(env.DB,item.order_id);
     if (order) await processMessageJob(env,order,item.kind);
+  }
+  const { results: notices } = await env.DB.prepare("SELECT order_id, kind FROM order_notice_jobs WHERE status='pending' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY updated_at, order_id, kind LIMIT 10").bind(timestamp).all();
+  for (const item of notices) {
+    const order = await getOrder(env.DB, item.order_id);
+    if (order) await processNoticeJob(env, order, item.kind);
   }
   if (!customerEmailConfig(env) && !refundAlertConfig(env)) return;
   const { results } = await env.DB.prepare("SELECT order_id, kind FROM order_email_delivery WHERE status IN ('queued','retry','sending') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?) ORDER BY created_at LIMIT 10").bind(timestamp, timestamp).all();
