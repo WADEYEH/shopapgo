@@ -353,14 +353,15 @@ wrangler.toml            Worker 设定（staging / production）
 ### 阶段 4：验收与切换（约 2–3 天，另加观察 48 小时）
 
 - 跑完第 9 章的上线验收。
-- 切换步骤（由我执行，你在线上待命）：
-  1. 备份正式数据库，套用迁移。迁移只新增资料表，不影响旧版还在运作的店。
+- **前置：部署权限**（`docs/ops/runbook.md` 第 2 节）。正式环境只从 GitHub 的 Deploy 工作部署，不从本机部署，所以切换前一定要设好：GitHub 的 `production` 环境和 Secrets（要 repo 拥有者 WADEYEH 帐号的管理权限；这台电脑的 GitHub 帐号 anpuuuuu 只有推送权限），以及 Cloudflare 的部署金钥（要能登录 Cloudflare 后台的人建立）。10/9 你还没有这些权限；不影响阶段 3 的开发和 staging 部署。
+- 切换步骤（由 GitHub 的 Deploy 工作执行、你按核准，你在线上待命）：
+  1. 记录正式数据库的还原点，套用迁移。迁移只增不改（D45），不影响旧版还在运作的店。
   2. 把 shopapgo 的新版部署到正式环境的 Worker `apgo-us-store`，取代 landing 的代码（沿用正式数据库和 Airwallex 正式帐户）。store 和 admin 的网域本来就绑在这个 Worker 上：store 的网址改为 301 转到 www，webhook 路径照常处理。
   3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker（先在 staging 网域演练过）。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
   4. 在 Airwallex 和 Resend 把 webhook 网址改成 www；在 Airwallex 登记 www 网域（Apple Pay 需要）。
   5. 冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。
   6. 观察 48 小时。Search Console 是用网域验证的，不受影响，重新提交 sitemap 即可。
-- 回退方案：Worker 可以直接回到切换前的版本；Pages 专案保留两周，www 可以在几分钟内改回 Pages。数据库只新增了资料表，旧版可以照常读写。
+- 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒）；Pages 专案保留两周，www 可以在几分钟内改回 Pages。数据库只增不改，旧版可以照常读写。
 
 **完成条件**：正式环境全部由新版服务；48 小时内没有未处理的错误。
 
