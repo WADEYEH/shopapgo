@@ -1,6 +1,6 @@
 // Refunds are initiated in the Airwallex or PayPal dashboard (D24). This module only reads provider state and records
 // minimal, order-scoped metadata; it never creates a refund or shipment. Both providers go through recordRefund (PayPal
-// from worker/paypal-events.js); statuses are Airwallex's: RECEIVED (pending), ACCEPTED, SETTLED (returned), FAILED.
+// from worker/payment-events.js); statuses are Airwallex's: RECEIVED (pending), ACCEPTED, SETTLED (returned), FAILED.
 import { retrieveRefund, listRefunds } from './airwallex.js';
 
 export const REFUND_EVENTS = new Set(['refund.received', 'refund.accepted', 'refund.settled', 'refund.failed']);

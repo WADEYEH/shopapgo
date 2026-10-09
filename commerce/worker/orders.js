@@ -186,10 +186,17 @@ export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, am
     addressCheck: sameAddress && stored.addressCheck ? stored.addressCheck : { status: "unverified", reason: "paypal_address" },
   }) : order.shipping_json;
 
-  const result = await db
+  const update = db
     .prepare(`UPDATE orders SET status = ?, paid_at = ?, shipping_json = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND ${SETTLEABLE}`)
-    .bind(nextStatus, nextStatus === "paid" ? timestamp : null, shippingJson, paypalOrderId, timestamp, order.id)
-    .run();
+    .bind(nextStatus, nextStatus === "paid" ? timestamp : null, shippingJson, paypalOrderId, timestamp, order.id);
+  // The confirmation email instruction commits with the payment, as for a card payment (settleIntent).
+  const result = nextStatus === "paid" ? (await db.batch([
+    update,
+    db.prepare(`INSERT OR IGNORE INTO order_email_jobs (order_id, kind, status, created_at, updated_at)
+      SELECT id, 'confirmation', 'pending', ?, ? FROM orders
+      WHERE id = ? AND status = 'paid' AND paid_at = ? AND updated_at = ?`)
+      .bind(timestamp, timestamp, order.id, timestamp, timestamp),
+  ]))[0] : await update.run();
   const changed = (result?.meta?.changes ?? 1) > 0;
   if (!changed) return alreadySettled(await getOrder(db, order.id), "paypal", paypalOrderId, amountCents, currency, captureId);
   await recordPayment(db, { provider: "paypal", ref: paypalOrderId, checkoutId: order.id, amountCents, currency });
@@ -280,10 +287,16 @@ function adminSummary(row) {
     fulfillmentStatus: row.fulfillment_status ?? "unfulfilled",
     shippedAt: row.shipped_at ?? null,
     refundHold: Boolean(row.refund_hold),
+    disputed: Boolean(row.disputed),
+    disputeDueAt: row.dispute_due_at ?? null,
   };
 }
 
-export async function listOrders(db, { status, fulfillment, q, limit = 50, before } = {}) {
+// Issue filters: "disputes" = orders with an open dispute (worker/disputes.js), earliest response deadline first (I13).
+export const ISSUE_FILTERS = ["disputes"];
+const OPEN_DISPUTE = "EXISTS (SELECT 1 FROM order_disputes d WHERE d.order_id = o.id AND d.status = 'open')";
+
+export async function listOrders(db, { status, fulfillment, issue, q, limit = 50, before } = {}) {
   const clauses = [IS_ORDER];
   const args = [];
   if (status && ORDER_STATUSES.includes(status)) {
@@ -293,33 +306,44 @@ export async function listOrders(db, { status, fulfillment, q, limit = 50, befor
   // "unfulfilled" = paid and not yet shipped (the to-ship queue); "shipped" = has a shipment row.
   if (fulfillment === "unfulfilled") clauses.push("o.status = 'paid' AND f.order_id IS NULL AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED')");
   else if (fulfillment === "shipped") clauses.push("f.order_id IS NOT NULL");
+  // The disputes list is short and sorted by deadline, so it is one page.
+  const disputes = issue === "disputes";
+  if (disputes) clauses.push(OPEN_DISPUTE);
   if (q) {
     clauses.push("(instr(lower(o.id), ?) > 0 OR instr(lower(o.email), ?) > 0 OR instr(lower(o.shipping_json), ?) > 0)");
     const needle = String(q).trim().toLowerCase().slice(0, 100);
     args.push(needle, needle, needle);
   }
-  if (before) {
+  if (before && !disputes) {
     clauses.push("o.created_at < ?");
     args.push(String(before));
   }
-  const pageSize = Math.max(1, Math.min(ADMIN_LIST_LIMIT, Number(limit) || 50));
+  const pageSize = disputes ? ADMIN_LIST_LIMIT : Math.max(1, Math.min(ADMIN_LIST_LIMIT, Number(limit) || 50));
   const where = `WHERE ${clauses.join(" AND ")}`;
+  const order = disputes ? "CASE WHEN dispute_due_at IS NULL THEN 1 ELSE 0 END, dispute_due_at, o.created_at DESC" : "o.created_at DESC";
   const { results } = await db
     .prepare(
       `SELECT o.*, n.status AS notification_status,
               COALESCE(f.fulfillment_status, 'unfulfilled') AS fulfillment_status, f.shipped_at AS shipped_at,
-              EXISTS(SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED') AS refund_hold
+              EXISTS(SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED') AS refund_hold,
+              ${OPEN_DISPUTE} AS disputed,
+              (SELECT MIN(d.due_at) FROM order_disputes d WHERE d.order_id = o.id AND d.status = 'open') AS dispute_due_at
          FROM orders o LEFT JOIN order_notifications n ON n.order_id = o.id
          LEFT JOIN order_fulfillments f ON f.order_id = o.id
-         ${where} ORDER BY o.created_at DESC LIMIT ?`,
+         ${where} ORDER BY ${order} LIMIT ?`,
     )
     .bind(...args, pageSize + 1)
     .all();
   const page = results.slice(0, pageSize);
   return {
     orders: page.map(adminSummary),
-    nextBefore: results.length > pageSize ? page.at(-1).created_at : null,
+    nextBefore: !disputes && results.length > pageSize ? page.at(-1).created_at : null,
   };
+}
+
+export async function issueCounts(db) {
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM orders o WHERE ${IS_ORDER} AND ${OPEN_DISPUTE}`).first();
+  return { disputes: row?.n ?? 0 };
 }
 
 export async function orderCounts(db) {

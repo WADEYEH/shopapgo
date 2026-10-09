@@ -97,7 +97,7 @@ export async function reconcilePayments(env, { nowMs = Date.now() } = {}) {
 // Cron job: dispute reminders every run; the payment check once a day (the first run claims it).
 export async function scheduledPaymentChecks(env, { nowMs = Date.now() } = {}) {
   const db = env.DB;
-  const reminders = await remindDisputes(env, { nowMs });
+  const reminders = await remindDisputes(env, { nowMs, adminUrl: `${adminOriginOf(env)}/admin/` });
   const last = (await db.prepare("SELECT value FROM ops_state WHERE key = ?").bind(STATE_KEY).first())?.value ?? null;
   if (last && nowMs - Date.parse(last) < DAY_MS) return { reminders, reconcile: "not_due" };
   const at = iso(nowMs);

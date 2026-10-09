@@ -168,7 +168,7 @@ export function buildRefundFailureEmail(order, refund, { policyNote, team = fals
   const heading = team ? 'Refund failed — action required' : 'Your refund could not be completed';
   const subject = `${team ? 'Action required: APGO refund failed' : 'Update: your APGO refund could not be completed'} · ${order.id}`;
   const intro = team
-    ? 'The payment provider reports that this refund failed. Review the payment in Airwallex and contact the customer. Do not assume an earlier acceptance notice means the refund completed.'
+    ? 'The payment provider reports that this refund failed. Review the payment in the Airwallex or PayPal dashboard and contact the customer. Do not assume an earlier acceptance notice means the refund completed.'
     : 'The payment provider reports that this refund could not be completed. If you received an earlier refund acceptance email, it reflected the initial status and does not confirm that the refund was completed.';
   const action = team
     ? 'No financial refund retry is automatic. Check the provider status before deciding any next action.'

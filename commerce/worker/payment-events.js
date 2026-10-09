@@ -4,7 +4,7 @@
 // (its current state) and matched to our order through the payment it belongs to; anything that does not match one of
 // our orders is ignored. Refunds then go through the same path as Airwallex ones (worker/refunds.js recordRefund):
 // customer notices, and a hold or cancellation of an order not shipped yet (worker/order-core.js).
-import { retrievePaymentDispute } from "./airwallex.js";
+import { AirwallexError, retrievePaymentDispute } from "./airwallex.js";
 import { PaypalError, retrievePaypalCapture, retrievePaypalDispute, retrievePaypalRefund } from "./paypal.js";
 import { getOrder } from "./orders.js";
 import { paymentBelongsTo } from "./checkouts.js";
@@ -25,6 +25,17 @@ const REFUND_STATUS = { COMPLETED: "SETTLED", PENDING: "RECEIVED", FAILED: "FAIL
 const cents = (value) => Math.round(Number(value) * 100);
 const validId = (value) => typeof value === "string" && /^[\w-]{1,120}$/.test(value);
 
+// A provider object that does not exist (404) is not ours to act on: null. Any other failure throws, so the webhook
+// answers 502 and the provider sends the event again later.
+async function unlessMissing(read) {
+  try {
+    return await read();
+  } catch (error) {
+    if ((error instanceof PaypalError || error instanceof AirwallexError) && error.status === 404) return null;
+    throw error;
+  }
+}
+
 // The capture a refund belongs to: its "up" link.
 function captureIdOf(refund) {
   const up = (Array.isArray(refund?.links) ? refund.links : []).find((link) => link?.rel === "up" && /\/captures\//.test(link?.href ?? ""));
@@ -35,7 +46,7 @@ function captureIdOf(refund) {
 // that checkout's payment objects.
 async function orderForCapture(env, captureId) {
   if (!validId(captureId)) return null;
-  const capture = await retrievePaypalCapture(env, captureId);
+  const capture = await unlessMissing(() => retrievePaypalCapture(env, captureId));
   const orderId = capture?.custom_id || capture?.invoice_id;
   const paypalOrderId = capture?.supplementary_data?.related_ids?.order_id;
   if (!orderId || !paypalOrderId) return null;
@@ -53,14 +64,8 @@ async function refundMessages(env, order, kind) {
 
 async function paypalRefundEvent(env, event, { adminUrl }) {
   const resource = event.resource ?? {};
-  let refund = null;
-  let captureId = null;
-  try {
-    refund = await retrievePaypalRefund(env, resource.id);
-    captureId = captureIdOf(refund);
-  } catch (error) {
-    if (!(error instanceof PaypalError) || error.status !== 404) throw error;
-  }
+  const refund = validId(resource.id) ? await unlessMissing(() => retrievePaypalRefund(env, resource.id)) : null;
+  let captureId = refund ? captureIdOf(refund) : null;
   // A reversal PayPal reports on the capture itself (no refund object): the whole capture went back.
   if (!refund && event.event_type === "PAYMENT.CAPTURE.REVERSED" && validId(resource.id)) {
     captureId = resource.id;
@@ -105,7 +110,8 @@ async function paypalDeniedEvent(env, event, { adminUrl }) {
 async function paypalDisputeEvent(env, event, { adminUrl }) {
   const disputeId = event.resource?.dispute_id;
   if (!validId(disputeId)) return { outcome: "ignored" };
-  const dispute = await retrievePaypalDispute(env, disputeId);
+  const dispute = await unlessMissing(() => retrievePaypalDispute(env, disputeId));
+  if (!dispute) return { outcome: "ignored" };
   const captureId = (Array.isArray(dispute?.disputed_transactions) ? dispute.disputed_transactions : [])[0]?.seller_transaction_id;
   const found = await orderForCapture(env, captureId);
   if (!found) return { outcome: "ignored" };
@@ -125,7 +131,7 @@ export async function handlePaypalPaymentEvent(env, event, { adminUrl = null } =
 export async function handleAirwallexDisputeEvent(env, event, { adminUrl = null } = {}) {
   const disputeId = event?.data?.object?.id;
   if (!validId(disputeId)) return { outcome: "ignored" };
-  const dispute = await retrievePaymentDispute(env, disputeId);
+  const dispute = await unlessMissing(() => retrievePaymentDispute(env, disputeId));
   const order = dispute?.merchant_order_id ? await getOrder(env.DB, dispute.merchant_order_id) : null;
   if (!order || !validId(dispute.payment_intent_id) || !(await paymentBelongsTo(env.DB, "airwallex", dispute.payment_intent_id, order.id))) return { outcome: "ignored" };
   const result = await recordDispute(env, { provider: "airwallex", disputeId, orderId: order.id, state: airwallexDisputeState(dispute) }, { adminUrl });

@@ -88,7 +88,7 @@ export async function orderHolds(db, order) {
   const dispute = await openDisputeOf(db, order.id);
   if (dispute) {
     const where = dispute.provider === "paypal" ? "PayPal" : "Airwallex";
-    holds.push({ code: "dispute", message: `A ${where} dispute is open${dispute.due_at ? ` (respond by ${new Date(dispute.due_at).toUTCString()})` : ""}. The order waits until it is won.` });
+    holds.push({ code: "dispute", message: `A dispute is open with ${where}${dispute.due_at ? ` (respond by ${new Date(dispute.due_at).toUTCString()})` : ""}. The order waits until it is won.` });
   }
   return holds;
 }

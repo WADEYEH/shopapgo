@@ -40,7 +40,7 @@ flowchart LR
 
 这些都在网页上操作，不需要指令。设定完告诉我，我帮你检查。
 
-**谁能做**：第 2–5 项要 GitHub repo 拥有者帐号（WADEYEH）的管理权限，这台电脑登录的 GitHub 帐号（anpuuuuu）只有推送权限，不能改设定；第 1、6、8 项要能登录 Cloudflare 后台（帐号 wadeyeh@apgo.com.tw 的 Cloudflare）。权限还没拿到之前：staging 照旧从这台电脑部署，阶段 3 开发不受影响；**切换上线前一定要完成**，否则正式环境无法部署（依规则不从本机部署）。
+**谁能做**：第 2–5 项要 GitHub repo 拥有者帐号（WADEYEH）的管理权限，这台电脑登录的 GitHub 帐号（anpuuuuu）只有推送权限，不能改设定；第 1、6、8 项要能登录 Cloudflare 后台（帐号 wadeyeh@apgo.com.tw 的 Cloudflare）；第 9、10 项要能登录 Airwallex 和 PayPal 后台。权限还没拿到之前：staging 照旧从这台电脑部署，阶段 3 开发不受影响；**切换上线前一定要完成**，否则正式环境无法部署（依规则不从本机部署）。
 
 | # | 在哪里 | 做什么 | 什么时候 |
 |---|---|---|---|
@@ -52,6 +52,8 @@ flowchart LR
 | 6 | healthchecks.io（免费方案即可）| 新增一个 check：Period 5 分钟、Grace 10 分钟，通知方式选你的 email；复制它的 Ping URL | 切换前 |
 | 7 | 终端机（我可以帮你打指令，值由你贴上） | `npx wrangler secret put HEALTHCHECK_PING_URL --env production`，贴上第 6 步的 Ping URL。staging 要不要也设一个可以自己决定 | 切换前 |
 | 8 | Cloudflare → Workers & Pages → `apgo-us-store` → Issues | 部署后自动开启，可以看到所有错误。要「主动通知」：Issues 的自动通知目前只能送到聊天工具或 webhook，不能直接寄 email；PR 3-7（团队通知）会加一个接收端，收到就寄团队信 | PR 3-7 |
+| 9 | Airwallex 后台 → Developer → Webhooks | 正式与 staging 各一个通知网址，订阅第 14 节表格里的 Airwallex 事件（加上退款和争议） | 切换前 |
+| 10 | PayPal Developer → Apps & Credentials → 正式（Live）的 App → Webhooks | 新增通知网址，订阅第 14 节表格里的 8 个 PayPal 事件；把产生的 Webhook ID 用 `npx wrangler secret put PAYPAL_WEBHOOK_ID --env production` 设进去（值由你贴上）。staging 用 Sandbox 的 App 做一次 | 切换前 |
 
 金钥第 1 步的权限说明：「Edit Cloudflare Workers」范本可以部署 Worker、改路由；加上 D1 Edit 才能套用数据库迁移和查还原点。这个金钥只放在 GitHub 的 Secrets，不会出现在任何档案或纪录里。
 
@@ -118,7 +120,7 @@ staging 的特别设定：订单付款后会自动送到**假的 Amazon**（第 
 
 也可以在 Cloudflare 后台操作：Workers & Pages → `apgo-us-store` → Deployments → 版本右边的「⋯」→ Rollback。
 
-**演练纪录（staging）**：见第 14 节。
+**演练纪录（staging）**：见第 15 节。
 
 ---
 
@@ -145,7 +147,7 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 4. 检查：订单数、最近几张订单的状态（只读查询）；`/api/health`。
 5. 补回还原点之后发生、但应该保留的资料（例如付款服务那边成功的付款：付款服务会重送通知，或从后台付款查询补登）。
 
-**演练纪录（staging）**：见第 14 节。
+**演练纪录（staging）**：见第 15 节。
 
 ---
 
@@ -175,7 +177,7 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 
 ## 9. 排程与健康检查
 
-- 排程：正式环境**每 5 分钟**、staging 每 2 分钟。每次执行三件工作：Amazon 出货状态同步、顾客信重寄、Meta 事件重送。一件失败不影响其他件。
+- 排程：正式环境**每 5 分钟**、staging 每 2 分钟。每次执行这些工作：结账失效与 30 天删除（`checkouts`，第 13 节）、争议期限提醒与每日对帐（`payments`，第 14 节）、冷静期后送 Amazon（`mcf_submit`）、Amazon 出货状态同步（`mcf_sync`）、顾客信重寄（`email_retry`）、Meta 事件重送（`meta_retry`）。一件失败不影响其他件。
 - 每次执行写进 `cron_runs` 资料表（`_tick` 代表整次执行），记录开始、结束、最后成功时间和最后的错误。
 - `GET /api/health`：
   - 200 `{"ok":true,...}`：30 分钟内有执行完的排程
@@ -270,7 +272,50 @@ Amazon 出货服务没有测试环境，staging 的订单如果真的送出去�
 
 ---
 
-## 14. 演练纪录
+## 14. 付款事件与每日对帐（PR 3-5）
+
+退款照 D24 一律在付款服务后台做（Airwallex 或 PayPal），我们的系统只负责记下来、冻结或取消订单、通知人。
+
+**退款与款项撤回（两家同一套）**
+
+| 发生的事 | 系统怎么做 |
+|---|---|
+| 未出货的订单被全额退款 | 订单自动取消（取消原因「全额退款」），退款信寄给顾客 |
+| 未出货的订单被部分退款 | 订单冻结（不送 Amazon、不能手动出货），寄信通知拥有者；退款信寄给顾客 |
+| 已出货的订单被退款 | 只记录，退款信寄给顾客 |
+| PayPal 款项撤回（通常是争议后 PayPal 把钱拿回去） | 当成全额退款处理，另外寄信通知拥有者 |
+| PayPal 拒绝一笔已付款订单的请款 | 寄信通知拥有者：钱没有进来，先不要出货，到 PayPal 后台查 |
+
+PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个按钮只查 Airwallex），PayPal 的退款由通知自动进来。
+
+**拒付与争议（两家）**
+
+- 顾客向银行或 PayPal 申请争议时：记下哪一家、原因、金额、回应期限；**未出货的订单冻结**；寄信给拥有者，含回应期限。
+- **期限前 3 天**再寄一次提醒（每个争议一次）。
+- 回应：到 Airwallex 或 PayPal 后台上传订单、付款、出货追踪资料（一键汇出在 PR 3-11）。
+- **赢了**：解除冻结，冷静期过了就照常送 Amazon。**输了**：视同全额退款，未出货就取消订单（取消原因「拒付」）；已出货的只通知拥有者，由团队决定。
+- 后台订单列表按「**Disputes**」只看争议中的订单，期限最早的排最前面；订单页有「Disputes」区块。
+
+**每日对帐（每天一次，第一次排程执行时做）**
+
+- 比对近 3 天：
+  - 我们开过、还没记成已付款的付款单，再问一次付款服务。付款服务显示已付款的，**直接补成订单**（如果那笔结账已经付过，就当成重复付款自动退款）。这是「付款成功但我们当下漏掉通知」的情况。
+  - 我们记为已付款的订单，向付款服务确认。付款服务没显示已付款的，**只通知、不自动改**：先不要出货，到付款服务后台查。
+- 有发现就寄一封「Daily payment check」给拥有者，列出每一笔。付款服务暂时连不上的只计数，不寄信。
+- 上次对帐时间记在 `ops_state` 的 `payments.reconciled_at`。
+
+**通知要订阅的事件**（需要能登录 Airwallex、PayPal 后台；见第 2 节第 9、10 项）
+
+| 付款服务 | 事件 | 通知网址 |
+|---|---|---|
+| Airwallex | `payment_intent.*`、`payment_attempt.*`（已有）、`refund.received`、`refund.accepted`、`refund.settled`、`refund.failed`、`payment_dispute.*`（全部争议事件） | `https://<网域>/api/webhooks/airwallex` |
+| PayPal | `PAYMENT.CAPTURE.COMPLETED`、`CHECKOUT.ORDER.COMPLETED`、`PAYMENT.CAPTURE.REFUNDED`、`PAYMENT.CAPTURE.REVERSED`、`PAYMENT.CAPTURE.DENIED`、`CUSTOMER.DISPUTE.CREATED`、`CUSTOMER.DISPUTE.UPDATED`、`CUSTOMER.DISPUTE.RESOLVED` | `https://<网域>/api/webhooks/paypal` |
+
+每个通知都先向付款服务查最新状态再处理，不是我们订单的付款一律略过；付款服务暂时连不上时回错误，让它稍后重送。
+
+---
+
+## 15. 演练纪录
 
 | 日期 | 演练 | 环境 | 结果 | 花费时间 |
 |---|---|---|---|---|

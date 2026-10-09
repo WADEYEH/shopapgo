@@ -95,7 +95,7 @@ export async function recordDispute(env, { provider, disputeId, orderId, state }
     if (to === "open") {
       await alertTeam(env, {
         ...base, key: `dispute-open:${provider}:${disputeId}`, kind: "dispute_open",
-        subject: `Order ${orderId}: a ${name} dispute was opened`,
+        subject: `Order ${orderId}: a dispute was opened with ${name}`,
         lines: [`The customer disputed ${money} with ${name} (${state.reason || "no reason given"}).`, dueText(state.dueAt), "The order is on hold: it will not be sent to Amazon or shipped until the dispute is won. Respond with the order, payment and tracking details in the dashboard."],
       });
     } else if (to === "won") {
@@ -120,7 +120,7 @@ export async function recordDispute(env, { provider, disputeId, orderId, state }
   }
 }
 
-// Open disputes of an order (for the hold and the order page).
+// Every dispute of an order, open or closed (the order page).
 export async function disputesForOrder(db, orderId) {
   const { results } = await db.prepare("SELECT * FROM order_disputes WHERE order_id = ? ORDER BY created_at").bind(orderId).all();
   return results.map((row) => ({
@@ -134,7 +134,7 @@ export async function openDispute(db, orderId) {
 }
 
 // Cron: tells the team again 3 days before an open dispute's deadline (once per dispute).
-export async function remindDisputes(env, { nowMs = Date.now() } = {}) {
+export async function remindDisputes(env, { nowMs = Date.now(), adminUrl = null } = {}) {
   const db = env.DB;
   const { results } = await db
     .prepare("SELECT * FROM order_disputes WHERE status = 'open' AND reminded_at IS NULL AND due_at IS NOT NULL AND due_at <= ? ORDER BY due_at LIMIT 20")
@@ -143,7 +143,7 @@ export async function remindDisputes(env, { nowMs = Date.now() } = {}) {
   for (const row of results) {
     const name = PROVIDER_NAME[row.provider] ?? row.provider;
     await alertTeam(env, {
-      key: `dispute-reminder:${row.provider}:${row.dispute_id}`, kind: "dispute_reminder", orderId: row.order_id,
+      key: `dispute-reminder:${row.provider}:${row.dispute_id}`, kind: "dispute_reminder", orderId: row.order_id, adminUrl,
       subject: `Order ${row.order_id}: the ${name} dispute is due soon`,
       lines: [`The response to the ${name} dispute (${(row.amount_cents / 100).toFixed(2)} ${row.currency}) is due soon.`, dueText(row.due_at)],
     });
