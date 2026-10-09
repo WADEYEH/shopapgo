@@ -66,7 +66,7 @@ const isStaleSubmitting = (row) => row.status === "submitting" && Date.now() - D
 
 // What the back office shows and which buttons it may offer. `order` is a D1 row; `fulfillment` its shipment (or null).
 export async function mcfView(env, order, fulfillment) {
-  // A database that has not run the latest schema.sql yet simply reads as "never sent" instead of breaking the page.
+  // A database that has not run the latest migrations yet simply reads as "never sent" instead of breaking the page.
   let row = null;
   try {
     row = await getMcfRecord(env.DB, order.id);

@@ -135,7 +135,10 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(staging, /^ADMIN_ACCEPT_SITE_BASIC = "true"/m);
   assert.match(staging, /^SITE_ENV = "staging"/m, "the test site keeps the Basic-auth gate and noindex");
   assert.match(staging, /^AIRWALLEX_ENV = "demo"/m);
-  assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID|MCF_AUTO_SUBMIT)\s*=/m.test(staging), "the test site never takes live payments, sends Meta events or ships through Amazon");
+  assert.ok(!/^\s*(PRICING_APPROVED|META_DATASET_ID)\s*=/m.test(staging), "the test site never takes live payments or sends Meta events");
+  // It sends orders to MCF, but only ever to the fake Amazon (worker/fake-amazon.js): never a real parcel.
+  assert.match(staging, /^MCF_FAKE = "true"$/m);
+  assert.match(staging, /^MCF_AUTO_SUBMIT = "true"$/m);
   assert.ok(!toml.includes("[env.next"), "next.shopapgo.com was retired (plan D38)");
   // Every environment serves the site as the Next.js export builds it (D41): no combining step, "/" is the home page.
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging]) {
@@ -159,7 +162,7 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");
   }
-  assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|MCF_AUTO_SUBMIT|SITE_ENV)\s*=/m.test(production), "no flag that would open payments or the staging gate in production");
+  assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|MCF_AUTO_SUBMIT|SITE_ENV|MCF_FAKE)\s*=/m.test(production), "no flag that would open payments, ship, fake Amazon or add the staging gate in production");
   assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production),"production has no website Basic login; admin uses ADMIN_LOGIN_* + ADMIN_TOKEN");
 });
 

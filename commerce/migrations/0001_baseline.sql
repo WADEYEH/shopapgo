@@ -1,6 +1,11 @@
--- APGO US store orders (Cloudflare D1).
--- Apply locally:  npx wrangler d1 execute apgo-us-store --local --file worker/schema.sql
--- Apply remote:   npx wrangler d1 execute apgo-us-store --remote --file worker/schema.sql
+-- APGO US store (Cloudflare D1), migration 0001: the baseline. Every table the store had before numbered migrations
+-- (D45, 2026-10-09). It is written with IF NOT EXISTS throughout, so applying it to a database that already has these
+-- tables (staging, the production database landing created) changes nothing and only adds the missing ones.
+--
+-- Migrations are applied with wrangler, which records each applied file in the d1_migrations table and runs it once:
+--   npm run db:migrate:local      npm run db:migrate:staging      production: the Deploy workflow (CI)
+-- Rule (D45, tests/schema.test.mjs): additive only. New tables and indexes, and new columns, but never a DROP,
+-- RENAME, a type change or a data rewrite, so the version before a deploy keeps working on the new structure.
 
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,                  -- APGO-US-XXXXXXXXXXXX, also Airwallex merchant_order_id
@@ -74,10 +79,8 @@ CREATE TABLE IF NOT EXISTS order_notifications (
 -- ---------------------------------------------------------------------------------
 -- Fulfilment, customer emails and audit trail.
 --
--- Migration policy: this file is re-run on every `npm run db:migrate:*`, and SQLite/D1 fail
--- a re-run of an added-column statement (duplicate column). So new data goes in NEW
--- tables that use CREATE ... IF NOT EXISTS; existing tables are never altered and
--- existing orders keep working untouched. An order's fulfilment status is derived:
+-- Before numbered migrations this file was re-run on every deploy, so these tables were added as NEW tables
+-- (CREATE ... IF NOT EXISTS) rather than as columns on orders. An order's fulfilment status is derived:
 --   no row in order_fulfillments  ->  "unfulfilled"
 --   a row                         ->  its fulfillment_status ("shipped")
 -- Payment status stays in orders.status and is never mixed with fulfilment.

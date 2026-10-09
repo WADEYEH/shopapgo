@@ -2,8 +2,11 @@
 // Next.js page, and the back office page (public/admin/), the store's Meta Pixel script (public/js/) and the Apple Pay
 // folder (public/apple-pay/) are files in public/, so there is nothing to combine.
 //
-//   node scripts/build-site.mjs           build ../out with the test-site settings (local, staging), then check it
-//   node scripts/build-site.mjs --check   only check an export that is already there (CI after `npm run build`)
+//   node scripts/build-site.mjs              build ../out with the test-site settings (local, staging), then check it
+//   node scripts/build-site.mjs --production build ../out for www.shopapgo.com (only the Deploy workflow's production job):
+//                                            the analytics values must be given in the environment, never taken from
+//                                            a developer's .env.local or left to chance
+//   node scripts/build-site.mjs --check      only check an export that is already there (CI after `npm run build`)
 import { spawnSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -25,6 +28,26 @@ export const TEST_SITE_ENV = {
   NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "",
   NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true",
 };
+
+// The production build: the single site, with the analytics values the workflow passes in (repository variables).
+export const PRODUCTION_SITE_ENV = { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true" };
+export const PRODUCTION_REQUIRED = ["NEXT_PUBLIC_APGO_US_ANALYTICS_READY", "NEXT_PUBLIC_APGO_US_GTM_ID", "NEXT_PUBLIC_APGO_US_META_PIXEL_ID"];
+// The same patterns as GTM_ID_RE / META_PIXEL_ID_RE in lib/us/config.js (tests/platform.test.mjs keeps them equal).
+const GTM_ID = /^GTM-[A-Z0-9]{4,10}$/;
+const META_PIXEL_ID = /^\d{8,20}$/;
+
+// Why these settings must not build production ([] when fine). A value left out, or analytics switched on with an id the
+// site would silently ignore, stops the deploy instead of shipping a site that measures nothing.
+export function productionEnvProblems(env) {
+  const problems = PRODUCTION_REQUIRED.filter((name) => env[name] === undefined).map((name) => `${name} is not set`);
+  const ready = String(env.NEXT_PUBLIC_APGO_US_ANALYTICS_READY ?? "");
+  if (env.NEXT_PUBLIC_APGO_US_ANALYTICS_READY !== undefined && !["true", "false"].includes(ready)) problems.push('NEXT_PUBLIC_APGO_US_ANALYTICS_READY must be "true" or "false"');
+  if (ready === "true") {
+    if (!GTM_ID.test(String(env.NEXT_PUBLIC_APGO_US_GTM_ID ?? "").trim())) problems.push("NEXT_PUBLIC_APGO_US_GTM_ID is not a GTM container id");
+    if (!META_PIXEL_ID.test(String(env.NEXT_PUBLIC_APGO_US_META_PIXEL_ID ?? "").trim())) problems.push("NEXT_PUBLIC_APGO_US_META_PIXEL_ID is not a Meta Pixel id");
+  }
+  return problems;
+}
 
 // What the Worker needs from the export: the pages it serves, the back office page, the store's pixel script, the
 // brand 404 page (not_found_handling) and the list of files it must not upload.
@@ -69,10 +92,18 @@ export async function checkSite(dir = SITE_DIR) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (!process.argv.includes("--check")) {
+    const production = process.argv.includes("--production");
+    if (production) {
+      const problems = productionEnvProblems(process.env);
+      if (problems.length) {
+        console.error(`production build refused: ${problems.join("; ")}`);
+        process.exit(1);
+      }
+    }
     // A fixed command string (npm is a .cmd on Windows, so it needs a shell); nothing user-supplied is interpolated.
     const result = spawnSync("npm --prefix .. run build", {
       cwd: COMMERCE,
-      env: { ...process.env, ...TEST_SITE_ENV },
+      env: { ...process.env, ...(production ? PRODUCTION_SITE_ENV : TEST_SITE_ENV) },
       stdio: "inherit",
       shell: true,
     });

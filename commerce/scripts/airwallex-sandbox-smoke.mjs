@@ -113,9 +113,9 @@ async function startWorker() {
   }
   const wrangler = path.join(root, "node_modules", ".bin", "wrangler");
   const envArgs = envName ? ["--env", envName] : [];
-  const migrate = spawnSync(wrangler, ["d1", "execute", "apgo-us-store", "--local", "--file", "worker/schema.sql", ...envArgs], { cwd: root, encoding: "utf8" });
+  const migrate = spawnSync(wrangler, ["d1", "migrations", "apply", "DB", "--local", ...envArgs], { cwd: root, encoding: "utf8" });
   if (migrate.status !== 0) fatal(`Local D1 migration failed:\n${(migrate.stderr || migrate.stdout).slice(-800)}`);
-  step("Local D1 schema applied");
+  step("Local D1 migrations applied");
   let output = "";
   worker = spawn(wrangler, ["dev", "--port", port, "--ip", "127.0.0.1", ...envArgs], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
   for (const stream of [worker.stdout, worker.stderr]) stream.on("data", (chunk) => { output = (output + chunk).slice(-4000); });

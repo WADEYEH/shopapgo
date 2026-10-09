@@ -1,11 +1,11 @@
 // A D1-compatible adapter over node:sqlite (in memory) so backend tests run the real
-// SQL in worker/orders.js and worker/schema.sql. Requires Node 22.5+.
-import { readFile } from "node:fs/promises";
+// SQL in worker/orders.js on a database built from the migrations (commerce/migrations). Requires Node 22.5+.
+import { migrationSql } from "./migrations.mjs";
 
 export async function createD1() {
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(":memory:");
-  db.exec(await readFile(new URL("../../worker/schema.sql", import.meta.url), "utf8"));
+  db.exec(await migrationSql());
   const plain = (row) => (row ? { ...row } : row);
   const executions = new WeakMap();
   return {

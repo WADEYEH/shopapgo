@@ -431,7 +431,7 @@ Nothing below is decided; the store refuses production traffic until
 ```bash
 npm install
 cp .dev.vars.example .dev.vars    # fill in Airwallex SANDBOX credentials (+ admin login / ADMIN_TOKEN)
-npm run db:migrate:local           # re-run after pulling: schema.sql is additive/idempotent
+npm run db:migrate:local           # re-run after pulling: applies the new numbered files in migrations/ only
 npm run build:site                 # the site the Worker serves: the Next.js export in ../out, test settings
 npm run dev                        # http://127.0.0.1:8799/  ·  /cart?add=d204  ·  /admin/
 ```
@@ -567,13 +567,11 @@ Payment status and fulfilment status are separate. `orders.status` stays
 
 ### Migration (existing databases)
 
-`npm run db:migrate:local|remote` re-runs `worker/schema.sql` every time, and SQLite/D1 cannot
-re-run an added-column statement without erroring. So this change adds **only new tables**, all
-`CREATE TABLE/INDEX IF NOT EXISTS`: `order_fulfillments`, `order_emails`, `order_audit`.
-`orders` is untouched; an existing order with no fulfilment row simply reads as `unfulfilled`.
-Run `npm run db:migrate:remote` **before** deploying this Worker (the order detail queries the new
-tables). Re-running is safe (tested three times against an in-memory DB and twice against local D1).
-Rollback: the old Worker ignores the new tables.
+These tables (`order_fulfillments`, `order_emails`, `order_audit`) are in the baseline migration
+(`migrations/0001_baseline.sql`, all `CREATE TABLE/INDEX IF NOT EXISTS`). `orders` is untouched; an
+existing order with no fulfilment row simply reads as `unfulfilled`. Since phase 3 (PR 3-1) D1 changes are
+numbered files in `migrations/` that wrangler applies once each, before the deploy (D45: additive only, see
+`docs/ops/runbook.md`). Rollback: the old Worker ignores the new tables.
 
 ## Customer emails
 
@@ -762,7 +760,7 @@ The old `SPAPI_LWA_CLIENT_ID` / `SPAPI_LWA_CLIENT_SECRET` / `SPAPI_REFRESH_TOKEN
 3. **Confirm the SKU mapping** and set `MCF_SKU_MAP_JSON` (FBA inventory showed seller SKUs `D204` / `D215`). Check that the SKUs are FBA-fulfillable with enough stock.
 4. **Test without shipping anything:** the read-only preview and list endpoints need no order. The **first real order** is a real shipment that consumes FBA stock and is charged MCF fees
    (the endpoints have no sandbox): place one small order yourself to your own address, with `MCF_AUTO_SUBMIT=true` only for that moment, watch it in `/admin/`, sync it, then decide.
-5. **Decide what shoppers are told about MCF shipping** (see next section), then `npm run db:migrate:remote` **before** deploying (adds `order_mcf`).
+5. **Decide what shoppers are told about MCF shipping** (see next section), then deploy through the Deploy workflow, which applies the migrations first (`order_mcf` is in the baseline).
 
 ### Shipping cost and delivery time shown to shoppers: open decision
 
@@ -786,7 +784,7 @@ the confirmation-page poll, exactly once) to Meta's Conversions API, deduplicate
 
 * **Switch:** `META_DATASET_ID` (a plain var, set only in `[env.production.vars]`). Unset (staging, local) = the whole feature is skipped: no Graph call, no attribution
   stored, Airwallex metadata unchanged, `scheduled()` does not touch the database for it. The token is the secret `META_CAPI_ACCESS_TOKEN`; without it events are skipped.
-* **Tables (new, in `worker/schema.sql`):** `order_attribution` (fbp, fbc, fbclid, source URL, client IP and user agent) and `order_meta_events`
+* **Tables (in `migrations/0001_baseline.sql`):** `order_attribution` (fbp, fbc, fbclid, source URL, client IP and user agent) and `order_meta_events`
   (`PK(order_id, event_name)`, status `sending|sent|failed`, attempts, a PII-free error code). No cookie banner is used (owner decision), so IP and UA are stored.
 * **Reliability:** an atomic claim on the primary key prevents double sends; 3 tries per request (network error, timeout, 429, 5xx); failures are re-sent by the cron
   with the original `event_id` and `event_time`; Meta rejects events older than 7 days, so the cron stops at 6.
@@ -911,7 +909,8 @@ Never put production keys (`AIRWALLEX_PROD_*` or the prod API key) into staging.
 
 ```bash
 npm run test:static && npm run test:e2e        # must be green first
-npm run deploy:staging                          # = db:migrate:staging (schema.sql, idempotent) + wrangler deploy --env staging
+npm run deploy:staging                          # = build:site + db:migrate:staging (new migrations only) + wrangler deploy --env staging
+# (after CI passes on main, .github/workflows/deploy.yml does the same by itself; docs/ops/runbook.md)
 node scripts/staging-check.mjs --base https://staging.shopapgo.com --admin-base https://admin-staging.shopapgo.com --credentials ~/.apgo-staging-credentials
 node scripts/airwallex-browser-smoke.mjs --base https://staging.shopapgo.com --admin-base https://admin-staging.shopapgo.com --credentials ~/.apgo-staging-credentials
 ```
@@ -956,13 +955,13 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 ### Go-live checklist for production (none of this has been done)
 
 - [ ] Create the production D1: `npx wrangler d1 create apgo-us-store`, paste the id into `[[env.production.d1_databases]]`, then
-      `npx wrangler d1 execute apgo-us-store --env production --remote --file worker/schema.sql`.
+      apply the migrations (the Deploy workflow does it, after recording a restore point: `docs/ops/runbook.md`).
 - [ ] Bind `store.shopapgo.com`: uncomment the `routes` line in `[env.production]` (zone `shopapgo.com`; the `www` Pages project stays untouched).
 - [ ] Production secrets with `--env production`: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` (production keys), `AIRWALLEX_WEBHOOK_SECRET`, `ADMIN_LOGIN_EMAIL`, `ADMIN_LOGIN_PASSWORD`, `ADMIN_TOKEN`,
       plus optional notification / email / MCF secrets.
 - [ ] Register the Airwallex production webhook `https://store.shopapgo.com/api/webhooks/airwallex` with the success/cancellation and six failed-attempt events listed below.
 - [ ] PayPal (credentials already set): register `https://store.shopapgo.com/api/webhooks/paypal` for `PAYMENT.CAPTURE.COMPLETED` in the live Dashboard and `wrangler secret put PAYPAL_WEBHOOK_ID --env production`. Same for staging sandbox. Details: [paypal.md](paypal.md).
-- [ ] Meta CAPI (production only; see `docs/meta-tracking.md`): the owner sets `META_CAPI_ACCESS_TOKEN` (and `META_TEST_EVENT_CODE` while testing) with `--env production`; run `worker/schema.sql` on the production D1 first (adds `order_attribution`, `order_meta_events`).
+- [ ] Meta CAPI (production only; see `docs/meta-tracking.md`): the owner sets `META_CAPI_ACCESS_TOKEN` (and `META_TEST_EVENT_CODE` while testing) with `--env production`; the Deploy workflow applies the migrations first (`order_attribution`, `order_meta_events` are in the baseline).
 - [ ] Approve prices / shipping / tax (see "Before switching `AIRWALLEX_ENV` to `prod`"), then set `PRICING_APPROVED = "true"` (until then prod takes no payments).
 - [ ] Decide MCF, emails, Apple Pay domain verification for `store.shopapgo.com`.
 - [ ] `npx wrangler deploy --env production`, then one real low-value order end to end.
@@ -973,7 +972,7 @@ The commands below are the generic form. Prefer the `--env staging` / `--env pro
 
 ```bash
 npx wrangler d1 create apgo-us-store          # paste database_id into wrangler.toml
-npm run db:migrate:remote                      # also creates order_notifications, order_fulfillments, order_emails, order_audit, order_mcf
+npx wrangler d1 migrations apply DB --remote   # every table; for staging / production use the npm script / Deploy workflow
 npx wrangler secret put AIRWALLEX_CLIENT_ID
 npx wrangler secret put AIRWALLEX_API_KEY
 npx wrangler secret put AIRWALLEX_WEBHOOK_SECRET

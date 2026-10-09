@@ -99,3 +99,15 @@ OUTBOUND_INTERNAL_TOKEN=
 # MCF_SYNC_CRON=
 # "true" also passes the shopper's email to Amazon so it sends its own shipping notices (default off: no duplicate emails).
 # MCF_NOTIFY_AMAZON_EMAIL=
+# Staging only (wrangler.toml [env.staging.vars]): "true" with SITE_ENV=staging sends every MCF call to the fake Amazon
+# (worker/fake-amazon.js) instead; set anywhere else it stops all sending. FAKE_MCF_SHIP_MINUTES (default 10) = when a fake
+# order ships. A recipient name containing STOCKOUT plays out a stock-out.
+# MCF_FAKE=
+# FAKE_MCF_SHIP_MINUTES=
+
+# --- Operations (worker/cron.js, docs/ops/runbook.md) ----------------------------------------------
+# Optional secret: an https dead-man-switch URL (e.g. a Healthchecks.io check) pinged after every cron run, + "/fail"
+# when a job failed. When the pings stop, that service alerts the team.
+HEALTHCHECK_PING_URL=
+# GET /api/health answers 503 when the last cron run is older than this (minutes, default 30).
+# CRON_STALE_MINUTES=

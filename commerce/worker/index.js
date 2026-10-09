@@ -8,6 +8,7 @@
 //   POST /api/checkout/paypal/order   create order + PayPal Orders v2 order
 //   POST /api/checkout/paypal/capture capture a PayPal order and settle the store order
 //   GET  /api/orders/:id           public order status (syncs pending intents / PayPal)
+//   GET  /api/health               200 while the cron keeps running, 503 once it has stopped (worker/cron.js)
 //   POST /api/webhooks/airwallex   signed Airwallex events
 //   POST /api/webhooks/paypal      verified PayPal events (PAYMENT.CAPTURE.COMPLETED)
 //   POST /api/webhooks/resend      Svix-signed Resend email delivery events
@@ -21,6 +22,8 @@
 // when an order turns paid; a cron re-sends failures. All of it is skipped unless META_DATASET_ID is set.
 //
 // With ADMIN_HOST set, /admin* is served only on that hostname and the store hostnames answer 404 (worker/hosts.js).
+//
+// Starting a payment, the address check and quotes are limited per client address (worker/rate-limit.js): 429 when over.
 
 import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
 import { PricingConfigError, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
@@ -68,18 +71,20 @@ import {
   settlePaypalOrder,
 } from "./orders.js";
 import { notifyOrderPaid } from "./notify.js";
-import { processConfirmationJob, processMessageJob, scheduledCustomerEmailRetry } from "./customer-email.js";
+import { processConfirmationJob, processMessageJob } from "./customer-email.js";
 import { handleRefundEvent } from './refunds.js';
 import { handleResendWebhook } from "./email-delivery.js";
-import { scheduledMcfSync, submitOrderToMcf } from "./mcf.js";
+import { submitOrderToMcf } from "./mcf.js";
 import { attributionMetadata, readAttribution, saveAttribution } from "./meta-attribution.js";
-import { metaEnabled, metaEventId, scheduledMetaRetry, sendMetaEvent } from "./meta-capi.js";
+import { metaEnabled, metaEventId, sendMetaEvent } from "./meta-capi.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
 import { siteRedirect } from "./redirects.js";
 import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
+import { rateLimited } from "./rate-limit.js";
+import { cronHealth, runScheduled } from "./cron.js";
 
 async function readBody(request) {
   let body;
@@ -499,6 +504,12 @@ async function route(request, env, services) {
   const { pathname } = new URL(request.url);
   const { method } = request;
 
+  const limited = await rateLimited(request, env);
+  if (limited) return limited;
+  if (pathname === "/api/health" && method === "GET") {
+    const health = await cronHealth(env);
+    return json(health, health.ok ? 200 : 503);
+  }
   if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env));
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
   if (pathname === "/api/checkout/address" && method === "POST") return handleAddressCheck(request, env);
@@ -557,10 +568,10 @@ export default {
   fetch(request, env, ctx) {
     return withStaging(request, env, () => handleRequest(request, env, ctx));
   },
-  // Cron. Three independent jobs, each a no-op unless enabled: Amazon MCF status sync (MCF_SYNC_CRON=true),
+  // Cron (worker/cron.js). Three independent jobs, each a no-op unless enabled: Amazon MCF status sync (MCF_SYNC_CRON=true),
   // customer email retries (customer email configured) and the Meta CAPI re-send of failed events (META_DATASET_ID set).
-  // allSettled: one failing job must not cancel the others.
+  // One failing job never cancels the others; every run is recorded for GET /api/health and pings HEALTHCHECK_PING_URL.
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(Promise.allSettled([scheduledMcfSync(env), scheduledCustomerEmailRetry(env), scheduledMetaRetry(env)]));
+    ctx.waitUntil(runScheduled(env));
   },
 };
