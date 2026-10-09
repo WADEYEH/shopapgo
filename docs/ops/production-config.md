@@ -73,7 +73,7 @@
 | 后台登录 | Cloudflare Access 设定（新增） |
 | 联络表单防机器人 | Turnstile 金钥（新增） |
 
-**PR 3-2 新增的设定**（切换那次部署生效）：一般设定 `ADMIN_OWNER_EMAIL`（第一位拥有者）。打开 Cloudflare Access 时再加：一般设定 `ADMIN_ACCESS`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`CLOUDFLARE_ACCOUNT_ID`、`ACCESS_LIST_ID`，密钥 `ACCESS_LIST_API_TOKEN`（`docs/ops/runbook.md` 第 12 节）。
+**PR 3-2 新增的设定**（切换那次部署生效）：一般设定 `ADMIN_OWNER_EMAIL`（第一位拥有者）。打开 Cloudflare Access 时再加：一般设定 `ADMIN_ACCESS`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`CLOUDFLARE_ACCOUNT_ID`、`ACCESS_LIST_ID`，密钥 `ACCESS_LIST_API_TOKEN`（`docs/ops/runbook.md` 第 11 节）。
 
 **之后要移除的**（企划 O10）：`META_TEST_EVENT_CODE`（先确认用途）；切换到 Cloudflare Access 后的 `ADMIN_LOGIN_EMAIL`、`ADMIN_LOGIN_PASSWORD`；`ADMIN_TOKEN` 只留给脚本或移除。
 

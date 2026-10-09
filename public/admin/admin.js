@@ -4,6 +4,7 @@
 // Who is signed in, Activity and Members: ./team.js.
 import { el, money, notice, priceRows } from "./ui.js";
 import { initTeam } from "./team.js";
+import { renderOrderActions, renderStage } from "./order-actions.js";
 
 // The back office only works on its own host (commerce/worker/hosts.js). Until the cutover the brand host (Cloudflare
 // Pages) builds the same site files, this page among them, so leave for the home page there.
@@ -409,6 +410,7 @@ function renderDetail(order) {
   body.replaceChildren(
     el("h3", {}, order.id),
     el("p", {}, statusBadge(order.status), shipBadge(order)),
+    ...[renderStage(order)].filter(Boolean),
     el(
       "dl",
       { class: "admin-facts" },
@@ -447,6 +449,7 @@ function renderDetail(order) {
     ),
     renderPaymentFailures(order),
     renderRefunds(order),
+    ...[renderOrderActions(order, { adminApi, onChange: orderChanged })].filter(Boolean),
     ...[renderMcf(order)].filter(Boolean),
     renderFulfillment(order),
     ...[renderHistory(order)].filter(Boolean),
@@ -493,6 +496,13 @@ function renderRefunds(order) {
       el('dt', {}, 'Updated'), el('dd', {}, formatDate(item.updatedAt)),
       item.failureCode && el('dt', {}, 'Failure code'), item.failureCode && el('dd', {}, item.failureCode))),
     button,checks,feedback);
+}
+
+// After a confirm / cancel / address change: show the new state with what happened, and refresh the list.
+function orderChanged(order, outcome) {
+  renderDetail(order);
+  if (outcome) $("[data-admin-detail-body]").prepend(outcome);
+  load({ reset: true });
 }
 
 async function select(orderId, { focus = true } = {}) {

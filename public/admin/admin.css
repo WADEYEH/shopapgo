@@ -125,3 +125,18 @@
   .admin-member__controls, .admin-member-add { grid-template-columns: minmax(0, 1fr); }
   .admin-filters .field { max-width: none; }
 }
+
+/* Order stage and actions (order-actions.js) */
+.admin-stage p { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 8px 0 0; }
+.admin-stage__label { color: var(--text-tertiary); font-size: 14px; }
+.admin-stage__label strong { color: var(--text-primary); }
+.admin-stage__note { color: var(--text-tertiary); font-size: 14px; }
+.admin-stage .notice { margin: 12px 0 0; }
+.admin-order-actions { display: grid; gap: 12px; }
+.admin-order-actions h4 { margin-bottom: 0; }
+.admin-order-change summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; color: var(--accent); }
+.admin-order-change > .admin-ship__form, .admin-order-change > form { margin-top: 8px; }
+.admin-address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.admin-check { display: flex; gap: 8px; align-items: center; min-height: 44px; color: var(--text-secondary); font-size: 14px; }
+.admin-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+@media (max-width: 480px) { .admin-address-grid { grid-template-columns: minmax(0, 1fr); } }

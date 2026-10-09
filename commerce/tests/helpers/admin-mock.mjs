@@ -54,6 +54,27 @@ const mcfBlock = (o, mcf) => {
   };
 };
 
+export const CANCEL_REASONS = {
+  customer_request: "Customer asked to cancel", out_of_stock: "Out of stock", full_refund: "Fully refunded",
+  chargeback: "Chargeback lost", review_rejected: "Payment did not match (review)", other: "Other",
+};
+
+// The order core block as worker/order-core.js orderCoreView() returns it, from a small description:
+// { stage, coolingOffEndsAt, holds, cancellation, payment }.
+export function coreBlock(o, core) {
+  const stage = core.stage;
+  const cooling = Boolean(core.coolingOffEndsAt) && stage === "paid";
+  return {
+    stage,
+    coolingOff: { endsAt: core.coolingOffEndsAt ?? null, active: cooling },
+    holds: core.holds ?? (stage === "review" ? [{ code: "review", message: "The amount paid did not match the order. Confirm or cancel it." }] : []),
+    cancellation: core.cancellation ?? null,
+    actions: { confirm: stage === "review", cancel: ["review", "paid", "fulfilling"].includes(stage), changeAddress: stage === "paid" && cooling },
+    payment: core.payment ?? { provider: "airwallex", paidCents: o.totalCents, refundedCents: 0, refundStatus: "none" },
+    cancelReasons: CANCEL_REASONS,
+  };
+}
+
 const view = (o, mcf = { mode: "off" }) => ({
   ...o,
   fulfillmentStatus: o.fulfillment ? "shipped" : "unfulfilled",
@@ -61,6 +82,7 @@ const view = (o, mcf = { mode: "off" }) => ({
   emails: o.emails ?? [],
   audit: o.audit ?? [],
   mcf: mcfBlock(o, mcf),
+  ...(o.core ? { core: coreBlock(o, o.core) } : {}),
 });
 
 // Returns the list of requested URLs so tests can assert on query strings.
@@ -121,7 +143,9 @@ function teamMock(team, writes) {
 
 // MCF options: mcf ({ mode: "off" | "not_configured" | "ready", submitFails: n = first n submits fail,
 // amazonShipped: true = the next sync finds the order shipped }), mcfRecords ({ [orderId]: record } to start from).
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {} } = {}) {
+// orderCore: { [orderId]: { stage, coolingOffEndsAt, holds, payment } } adds the order core block to those orders;
+// orderActionError: { status, code, message } makes the next confirm / cancel / address fail like the Worker would.
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null } = {}) {
   const requests = [];
   requests.writes = [];
   requests.mcf = [];
@@ -131,6 +155,9 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
   const orders = SAMPLE_ORDERS.map((o) => structuredClone(o));
   for (const [id, failures] of Object.entries(paymentFailures)) orders.find((o) => o.id === id).paymentFailures = structuredClone(failures);
   for (const [id, record] of Object.entries(mcfRecords)) orders.find((o) => o.id === id).mcfRecord = structuredClone(record);
+  for (const [id, core] of Object.entries(orderCore)) orders.find((o) => o.id === id).core = structuredClone(core);
+  requests.orderActions = [];
+  let actionError = orderActionError;
   let submitFails = mcf.submitFails ?? 0;
   const mcfState = { amazonShipped: Boolean(mcf.amazonShipped) };
   requests.mcfState = mcfState;
@@ -179,6 +206,30 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       }
       order.emails = [...(order.emails ?? []), { kind: "shipment", status: email, detail: "", updatedAt: stamp }];
       return reply(200, { result: { outcome: "synced", shipped: true, email, reason: null }, order: view(order, mcf) });
+    }
+    const actionMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address)$/);
+    if (actionMatch) {
+      const request = route.request();
+      const body = request.postDataJSON();
+      requests.orderActions.push({ action: actionMatch[2], method: request.method(), contentType: request.headers()["content-type"], body });
+      if (actionError) {
+        const error = actionError;
+        actionError = null;
+        return reply(error.status, { error: { code: error.code, message: error.message } });
+      }
+      const order = orders.find((o) => o.id === decodeURIComponent(actionMatch[1]));
+      if (!order?.core) return reply(404, { error: { code: "not_found", message: "Order not found." } });
+      if (actionMatch[2] === "confirm") {
+        order.status = "paid";
+        order.core = { ...order.core, stage: "paid", holds: [], coolingOffEndsAt: "2026-10-09T05:00:00.000Z" };
+      } else if (actionMatch[2] === "cancel") {
+        order.status = "cancelled";
+        order.core = { ...order.core, stage: "cancelled", holds: [], cancellation: { fromStage: order.core.stage, reason: body.reason, note: body.note || null, by: "staff@apgo.example", at: stamp, amazonCancel: order.core.stage === "fulfilling" ? "requested" : null } };
+      } else {
+        order.shipping = { ...order.shipping, ...body.shipping };
+      }
+      const payment = coreBlock(order, order.core).payment;
+      return reply(200, { result: { changed: true, payment: actionMatch[2] === "cancel" ? payment : null }, order: view(order, mcf) });
     }
     const shipMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/ship$/);
     if (shipMatch) {
