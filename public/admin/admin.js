@@ -5,13 +5,15 @@
 import { el, money, notice, priceRows } from "./ui.js";
 import { initTeam } from "./team.js";
 import { renderOrderActions, renderStage } from "./order-actions.js";
+import { initCheckouts } from "./checkouts.js";
 
 // The back office only works on its own host (commerce/worker/hosts.js). Until the cutover the brand host (Cloudflare
 // Pages) builds the same site files, this page among them, so leave for the home page there.
 if (["www.shopapgo.com", "shopapgo.com"].includes(location.hostname)) location.replace("/");
 
 const $ = (selector, root = document) => root.querySelector(selector);
-const STATUSES = ["all", "paid", "pending", "review", "cancelled"];
+// Orders only: unpaid checkouts are in their own section (checkouts.js, D36).
+const STATUSES = ["all", "paid", "review", "cancelled"];
 const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
 const formatDate = (iso) => (iso ? dateTime.format(new Date(iso)) : "—");
 
@@ -611,6 +613,7 @@ async function loadMessages({ reset = false } = {}) {
 
 $("[data-admin-messages-load]").addEventListener("click", () => loadMessages({ reset: true }));
 
+initCheckouts({ adminApi });
 initTeam({ adminApi, openOrder: (id) => { history.replaceState(null, "", `#${id}`); select(id); } });
 await load({ reset: true });
 const initial = decodeURIComponent(window.location.hash.slice(1));

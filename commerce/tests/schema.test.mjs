@@ -19,6 +19,7 @@ const all = await migrations();
 const ADDED = [
   "admin_audit",
   "admin_members",
+  "checkout_payments",
   "contact_messages",
   "cron_runs",
   "customer_email_events",
@@ -105,7 +106,12 @@ test("a fresh database gets the production tables with the same columns, plus th
   const prod = await database(production);
   const shared = tables(prod);
   assert.deepEqual(tables(fresh), [...shared, ...ADDED].sort());
-  for (const table of shared) assert.deepEqual(columns(fresh, table), columns(prod, table), `${table}: same columns as production`);
+  // Production's columns, in order; later migrations may add more at the end (D45).
+  for (const table of shared) {
+    const prodColumns = columns(prod, table);
+    assert.deepEqual(columns(fresh, table).slice(0, prodColumns.length), prodColumns, `${table}: production's columns first`);
+  }
+  assert.deepEqual(columns(fresh, "orders").slice(columns(prod, "orders").length).map((c) => c.name), ["expired_at", "purged_at"]);
 });
 
 test("every environment applies the migrations with wrangler (migrations_dir), and the scripts use them", async () => {

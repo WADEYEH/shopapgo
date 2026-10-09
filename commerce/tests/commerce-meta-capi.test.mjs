@@ -567,22 +567,20 @@ test("scheduled(): one handler runs the Meta re-send and still the MCF sync (mer
     assert.equal(eventRows(db, orderId)[0].status, "sent");
   });
 
-  // staging / local: no dataset id -> the jobs write nothing; the run itself is recorded (cron_runs) and the Amazon
-  // queue is only read (empty here)
+  // staging / local: no dataset id -> the Meta re-send never touches its tables (the other jobs find nothing to do here)
   const touched = [];
-  const queueRead = (sql) => /^SELECT order_id FROM mcf_submission_queue\b/.test(sql);
   const stagingEnv = baseEnv({
     prepare(sql) {
       touched.push(sql);
-      if (queueRead(sql)) return { bind: () => ({ all: async () => ({ results: [] }) }) };
-      if (!/\bcron_runs\b/.test(sql)) throw new Error("database must not be touched");
-      return { bind: () => ({ run: async () => ({ meta: { changes: 1 } }) }) };
+      const statement = { all: async () => ({ results: [] }), first: async () => null, run: async () => ({ meta: { changes: 0 } }) };
+      return { bind: () => statement, ...statement };
     },
   });
   const ctx = ctxStub();
   await worker.scheduled({}, stagingEnv, ctx);
   await ctx.settled();
-  assert.ok(touched.length > 0 && touched.every((sql) => /\bcron_runs\b/.test(sql) || queueRead(sql)));
+  assert.ok(touched.some((sql) => /\bcron_runs\b/.test(sql)), "the run is recorded");
+  assert.ok(!touched.some((sql) => /\border_meta_events\b/.test(sql)), "no Meta work without a dataset id");
 });
 
 // ---------- test_event_code, logs, secrets ----------

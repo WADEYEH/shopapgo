@@ -140,3 +140,6 @@
 .admin-check { display: flex; gap: 8px; align-items: center; min-height: 44px; color: var(--text-secondary); font-size: 14px; }
 .admin-check input { width: 20px; height: 20px; accent-color: var(--accent); }
 @media (max-width: 480px) { .admin-address-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Unfinished checkouts (checkouts.js) */
+.admin-checkout__failure { margin: 6px 0 0; color: var(--accent-dry); font-size: 14px; overflow-wrap: anywhere; }

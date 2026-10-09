@@ -199,7 +199,7 @@ test("checkout session sends an idempotent, correctly shaped PaymentIntent", { s
   assert.deepEqual(order, { status: "pending", payment_intent_id: "int_123" });
 });
 
-test("a failed PaymentIntent create cancels the orphan order and returns a generic 502", { skip }, async () => {
+test("a failed PaymentIntent create returns a generic 502 and leaves the checkout open for the next try (D36)", { skip }, async () => {
   const db = await createD1();
   resetAirwallexTokenCache();
   await withFetch(
@@ -210,8 +210,8 @@ test("a failed PaymentIntent create cancels the orphan order and returns a gener
       assert.ok(!JSON.stringify(await response.json()).includes("bad amount"), "provider detail is not leaked");
     },
   );
-  const order = await db.prepare("SELECT status FROM orders").first();
-  assert.equal(order.status, "cancelled");
+  const order = await db.prepare("SELECT status, payment_intent_id FROM orders").first();
+  assert.deepEqual({ ...order }, { status: "pending", payment_intent_id: null }, "a checkout with no payment object; it expires after 24 hours");
 });
 
 test("missing Airwallex credentials fail closed without calling the network", { skip }, async () => {
@@ -381,7 +381,7 @@ test("admin: Bearer and Basic auth list orders with address, items, totals and p
   const basic = `Basic ${Buffer.from(`admin:${ADMIN_TOKEN}`).toString("base64")}`;
   const list = await (await call(env, "/admin/api/orders", { headers: { Authorization: basic } })).json();
   assert.equal(list.orders.length, 1);
-  assert.deepEqual(list.counts, { pending: 0, paid: 1, review: 0, cancelled: 0 });
+  assert.deepEqual(list.counts, { paid: 1, review: 0, cancelled: 0 });
   assert.equal(list.orders[0].notification, "skipped", "no channel configured → skipped and recorded");
   assert.equal(list.orders[0].itemCount, 3);
 
@@ -393,8 +393,8 @@ test("admin: Bearer and Basic auth list orders with address, items, totals and p
   assert.equal(detail.lines.length, 2);
   assert.equal(detail.paymentIntentId, "int_123");
 
-  const filtered = await (await call(env, "/admin/api/orders?status=pending", { headers: { Authorization: basic } })).json();
-  assert.equal(filtered.orders.length, 0);
+  // Unpaid checkouts are not orders (D36): no "pending" filter here; they have their own list.
+  assert.equal((await call(env, "/admin/api/orders?status=pending", { headers: { Authorization: basic } })).status, 400);
   const search = await (await call(env, "/admin/api/orders?q=austin", { headers: { Authorization: basic } })).json();
   assert.equal(search.orders.length, 1);
   assert.equal((await call(env, "/admin/api/orders?status=bogus", { headers: { Authorization: basic } })).status, 400);
@@ -791,7 +791,10 @@ test("admin list filters by fulfilment status and exposes the to-ship queue coun
   assert.deepEqual(shipped.orders.map((o) => [o.id, o.fulfillmentStatus]), [[a.orderId, "shipped"]]);
   assert.ok(shipped.orders[0].shippedAt);
   assert.deepEqual(shipped.fulfillmentCounts, { unfulfilled: 1, shipped: 1 });
-  assert.equal((await get("")).orders.length, 3);
+  assert.equal((await get("")).orders.length, 2, "the unpaid checkout is not an order (M9-22)");
+  const checkouts = await (await call(env, "/admin/api/checkouts", { headers: bearer })).json();
+  assert.equal(checkouts.checkouts.length, 1);
+  assert.deepEqual(checkouts.counts, { open: 1, expired: 0 });
   assert.equal((await call(env, "/admin/api/orders?fulfillment=bogus", { headers: bearer })).status, 400);
 });
 

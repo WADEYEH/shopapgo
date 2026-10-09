@@ -145,7 +145,8 @@ function teamMock(team, writes) {
 // amazonShipped: true = the next sync finds the order shipped }), mcfRecords ({ [orderId]: record } to start from).
 // orderCore: { [orderId]: { stage, coolingOffEndsAt, holds, payment } } adds the order core block to those orders;
 // orderActionError: { status, code, message } makes the next confirm / cancel / address fail like the Worker would.
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null } = {}) {
+// checkouts: the Unfinished checkouts list (worker/checkouts.js listCheckouts shape).
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [] } = {}) {
   const requests = [];
   requests.writes = [];
   requests.mcf = [];
@@ -167,6 +168,12 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     requests.push(url.pathname + url.search);
     const reply = (code, data) => route.fulfill({ status: code, contentType: "application/json", body: JSON.stringify(data) });
     if (status !== 200) return reply(status, { error: { code: "admin_not_configured", message: "The order back office is not configured." } });
+    if (url.pathname === "/admin/api/checkouts") {
+      const wanted = url.searchParams.get("status") || "all";
+      const q = (url.searchParams.get("q") || "").toLowerCase();
+      const list = checkouts.filter((c) => (wanted === "all" || c.status === wanted) && (!q || (c.email || "").toLowerCase().includes(q)));
+      return reply(200, { checkouts: list, nextBefore: null, counts: { open: checkouts.filter((c) => c.status === "open").length, expired: checkouts.filter((c) => c.status === "expired").length } });
+    }
     const teamReply = teamRoute?.(url, route.request(), reply);
     if (teamReply) return teamReply;
     const mcfMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync)$/);

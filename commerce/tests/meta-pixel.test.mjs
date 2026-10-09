@@ -52,7 +52,7 @@ test("meta-pixel.js: fixed ids, hostname gate, event ids, and no hard-coded pric
 
 test("the checkout: attribution goes into the request body but never into the session cache key", async () => {
   const source = await read("../components/shop/checkout/CheckoutPage.js");
-  assert.ok(/body:\s*\{\s*\.\.\.payload,\s*attribution:\s*readAttribution\(\)\s*\}/.test(source));
+  assert.ok(/body:\s*\{\s*\.\.\.payload,\s*checkoutId:\s*readCheckoutId\(\),\s*attribution:\s*readAttribution\(\)\s*\}/.test(source), "attribution (and the checkout id) ride along outside the payload");
   assert.ok(/const key = JSON\.stringify\(payload\);/.test(source), "cache key is built from payload only");
   assert.ok(!/payload\s*=\s*\{[^}]*attribution/.test(source), "attribution is not part of payload");
   assert.ok(source.includes('track("checkout_session_created"'));

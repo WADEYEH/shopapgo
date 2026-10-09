@@ -62,6 +62,7 @@ export const REQUIRED_FILES = [
   "admin/admin.js",
   "admin/team.js",
   "admin/order-actions.js",
+  "admin/checkouts.js",
   "js/meta-pixel.js",
   ".assetsignore",
 ];

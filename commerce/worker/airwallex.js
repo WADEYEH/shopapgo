@@ -150,6 +150,27 @@ export function retrievePaymentIntent(env, intentId) {
   return request(env, "GET", `/api/v1/pa/payment_intents/${encodeURIComponent(intentId)}`, undefined, { idempotent: true });
 }
 
+// Voids a PaymentIntent nobody may pay any more (a superseded or expired checkout payment; worker/checkouts.js).
+// Cancelling twice is answered with an error the caller treats as "already cancelled" after reading the intent.
+export function cancelPaymentIntent(env, intentId, requestId) {
+  return request(env, "POST", `/api/v1/pa/payment_intents/${encodeURIComponent(intentId)}/cancel`, {
+    request_id: requestId,
+    cancellation_reason: "requested_by_customer",
+  }, { idempotent: true });
+}
+
+// Refunds a whole payment that should never have happened: the second successful payment of one checkout (C11,
+// M5-08; worker/checkouts.js). Never used for ordinary refunds, which are made in the Airwallex dashboard (D24).
+// request_id is fixed per payment, so a retry can never refund twice.
+export function refundDuplicatePayment(env, { intentId, amount, requestId }) {
+  return request(env, "POST", "/api/v1/pa/refunds/create", {
+    request_id: requestId,
+    payment_intent_id: intentId,
+    amount,
+    reason: "Duplicate payment for the same checkout",
+  }, { idempotent: true });
+}
+
 export function retrieveRefund(env, refundId) {
   return request(env, 'GET', `/api/v1/pa/refunds/${encodeURIComponent(refundId)}`, undefined, { idempotent:true });
 }

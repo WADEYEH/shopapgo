@@ -123,13 +123,17 @@ function fakeDb(order) {
         bind(...args) {
           return {
             async first() {
+              // worker/checkouts.js paymentBelongsTo: no recorded payment objects here, only the legacy single one.
+              if (sql.includes("FROM checkout_payments")) return null;
+              if (sql.startsWith("SELECT 1 AS x FROM orders WHERE id = ? AND payment_intent_id = ?")) return rows.get(args[0])?.payment_intent_id === args[1] ? { x: 1 } : null;
               return rows.get(args[0]) ?? null;
             },
             async run() {
               if (sql.startsWith("UPDATE orders SET status")) {
-                const [status, paidAt, updatedAt, id] = args;
+                const [status, paidAt, ref, updatedAt, id] = args;
                 const row = rows.get(id);
-                if (row?.status === "pending") Object.assign(row, { status, paid_at: paidAt, updated_at: updatedAt });
+                if (row?.status !== "pending") return { meta: { changes: 0 } };
+                Object.assign(row, { status, paid_at: paidAt, payment_intent_id: ref, updated_at: updatedAt });
               }
               return { meta: { changes: 1 } };
             },
