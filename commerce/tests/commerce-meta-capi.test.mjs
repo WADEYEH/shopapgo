@@ -567,11 +567,14 @@ test("scheduled(): one handler runs the Meta re-send and still the MCF sync (mer
     assert.equal(eventRows(db, orderId)[0].status, "sent");
   });
 
-  // staging / local: no dataset id -> the jobs do not touch the database; only the run itself is recorded (cron_runs)
+  // staging / local: no dataset id -> the jobs write nothing; the run itself is recorded (cron_runs) and the Amazon
+  // queue is only read (empty here)
   const touched = [];
+  const queueRead = (sql) => /^SELECT order_id FROM mcf_submission_queue\b/.test(sql);
   const stagingEnv = baseEnv({
     prepare(sql) {
       touched.push(sql);
+      if (queueRead(sql)) return { bind: () => ({ all: async () => ({ results: [] }) }) };
       if (!/\bcron_runs\b/.test(sql)) throw new Error("database must not be touched");
       return { bind: () => ({ run: async () => ({ meta: { changes: 1 } }) }) };
     },
@@ -579,7 +582,7 @@ test("scheduled(): one handler runs the Meta re-send and still the MCF sync (mer
   const ctx = ctxStub();
   await worker.scheduled({}, stagingEnv, ctx);
   await ctx.settled();
-  assert.ok(touched.length > 0 && touched.every((sql) => /\bcron_runs\b/.test(sql)));
+  assert.ok(touched.length > 0 && touched.every((sql) => /\bcron_runs\b/.test(sql) || queueRead(sql)));
 });
 
 // ---------- test_event_code, logs, secrets ----------

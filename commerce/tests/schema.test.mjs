@@ -23,12 +23,15 @@ const ADDED = [
   "cron_runs",
   "customer_email_events",
   "customer_email_suppressions",
+  "mcf_submission_queue",
+  "order_cancellations",
   "order_email_delivery",
   "order_email_jobs",
   "order_message_jobs",
   "order_payment_failures",
   "order_refunds",
   "staging_fake_mcf_orders",
+  "team_alerts",
 ];
 
 const statements = (sql) => sql.replace(/--[^\n]*/g, "").split(";").map((part) => part.trim()).filter(Boolean);

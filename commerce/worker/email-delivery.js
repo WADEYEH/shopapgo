@@ -90,7 +90,9 @@ async function postEmail(config, row, fetchImpl) {
 }
 
 export async function sendOutboxEmail(env, order, kind, config, makeMessage, { retry = false, resumeInitialJob = false, fetchImpl = fetch, nowMs = Date.now() } = {}) {
-  if (!validEmailKind(kind) || order.status !== 'paid') return { status: 'blocked', detail: 'A paid order and valid email kind are required.' };
+  // Refund notices also go out for an order cancelled after payment (worker/order-core.js); nothing else does.
+  const sendable = order.status === 'paid' || (order.status === 'cancelled' && Boolean(order.paid_at) && Boolean(refundEmailKind(kind)));
+  if (!validEmailKind(kind) || !sendable) return { status: 'blocked', detail: 'A paid order and valid email kind are required.' };
   const db = env.DB;
   const legacy = await db.prepare('SELECT status FROM order_emails WHERE order_id = ? AND kind = ?').bind(order.id, kind).first();
   let row = await getDelivery(db, order.id, kind);
