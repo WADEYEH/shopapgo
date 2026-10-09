@@ -4,6 +4,19 @@ import { getFulfillment, listAudit } from "./fulfillment.js";
 import { listPaymentFailures } from "./payment-failures.js";
 import { refundView } from './refunds.js';
 import { amountsMatch, isUsableUsShipping } from "./paypal.js";
+import { checkoutIdForPayment, markPayment, paymentBelongsTo, recordPayment } from "./checkouts.js";
+
+// A checkout that a payment may still turn into an order (D36): pending, expired (a late payment still counts, M4-04),
+// or closed before any payment. An order cancelled after payment (order_cancellations) never is.
+const SETTLEABLE = `(status IN ('pending', 'expired') OR (status = 'cancelled' AND paid_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM order_cancellations c WHERE c.order_id = orders.id)))`;
+
+// After a payment that succeeded did not settle the checkout: a redelivery of the payment that did (nothing to do), or
+// a second payment for an order already paid (refunded by worker/checkouts.js refundDuplicate).
+function alreadySettled(order, provider, ref, amountCents, currency, captureId = "") {
+  const duplicate = order.payment_intent_id !== ref;
+  return { status: order.status, changed: false, order, ...(duplicate ? { duplicate: { provider, ref, amountCents, currency, captureId } } : {}) };
+}
 
 const now = () => new Date().toISOString();
 
@@ -52,11 +65,24 @@ export async function attachPaypalOrder(db, orderId, paypalOrderId) {
     .run();
 }
 
-export function getOrderPayment(db, orderId) {
+// The provider of the order's current payment object (the one that paid, once paid): from checkout_payments, else
+// order_payments (PayPal orders made before checkouts were reused). null = Airwallex.
+export async function getOrderPayment(db, orderId) {
+  const current = await db
+    .prepare(
+      `SELECT p.provider, p.ref AS provider_ref, p.created_at FROM orders o
+         JOIN checkout_payments p ON p.checkout_id = o.id AND p.ref = o.payment_intent_id
+        WHERE o.id = ?`,
+    )
+    .bind(orderId)
+    .first();
+  if (current) return current;
   return db.prepare("SELECT provider, provider_ref, created_at FROM order_payments WHERE order_id = ?").bind(orderId).first();
 }
 
 export async function getOrderByPaypalOrderId(db, paypalOrderId) {
+  const checkoutId = await checkoutIdForPayment(db, "paypal", paypalOrderId);
+  if (checkoutId) return getOrder(db, checkoutId);
   const viaTable = await db
     .prepare(
       `SELECT o.* FROM orders o
@@ -93,22 +119,22 @@ export async function cancelUnpayableOrder(db, orderId) {
 // status = 'pending'), which is what makes "notify once" safe under races.
 export async function settleIntent(db, intent) {
   const order = await getOrder(db, intent.merchant_order_id);
-  if (!order || order.payment_intent_id !== intent.id) return { status: null, changed: false, order: null };
-  if (order.status !== "pending") return { status: order.status, changed: false, order };
-
-  let status = null;
-  if (intent.status === "SUCCEEDED") {
-    const matches = intent.currency === order.currency && Math.abs(Number(intent.amount) - toMajor(order.total_cents)) < 0.005;
-    status = matches ? "paid" : "review";
-  } else if (intent.status === "CANCELLED") {
-    status = "cancelled";
+  // Any PaymentIntent the checkout ever had counts, not only the latest (worker/checkouts.js).
+  if (!order || !(await paymentBelongsTo(db, "airwallex", intent.id, order.id))) return { status: null, changed: false, order: null };
+  // A cancelled intent was replaced or voided: the checkout itself stays open until it is paid or expires.
+  if (intent.status === "CANCELLED") {
+    await markPayment(db, "airwallex", intent.id, "voided");
+    return { status: order.status, changed: false, order };
   }
-  if (!status) return { status: order.status, changed: false, order };
+  if (intent.status !== "SUCCEEDED") return { status: order.status, changed: false, order };
 
+  const amountCents = Math.round(Number(intent.amount) * 100);
+  const matches = intent.currency === order.currency && Math.abs(Number(intent.amount) - toMajor(order.total_cents)) < 0.005;
+  const status = matches ? "paid" : "review";
   const timestamp = now();
   const update = db
-    .prepare("UPDATE orders SET status = ?, paid_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
-    .bind(status, status === "paid" ? timestamp : null, timestamp, order.id);
+    .prepare(`UPDATE orders SET status = ?, paid_at = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND ${SETTLEABLE}`)
+    .bind(status, status === "paid" ? timestamp : null, intent.id, timestamp, order.id);
   // Commit payment and its confirmation instruction together. waitUntil is only
   // a latency optimization; a fresh Worker can recover the instruction via cron.
   // The timestamp guard excludes historic paid orders if a concurrent call won.
@@ -120,7 +146,10 @@ export async function settleIntent(db, intent) {
       .bind(timestamp, timestamp, order.id, timestamp, timestamp),
   ]))[0] : await update.run();
   const changed = (result?.meta?.changes ?? 1) > 0;
-  return { status: changed ? status : (await getOrder(db, order.id)).status, changed, order: changed ? await getOrder(db, order.id) : order };
+  if (!changed) return alreadySettled(await getOrder(db, order.id), "airwallex", intent.id, amountCents, intent.currency);
+  await recordPayment(db, { provider: "airwallex", ref: intent.id, checkoutId: order.id, amountCents, currency: intent.currency });
+  await markPayment(db, "airwallex", intent.id, "succeeded");
+  return { status, changed, order: await getOrder(db, order.id), lateAfterExpiry: order.status === "expired", payment: { provider: "airwallex", ref: intent.id } };
 }
 
 export async function applyIntentStatus(db, intent) {
@@ -130,11 +159,11 @@ export async function applyIntentStatus(db, intent) {
 // PayPal settle: a COMPLETED capture whose amount/currency matches and whose
 // shipping is a usable US address becomes paid. A completed capture that is
 // missing an address or whose amount disagrees is parked in review — never paid.
-export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, amountValue, currency, shipping }) {
+export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, amountValue, currency, shipping, captureId = "" }) {
   const order = orderId ? await getOrder(db, orderId) : await getOrderByPaypalOrderId(db, paypalOrderId);
-  if (!order || order.payment_intent_id !== paypalOrderId) return { status: null, changed: false, order: null };
-  if (order.status !== "pending") return { status: order.status, changed: false, order };
+  if (!order || !(await paymentBelongsTo(db, "paypal", paypalOrderId, order.id))) return { status: null, changed: false, order: null };
   if (status !== "COMPLETED") return { status: order.status, changed: false, order };
+  const amountCents = Math.round(Number(amountValue) * 100);
 
   const matches = currency === order.currency && amountsMatch(amountValue, order.total_cents);
   const addressOk = isUsableUsShipping(shipping);
@@ -158,11 +187,14 @@ export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, am
   }) : order.shipping_json;
 
   const result = await db
-    .prepare("UPDATE orders SET status = ?, paid_at = ?, shipping_json = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
-    .bind(nextStatus, nextStatus === "paid" ? timestamp : null, shippingJson, timestamp, order.id)
+    .prepare(`UPDATE orders SET status = ?, paid_at = ?, shipping_json = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND ${SETTLEABLE}`)
+    .bind(nextStatus, nextStatus === "paid" ? timestamp : null, shippingJson, paypalOrderId, timestamp, order.id)
     .run();
   const changed = (result?.meta?.changes ?? 1) > 0;
-  return { status: changed ? nextStatus : (await getOrder(db, order.id)).status, changed, order: changed ? await getOrder(db, order.id) : order };
+  if (!changed) return alreadySettled(await getOrder(db, order.id), "paypal", paypalOrderId, amountCents, currency, captureId);
+  await recordPayment(db, { provider: "paypal", ref: paypalOrderId, checkoutId: order.id, amountCents, currency });
+  await markPayment(db, "paypal", paypalOrderId, "succeeded");
+  return { status: nextStatus, changed, order: await getOrder(db, order.id), lateAfterExpiry: order.status === "expired", payment: { provider: "paypal", ref: paypalOrderId } };
 }
 
 // ---------- New-order notification bookkeeping ----------

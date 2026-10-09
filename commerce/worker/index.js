@@ -4,8 +4,8 @@
 //   GET  /.well-known/apple-developer-merchantid-domain-association   Apple Pay domain check
 //   POST /api/cart/quote           server-priced cart ({ items, state?, method? })
 //   POST /api/checkout/address     shipping-address check before payment ({ shipping }; worker/address-check.js)
-//   POST /api/checkout/session     create order + Airwallex PaymentIntent
-//   POST /api/checkout/paypal/order   create order + PayPal Orders v2 order
+//   POST /api/checkout/session     the checkout (reused via checkoutId, D36) + its Airwallex PaymentIntent
+//   POST /api/checkout/paypal/order   the checkout (reused via checkoutId) + a PayPal Orders v2 order
 //   POST /api/checkout/paypal/capture capture a PayPal order and settle the store order
 //   GET  /api/orders/:id           public order status (syncs pending intents / PayPal)
 //   GET  /api/health               200 while the cron keeps running, 503 once it has stopped (worker/cron.js)
@@ -57,9 +57,7 @@ import {
 import {
   attachPaymentIntent,
   attachPaypalOrder,
-  cancelUnpayableOrder,
   getOrder,
-  getOrderByIntent,
   getOrderByPaypalOrderId,
   getOrderPayment,
   insertOrder,
@@ -83,6 +81,7 @@ import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 import { rateLimited } from "./rate-limit.js";
 import { cronHealth, runScheduled } from "./cron.js";
+import { checkoutIdForPayment, checkoutPayments, nextRequestId, paymentBelongsTo, recordPayment, reusableCheckout, updateCheckout, voidPayments } from "./checkouts.js";
 
 async function readBody(request) {
   let body;
@@ -116,6 +115,42 @@ async function handleAddressCheck(request, env) {
   });
 }
 
+// The checkout for this purchase (D36, M3 §5): the one the page sent back while it can still be paid, brought up to
+// date with what the shopper now has; otherwise a new one. Its id becomes the order number.
+async function openCheckout(env, checkoutId, { checkout, quote: priced }) {
+  const existing = await reusableCheckout(env.DB, checkoutId);
+  if (existing && (await updateCheckout(env.DB, existing.id, { checkout, quote: priced }))) return { orderId: existing.id, reused: true };
+  const orderId = newOrderId();
+  await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
+  return { orderId, reused: false };
+}
+
+// A PaymentIntent of this checkout that can still be paid for this amount, so a retry, a refresh or a second tab pays
+// the same one (M3-13). { intent } to reuse, { settled: status } when one already succeeded or is processing, or null.
+async function reusableIntent(env, orderId, priced, services) {
+  const order = await getOrder(env.DB, orderId);
+  const candidates = (await checkoutPayments(env.DB, order))
+    .filter((p) => p.provider === "airwallex" && p.status === "open" && p.amount_cents === priced.totalCents && p.currency === priced.currency);
+  for (const payment of candidates) {
+    let intent;
+    try {
+      intent = await retrievePaymentIntent(env, payment.ref);
+    } catch (error) {
+      if (!(error instanceof AirwallexError)) throw error;
+      continue;
+    }
+    if (intent.status === "SUCCEEDED") {
+      await afterSettle(await settleIntent(env.DB, intent), services);
+      return { settled: (await getOrder(env.DB, orderId)).status };
+    }
+    if (["PENDING", "REQUIRES_CAPTURE"].includes(intent.status)) return { settled: "processing" };
+    if (["REQUIRES_PAYMENT_METHOD", "REQUIRES_CUSTOMER_ACTION"].includes(intent.status) && intent.client_secret && Math.abs(Number(intent.amount) - toMajor(priced.totalCents)) < 0.005) {
+      return { intent };
+    }
+  }
+  return null;
+}
+
 async function handleCheckoutSession(request, env, services) {
   // With AIRWALLEX_ENV=prod the store stays closed until the owner sets
   // PRICING_APPROVED=true, so placeholder prices/shipping/tax cannot go live by accident.
@@ -127,21 +162,26 @@ async function handleCheckoutSession(request, env, services) {
   const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, resolvePricing(env));
   // Checked again here, whatever the page did: an undeliverable address never reaches a payment.
   checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
-  const orderId = newOrderId();
   const origin = new URL(request.url).origin;
-
-  await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
+  const { orderId, reused } = await openCheckout(env, body.checkoutId, { checkout, quote: priced });
 
   // Meta attribution (production only): browser-sent ids, cookies, IP and user agent, validated and stored per order.
   // Optional by design: a missing or malformed `attribution` never affects checkout.
   const attribution = await captureAttribution(env, request, body, orderId, origin);
 
-  let intent;
-  try {
+  // Reuse the checkout's PaymentIntent while it can still be paid for this amount; a paid or processing checkout
+  // sends the page to the order (no new payment).
+  const reusable = reused ? await reusableIntent(env, orderId, priced, services) : null;
+  if (reusable?.settled) return json({ orderId, quote: priced, settled: reusable.settled });
+  let intent = reusable?.intent ?? null;
+  if (!intent) {
+    // A new amount (or nothing payable left): older intents of this checkout are cancelled first.
+    await voidPayments(env, orderId, { provider: "airwallex" });
+    // Stable per payment object: if our request times out and is retried, Airwallex returns the original intent
+    // instead of creating a second one.
+    const requestId = await nextRequestId(env.DB, orderId, "airwallex");
     intent = await createPaymentIntent(env, {
-      // Stable per order: if our request times out and is retried, Airwallex returns
-      // the original intent instead of creating a second one.
-      request_id: orderId,
+      request_id: requestId,
       amount: toMajor(priced.totalCents),
       currency: priced.currency,
       merchant_order_id: orderId,
@@ -180,13 +220,10 @@ async function handleCheckoutSession(request, env, services) {
       // Attribution first so it can never overwrite source / order_id.
       metadata: { ...attributionMetadata(attribution), source: "apgo-us-store", order_id: orderId },
     });
-  } catch (error) {
-    // The shopper retries with a new order; don't leave this one "pending" forever.
-    await cancelUnpayableOrder(env.DB, orderId);
-    throw error;
+    // A failure above leaves the checkout open: the next try reuses it (and it expires after 24 hours if never paid).
+    await recordPayment(env.DB, { provider: "airwallex", ref: intent.id, checkoutId: orderId, amountCents: priced.totalCents, currency: priced.currency });
+    await attachPaymentIntent(env.DB, orderId, intent.id);
   }
-
-  await attachPaymentIntent(env.DB, orderId, intent.id);
   await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
 
   return json({
@@ -212,25 +249,19 @@ async function handlePaypalCreate(request, env, services) {
   if (checkout.shippingSource === "checkout") {
     checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
   }
-  const orderId = newOrderId();
   const origin = storefrontOrigin(request, env);
+  const { orderId } = await openCheckout(env, body.checkoutId, { checkout, quote: priced });
   const { returnUrl, cancelUrl } = checkoutReturnUrls(origin, orderId);
-
-  await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
   await captureAttribution(env, request, body, orderId, origin);
 
-  let paypalOrder;
-  try {
-    paypalOrder = await createPaypalOrder(
-      env,
-      paypalOrderPayload({ orderId, quote: priced, checkout, returnUrl, cancelUrl }),
-      orderId,
-    );
-  } catch (error) {
-    await cancelUnpayableOrder(env.DB, orderId);
-    throw error;
-  }
-
+  // Each PayPal button press is a new PayPal order; the checkout's older ones can no longer be captured.
+  await voidPayments(env, orderId, { provider: "paypal" });
+  const paypalOrder = await createPaypalOrder(
+    env,
+    paypalOrderPayload({ orderId, quote: priced, checkout, returnUrl, cancelUrl }),
+    await nextRequestId(env.DB, orderId, "paypal"),
+  );
+  await recordPayment(env.DB, { provider: "paypal", ref: paypalOrder.id, checkoutId: orderId, amountCents: priced.totalCents, currency: priced.currency });
   await attachPaypalOrder(env.DB, orderId, paypalOrder.id);
   await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
 
@@ -252,6 +283,7 @@ async function settleFromPaypalSnapshot(env, db, paypalOrder, services) {
       amountValue: inspected.amountValue,
       currency: inspected.currency,
       shipping: inspected.shipping,
+      captureId: inspected.captureId,
     }),
     services,
   );
@@ -289,11 +321,27 @@ async function handlePaypalCapture(request, env, services) {
     : await getOrder(env.DB, orderId);
   if (!storeOrder) return fail(404, "not_found", "Order not found.");
   if (orderId && storeOrder.id !== orderId) return fail(400, "invalid_request", "PayPal order does not match this store order.");
-  if (paypalOrderId && storeOrder.payment_intent_id !== paypalOrderId) {
+  // Without a PayPal order id (the return URL), the checkout's newest PayPal order.
+  const latestPaypal = (await checkoutPayments(env.DB, storeOrder)).find((p) => p.provider === "paypal");
+  const paypalId = paypalOrderId || latestPaypal?.ref || "";
+  if (!paypalId || !(await paymentBelongsTo(env.DB, "paypal", paypalId, storeOrder.id))) {
     return fail(400, "invalid_request", "PayPal order does not match this store order.");
   }
+  const payment = await env.DB.prepare("SELECT status FROM checkout_payments WHERE provider = 'paypal' AND ref = ?").bind(paypalId).first();
+  // Already paid with this PayPal order: report it (a return page reload, a double click).
+  if (storeOrder.status !== "pending" && storeOrder.payment_intent_id === paypalId) {
+    return json({ orderId: storeOrder.id, status: storeOrder.status, paypal: { id: paypalId, status: "COMPLETED" }, eventIds: eventIdsFor(storeOrder.id) });
+  }
+  // Never capture a PayPal order that was replaced, or one for a checkout that is paid another way or expired: no
+  // second charge to refund later (M3-13).
+  if (payment?.status === "voided") return fail(409, "payment_replaced", "This PayPal payment was replaced by a newer one. Please choose PayPal again.");
+  if (storeOrder.status !== "pending") {
+    return storeOrder.status === "expired"
+      ? fail(409, "checkout_expired", "This checkout expired. Your cart is still here; please start the payment again.")
+      : fail(409, "checkout_closed", "This order is already paid.");
+  }
 
-  const result = await captureAndSettle(env, storeOrder, storeOrder.payment_intent_id, services);
+  const result = await captureAndSettle(env, storeOrder, paypalId, services);
   if (result.error) return result.error;
   return json({
     orderId: result.order.id,
@@ -328,7 +376,7 @@ function deferred(services, work) {
 // After a payment settled (worker/after-payment.js): notification, confirmation email, Purchase event and the
 // cooling-off queue for a paid order; a team alert for one that needs review. After the response when possible.
 function afterSettle(settled, { env, ctx, adminOrigin }) {
-  if (!settled?.changed) return undefined;
+  if (!settled?.changed && !settled?.duplicate) return undefined;
   const work = settleFollowUps(settled, { env, adminOrigin });
   if (ctx?.waitUntil) {
     ctx.waitUntil(work);
@@ -405,8 +453,8 @@ async function handleWebhook(request, env, services) {
   if (String(event.name).startsWith("payment_intent.") && snapshot?.id && snapshot.merchant_order_id) {
     let intent = snapshot;
     if (late) {
-      const order = await getOrderByIntent(env.DB, snapshot.id);
-      intent = order ? await retrievePaymentIntent(env, snapshot.id) : null;
+      const checkoutId = await checkoutIdForPayment(env.DB, "airwallex", snapshot.id);
+      intent = checkoutId ? await retrievePaymentIntent(env, snapshot.id) : null;
     }
     if (intent) await afterSettle(await settleIntent(env.DB, intent), services);
   }
@@ -451,7 +499,7 @@ async function handlePaypalWebhook(request, env, services) {
         : null;
     if (storeOrder?.payment_intent_id) {
       try {
-        const paypalOrder = await retrievePaypalOrder(env, storeOrder.payment_intent_id);
+        const paypalOrder = await retrievePaypalOrder(env, paypalOrderId || storeOrder.payment_intent_id);
         await settleFromPaypalSnapshot(env, env.DB, paypalOrder, services);
       } catch (error) {
         if (!(error instanceof PaypalError)) throw error;

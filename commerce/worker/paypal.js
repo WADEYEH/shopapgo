@@ -238,6 +238,14 @@ export function capturePaypalOrder(env, paypalOrderId, requestId) {
   });
 }
 
+// Refunds a whole capture that should never have happened: the second successful payment of one checkout (C11,
+// M5-08; worker/checkouts.js). PayPal-Request-Id is fixed per capture, so a retry can never refund twice.
+export function refundDuplicateCapture(env, captureId, requestId) {
+  return request(env, "POST", `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {
+    note_to_payer: "Duplicate payment for the same order. Your order was paid once.",
+  }, { idempotent: true, requestId });
+}
+
 export function approveUrlFrom(paypalOrder) {
   const links = Array.isArray(paypalOrder?.links) ? paypalOrder.links : [];
   const approve = links.find((link) => link?.rel === "approve" && link?.href);
@@ -300,6 +308,7 @@ export function inspectPaypalOrder(paypalOrder) {
   const captured = paypalOrder?.status === "COMPLETED" || capture?.status === "COMPLETED";
   return {
     paypalOrderId: paypalOrder?.id ?? "",
+    captureId: capture?.id ?? "",
     storeOrderId: unit.custom_id || unit.invoice_id || "",
     status: captured ? "COMPLETED" : String(paypalOrder?.status ?? ""),
     captureStatus: capture?.status ?? "",

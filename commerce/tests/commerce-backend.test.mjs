@@ -199,7 +199,7 @@ test("checkout session sends an idempotent, correctly shaped PaymentIntent", { s
   assert.deepEqual(order, { status: "pending", payment_intent_id: "int_123" });
 });
 
-test("a failed PaymentIntent create cancels the orphan order and returns a generic 502", { skip }, async () => {
+test("a failed PaymentIntent create returns a generic 502 and leaves the checkout open for the next try (D36)", { skip }, async () => {
   const db = await createD1();
   resetAirwallexTokenCache();
   await withFetch(
@@ -210,8 +210,8 @@ test("a failed PaymentIntent create cancels the orphan order and returns a gener
       assert.ok(!JSON.stringify(await response.json()).includes("bad amount"), "provider detail is not leaked");
     },
   );
-  const order = await db.prepare("SELECT status FROM orders").first();
-  assert.equal(order.status, "cancelled");
+  const order = await db.prepare("SELECT status, payment_intent_id FROM orders").first();
+  assert.deepEqual({ ...order }, { status: "pending", payment_intent_id: null }, "a checkout with no payment object; it expires after 24 hours");
 });
 
 test("missing Airwallex credentials fail closed without calling the network", { skip }, async () => {

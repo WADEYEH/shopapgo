@@ -268,7 +268,7 @@ test("PayPal create without shipping still prices from the catalog and asks PayP
   assert.equal(sent.application_context.shipping_preference, "GET_FROM_FILE");
 });
 
-test("a failed PayPal create cancels the orphan order and returns a generic 502", { skip }, async () => {
+test("a failed PayPal create returns a generic 502 and leaves the checkout open for the next try (D36)", { skip }, async () => {
   const db = await createD1();
   resetPaypalTokenCache();
   await withFetch(
@@ -282,7 +282,7 @@ test("a failed PayPal create cancels the orphan order and returns a generic 502"
       assert.ok(!JSON.stringify(await response.json()).includes("bad amount"));
     },
   );
-  assert.equal((await db.prepare("SELECT status FROM orders").first()).status, "cancelled");
+  assert.equal((await db.prepare("SELECT status FROM orders").first()).status, "pending");
 });
 
 test("PayPal create is closed in prod until PRICING_APPROVED, same as cards", { skip }, async () => {

@@ -4,6 +4,10 @@
 //
 // A payment whose amount did not match (review, T2) instead tells the team once, and nothing else happens until
 // someone confirms or cancels it in the back office.
+//
+// Checkouts (worker/checkouts.js): once a checkout is paid, its other payment objects are voided; a payment that
+// arrives after the checkout expired still makes the order and the team is told (M4-04); a second successful payment
+// for an order already paid is refunded in full (C11, M5-08).
 import { claimNotification, finishNotification, getOrder } from "./orders.js";
 import { notifyOrderPaid } from "./notify.js";
 import { processConfirmationJob } from "./customer-email.js";
@@ -11,6 +15,7 @@ import { metaEnabled, sendMetaEvent } from "./meta-capi.js";
 import { applyRefundsToOrder, coolingOffMinutes, queueForAmazon } from "./order-core.js";
 import { alertTeam } from "./team-alerts.js";
 import { submitDueOrders } from "./mcf.js";
+import { refundDuplicate, voidPayments } from "./checkouts.js";
 
 // Meta CAPI event for one order, once. Reads the order fresh; never throws.
 export async function runMetaEvent(env, orderId, eventName) {
@@ -55,8 +60,28 @@ export function runAfterPaid(env, order, { adminOrigin }) {
 
 // After a settle attempt (webhook, return page, PayPal capture). Only the call that changed the order does anything.
 export async function settleFollowUps(settled, { env, adminOrigin }) {
+  const adminUrl = `${adminOrigin}/admin/`;
+  if (settled?.duplicate && settled.order) {
+    await refundDuplicate(env, { order: settled.order, ...settled.duplicate, adminUrl });
+    return;
+  }
   if (!settled?.changed) return;
   const order = settled.order;
+  try {
+    await voidPayments(env, order.id, { keep: settled.payment?.ref });
+  } catch (error) {
+    console.error("checkout_void_failed", { orderId: order.id, reason: error?.message });
+  }
+  if (settled.lateAfterExpiry) {
+    await alertTeam(env, {
+      key: `late-payment:${order.id}`,
+      kind: "late_payment",
+      orderId: order.id,
+      adminUrl,
+      subject: `Order ${order.id} was paid after its checkout expired`,
+      lines: [`The checkout for ${order.id} had expired (no payment within 24 hours), then a payment succeeded. The order was created as usual; check that the items are still right to send.`],
+    });
+  }
   if (settled.status === "paid") {
     await runAfterPaid(env, order, { adminOrigin });
     // A refund that arrived before the payment (events out of order, M4-13) applies now.
