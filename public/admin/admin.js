@@ -1,8 +1,9 @@
-// Order back office. The Worker gates this page and /admin/api/* with HTTP Basic
-// auth, so the browser re-sends the credentials on every fetch; nothing secret is
-// stored by this page. The writes are "Mark as shipped" (POST .../ship) and the Amazon MCF buttons
-// (POST .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync), all JSON.
+// Order back office. The Worker gates this page and /admin/api/* (Cloudflare Access, or until then HTTP Basic, which
+// the browser re-sends on every fetch); nothing secret is stored by this page. The writes are "Mark as shipped"
+// (POST .../ship) and the Amazon MCF buttons (POST .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync), all JSON.
+// Who is signed in, Activity and Members: ./team.js.
 import { el, money, notice, priceRows } from "./ui.js";
+import { initTeam } from "./team.js";
 
 // The back office only works on its own host (commerce/worker/hosts.js). Until the cutover the brand host (Cloudflare
 // Pages) builds the same site files, this page among them, so leave for the home page there.
@@ -38,6 +39,7 @@ async function adminApi(path, { method = "GET", body } = {}) {
     const reason =
       response.status === 503 ? "The back office is not configured (its access secret is not set)."
       : response.status === 401 ? "You are signed out. Reload the page and sign in again."
+      : response.status === 403 && data?.error?.code === "not_a_member" ? data.error.message
       : data?.error?.message || "The back office is unavailable.";
     const error = new Error(reason);
     error.status = response.status;
@@ -575,7 +577,7 @@ function renderMessages() {
         ),
         el("p", { class: "admin-message__text" }, m.message),
       ))),
-    messages.nextBefore ? el("button", { class: "btn btn--sm btn--text", type: "button", onclick: () => loadMessages() }, "Load older messages") : null,
+    ...[messages.nextBefore && el("button", { class: "btn btn--sm btn--text", type: "button", onclick: () => loadMessages() }, "Load older messages")].filter(Boolean),
   );
 }
 
@@ -599,6 +601,7 @@ async function loadMessages({ reset = false } = {}) {
 
 $("[data-admin-messages-load]").addEventListener("click", () => loadMessages({ reset: true }));
 
+initTeam({ adminApi, openOrder: (id) => { history.replaceState(null, "", `#${id}`); select(id); } });
 await load({ reset: true });
 const initial = decodeURIComponent(window.location.hash.slice(1));
 if (initial) select(initial, { focus: false });

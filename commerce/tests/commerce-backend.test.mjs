@@ -664,9 +664,9 @@ test("ship: a paid order is marked shipped once, stores time + carrier + trackin
   assert.equal(body.order.fulfillment.carrier, "UPS");
   assert.equal(body.order.fulfillment.trackingNumber, SHIPMENT.trackingNumber);
   assert.equal(body.order.fulfillment.trackingUrl, SHIPMENT.trackingUrl);
-  assert.equal(body.order.fulfillment.shippedBy, "admin");
+  assert.equal(body.order.fulfillment.shippedBy, "token", "recorded under who signed in: here the script token (M9-02)");
   assert.ok(Date.parse(body.order.fulfillment.shippedAt) >= before - 1000);
-  assert.deepEqual(body.order.audit.map((a) => [a.action, a.actor]), [["order.shipped", "admin"]]);
+  assert.deepEqual(body.order.audit.map((a) => [a.action, a.actor]), [["order.shipped", "token"]]);
   assert.equal(body.order.audit[0].detail.trackingNumber, SHIPMENT.trackingNumber);
 
   assert.equal(mails.length, 1);

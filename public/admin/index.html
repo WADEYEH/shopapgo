@@ -16,6 +16,7 @@
         <a class="shop-header__logo" href="./" aria-label="APGO orders"><img src="/us/assets/brand/apgo-logo.png" alt="APGO" width="89" height="24"></a>
         <nav class="shop-header__nav" aria-label="Back office">
           <span class="admin-tag">Back office</span>
+          <span class="admin-whoami" data-admin-whoami hidden></span>
         </nav>
       </div>
     </header>
@@ -63,6 +64,24 @@
         <p class="body body--sm">Messages from the Contact us form, newest first. Each one is also emailed to the support inbox; reply from there.</p>
         <button class="btn btn--sm" type="button" data-admin-messages-load>Show messages</button>
         <div data-admin-messages aria-live="polite"></div>
+      </section>
+
+      <section class="admin-messages" aria-labelledby="activity-heading" data-admin-activity-section hidden>
+        <h2 class="heading-guide-h2" id="activity-heading">Activity</h2>
+        <p class="body body--sm">Everything done in the back office and by the system: who, when, what and why. Newest first.</p>
+        <form class="admin-filters" data-admin-activity-filter>
+          <div class="field"><label class="field__label" for="activity-actor">Person</label><span class="select"><select id="activity-actor" name="actor"><option value="">Everyone</option></select></span></div>
+          <div class="field"><label class="field__label" for="activity-from">From</label><input id="activity-from" type="date" name="from"></div>
+          <div class="field"><label class="field__label" for="activity-to">To</label><input id="activity-to" type="date" name="to"></div>
+          <button class="btn btn--sm" type="submit">Show activity</button>
+        </form>
+        <div data-admin-activity aria-live="polite"></div>
+      </section>
+
+      <section class="admin-messages" aria-labelledby="members-heading" data-admin-members-section hidden>
+        <h2 class="heading-guide-h2" id="members-heading">Members</h2>
+        <p class="body body--sm">Who can use the back office. Owners manage members; members do the day-to-day work. Every change is logged under Activity and emailed to the owners.</p>
+        <div data-admin-members aria-live="polite"></div>
       </section>
     </main>
   </body>

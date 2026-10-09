@@ -60,6 +60,7 @@ export const REQUIRED_FILES = [
   "contact.html",
   "admin/index.html",
   "admin/admin.js",
+  "admin/team.js",
   "js/meta-pixel.js",
   ".assetsignore",
 ];

@@ -67,13 +67,67 @@ const view = (o, mcf = { mode: "off" }) => ({
 // Options: status (force an error status), emailConfigured (false = shipment email is "skipped"),
 // shipError ({ status, code, message } forces the ship POST to fail).
 // The returned array also carries .writes (ship requests), .mcf (MCF POSTs) and .emails (would-be Resend payloads).
+export const TEAM_OWNER = "owner@apgo.example";
+const TEAM_STAMP = "2026-10-09T03:00:00.000Z";
+
+// Who is signed in, the Activity log and Members, like worker/admin.js. team: { role, accessSignIn, accessList,
+// activity, members } or null (an older Worker without these endpoints). Returns a route handler; records writes.
+function teamMock(team, writes) {
+  const me = { id: TEAM_OWNER, email: TEAM_OWNER, role: team.role ?? "owner", via: team.accessSignIn ? "access" : "password" };
+  const members = structuredClone(team.members ?? [{ email: TEAM_OWNER, role: "owner", status: "active", addedBy: "system", addedAt: TEAM_STAMP, updatedBy: "system", updatedAt: TEAM_STAMP }]);
+  const activity = structuredClone(team.activity ?? []);
+  let accessList = structuredClone(team.accessList ?? { configured: false, last: null });
+  const syncResult = () => (accessList.configured ? { status: "synced", added: 1, removed: 0, detail: "" } : { status: "not_configured", added: 0, removed: 0, detail: "The Cloudflare Access list sync is not set up." });
+  const owners = () => members.filter((m) => m.status === "active" && m.role === "owner").length;
+  return (url, request, reply) => {
+    if (url.pathname === "/admin/api/me") return reply(200, { actor: me, accessSignIn: Boolean(team.accessSignIn) });
+    if (url.pathname === "/admin/api/activity") {
+      const actor = url.searchParams.get("actor");
+      return reply(200, { entries: activity.filter((e) => !actor || e.actor === actor), nextCursor: null, actors: [...new Set(activity.map((e) => e.actor))].sort() });
+    }
+    if (!url.pathname.startsWith("/admin/api/members")) return null;
+    if (me.role !== "owner") return reply(403, { error: { code: "owner_only", message: "Only an owner can manage members." } });
+    if (request.method() === "GET") return reply(200, { members, accessSignIn: Boolean(team.accessSignIn), accessList });
+    const body = request.postDataJSON();
+    writes.push({ path: url.pathname, contentType: request.headers()["content-type"], body });
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const found = members.find((m) => m.email === email && m.status === "active");
+    const done = (title) => {
+      activity.unshift({ source: "admin", at: TEAM_STAMP, actor: me.id, via: me.via, action: title, target: email, before: null, after: null, reason: body.reason || null, detail: {} });
+      return reply(200, { member: members.find((m) => m.email === email), notified: { sent: owners(), skipped: 0, failed: 0 }, sync: syncResult(), members, accessList });
+    };
+    if (url.pathname === "/admin/api/members/sync") {
+      accessList = { configured: true, last: { status: "synced", at: TEAM_STAMP, detail: "" } };
+      return reply(200, { sync: syncResult(), accessList });
+    }
+    if (url.pathname === "/admin/api/members") {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(400, { error: { code: "invalid_email", message: "Enter a valid email address." } });
+      if (found) return reply(409, { error: { code: "already_member", message: `${email} is already a member.` } });
+      members.push({ email, role: body.role || "member", status: "active", addedBy: me.id, addedAt: TEAM_STAMP, updatedBy: me.id, updatedAt: TEAM_STAMP });
+      return done("member.added");
+    }
+    if (!found) return reply(404, { error: { code: "not_a_member", message: `${email} is not a member.` } });
+    if (found.role === "owner" && owners() <= 1 && (url.pathname.endsWith("/remove") || body.role === "member")) {
+      return reply(409, { error: { code: "last_owner", message: "The last owner cannot be removed. Make someone else an owner first." } });
+    }
+    if (url.pathname.endsWith("/remove")) {
+      Object.assign(found, { status: "removed", updatedBy: me.id, updatedAt: TEAM_STAMP });
+      return done("member.removed");
+    }
+    found.role = body.role;
+    return done("member.role_changed");
+  };
+}
+
 // MCF options: mcf ({ mode: "off" | "not_configured" | "ready", submitFails: n = first n submits fail,
 // amazonShipped: true = the next sync finds the order shipped }), mcfRecords ({ [orderId]: record } to start from).
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {} } = {}) {
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {} } = {}) {
   const requests = [];
   requests.writes = [];
   requests.mcf = [];
   requests.emails = [];
+  requests.team = [];
+  const teamRoute = team ? teamMock(team, requests.team) : null;
   const orders = SAMPLE_ORDERS.map((o) => structuredClone(o));
   for (const [id, failures] of Object.entries(paymentFailures)) orders.find((o) => o.id === id).paymentFailures = structuredClone(failures);
   for (const [id, record] of Object.entries(mcfRecords)) orders.find((o) => o.id === id).mcfRecord = structuredClone(record);
@@ -86,6 +140,8 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     requests.push(url.pathname + url.search);
     const reply = (code, data) => route.fulfill({ status: code, contentType: "application/json", body: JSON.stringify(data) });
     if (status !== 200) return reply(status, { error: { code: "admin_not_configured", message: "The order back office is not configured." } });
+    const teamReply = teamRoute?.(url, route.request(), reply);
+    if (teamReply) return teamReply;
     const mcfMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync)$/);
     if (mcfMatch || url.pathname === "/admin/api/mcf/sync") {
       const request = route.request();
