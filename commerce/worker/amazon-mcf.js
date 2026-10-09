@@ -18,6 +18,9 @@
 //
 // Nothing here runs unless worker/mcf.js calls it, and that only happens when MCF_AUTO_SUBMIT=true.
 //
+// Staging: MCF_FAKE=true (with SITE_ENV=staging) answers every call from worker/fake-amazon.js instead, so a staging order
+// never ships a real parcel; the connection settings are then not needed. MCF_FAKE anywhere else sends nothing at all.
+//
 // Env (values only via `wrangler secret put` / .dev.vars; never commit them):
 //   AMAZON_OUTBOUND_BASE_URL, OUTBOUND_INTERNAL_TOKEN   connection to the MCP Worker
 //   MCF_SKU_MAP_JSON      {"D204":"<amazon seller SKU>","D215":"..."}  default {} (nothing is sent until set)
@@ -25,6 +28,8 @@
 //   MCF_NOTIFY_AMAZON_EMAIL  "true" = pass the shopper's email as notification_emails so Amazon sends its own shipping
 //                            notices too (default off: our own emails are the only ones, no duplicates)
 //   MCF_TIMEOUT_MS, MCF_RETRY_DELAY_MS   tuning / tests
+
+import { FAKE_BLOCKED_MESSAGE, FAKE_SKU_MAP, fakeMode, fakeOutbound } from "./fake-amazon.js";
 
 const USER_AGENT = "APGO-US-Store/1.0 (CloudflareWorkers)";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -92,8 +97,9 @@ function baseUrl(env) {
 // Resolves everything the Worker needs to decide whether MCF may run. Never returns secret values.
 export function mcfConfig(env = {}) {
   const enabled = String(env.MCF_AUTO_SUBMIT ?? "").trim().toLowerCase() === "true";
-  const missingSettings = CONNECTION_ENV.filter((name) => !String(env[name] ?? "").trim());
-  const badUrl = !missingSettings.includes("AMAZON_OUTBOUND_BASE_URL") && !baseUrl(env);
+  const fake = fakeMode(env); // "on" | "blocked" | null
+  const missingSettings = fake ? [] : CONNECTION_ENV.filter((name) => !String(env[name] ?? "").trim());
+  const badUrl = !fake && !missingSettings.includes("AMAZON_OUTBOUND_BASE_URL") && !baseUrl(env);
   const sku = parseMap(env.MCF_SKU_MAP_JSON, "MCF_SKU_MAP_JSON", (value) =>
     typeof value === "string" && value.trim() && value.trim().length <= 40 ? value.trim() : null,
   );
@@ -103,12 +109,14 @@ export function mcfConfig(env = {}) {
   });
   const shippingMap = Object.fromEntries(Object.entries(DEFAULT_SHIPPING_MAP).map(([k, v]) => [k.toUpperCase(), v]));
   Object.assign(shippingMap, shipping.map);
+  const fakeSkus = fake === "on" && !sku.error && Object.keys(sku.map).length === 0;
   return {
     enabled,
+    fake,
     missingSettings,
     badUrl,
-    connectionOk: missingSettings.length === 0 && !badUrl,
-    skuMap: sku.map,
+    connectionOk: fake === "on" || (!fake && missingSettings.length === 0 && !badUrl),
+    skuMap: fakeSkus ? { ...FAKE_SKU_MAP } : sku.map,
     skuError: sku.error,
     shippingMap,
     shippingError: shipping.error,
@@ -118,6 +126,7 @@ export function mcfConfig(env = {}) {
 
 // Why the connection to the MCP Worker is unusable (null when fine). Names only, never values.
 export function connectionProblem(config) {
+  if (config.fake === "blocked") return FAKE_BLOCKED_MESSAGE;
   if (config.missingSettings.length) return `missing ${config.missingSettings.join(", ")}`;
   if (config.badUrl) return "AMAZON_OUTBOUND_BASE_URL must be an https:// URL";
   return null;
@@ -208,6 +217,13 @@ function httpError(status, body, label) {
 // carries the same caller-chosen seller_fulfillment_order_id (the endpoint answers alreadyExists instead of creating a
 // second order), so network errors / timeouts / 429 / 5xx are retried (3 tries, exponential backoff) with the SAME body.
 async function outbound(env, method, path, { body, query, label } = {}) {
+  const fake = fakeMode(env);
+  if (fake === "blocked") throw new McfError("config", FAKE_BLOCKED_MESSAGE, { code: "fake_outside_staging" });
+  if (fake === "on") {
+    const reply = await fakeOutbound(env, method, path, { body, query });
+    if (reply.status >= 200 && reply.status < 300) return reply;
+    throw httpError(reply.status, reply.body, label);
+  }
   const base = baseUrl(env);
   const token = String(env.OUTBOUND_INTERNAL_TOKEN ?? "").trim();
   if (!base || !token) {

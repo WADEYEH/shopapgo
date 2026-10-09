@@ -9,6 +9,7 @@ import { AirwallexError, createPaymentIntent, resetAirwallexTokenCache, retrieve
 import { buildNotification, notificationChannels, notifyOrderPaid } from "../worker/notify.js";
 import { buildConfirmationEmail, buildShipmentEmail, customerEmailConfig } from "../worker/customer-email.js";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
+import { migrations } from "./helpers/migrations.mjs";
 
 // Safety net: a test that forgets to stub fetch must fail instead of calling the internet.
 globalThis.fetch = async (url) => { throw new Error(`unexpected real network call: ${url}`); };
@@ -566,16 +567,13 @@ async function ship(env, orderId, body = SHIPMENT, headers = {}, mails = []) {
   );
 }
 
-test("schema: re-running the migration on an existing database is a no-op and adds no columns to orders", { skip }, async () => {
-  const { readFile } = await import("node:fs/promises");
+test("schema: the baseline migration applied again over existing orders changes nothing, and they read as unfulfilled", { skip }, async () => {
   const db = await createD1();
   const before = db.raw.prepare("PRAGMA table_info(orders)").all().map((c) => c.name);
   await db.prepare("INSERT INTO orders (id,status,email,shipping_json,shipping_method,lines_json,currency,subtotal_cents,shipping_cents,tax_cents,total_cents,created_at,updated_at) VALUES ('APGO-US-01D000000001','paid','a@b.co','{}','standard','[]','USD',1,0,0,1,'t','t')").run();
-  const schema = await readFile(new URL("../worker/schema.sql", import.meta.url), "utf8");
-  db.raw.exec(schema); // second and third run must not throw
-  db.raw.exec(schema);
+  const [baseline] = await migrations();
+  db.raw.exec(baseline.sql); // the baseline is IF NOT EXISTS throughout: a database that has its tables is untouched
   assert.deepEqual(db.raw.prepare("PRAGMA table_info(orders)").all().map((c) => c.name), before);
-  assert.ok(!/^[^-\n]*ALTER\s+TABLE/im.test(schema), "D1 cannot re-run ALTER ADD COLUMN; new data goes in IF NOT EXISTS tables");
   const legacy = await (await call(baseEnv(db), "/admin/api/orders/APGO-US-01D000000001", { headers: bearer })).json();
   assert.equal(legacy.fulfillmentStatus, "unfulfilled", "pre-existing orders read as unfulfilled");
 });

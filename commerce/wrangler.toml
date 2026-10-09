@@ -20,6 +20,24 @@ run_worker_first = true
 binding = "DB"
 database_name = "apgo-us-store"
 database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"   # numbered, additive-only migrations (D45): npm run db:migrate:local
+
+# Per-address limits on the endpoints that cost money or invite abuse (worker/rate-limit.js, M12-06): starting a payment,
+# the address check (a paid Google API) and quotes. Each environment has its own namespaces.
+[[ratelimits]]
+name = "CHECKOUT_LIMITER"
+namespace_id = "3101"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "ADDRESS_LIMITER"
+namespace_id = "3102"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "QUOTE_LIMITER"
+namespace_id = "3103"
+simple = { limit = 60, period = 60 }
 
 [vars]
 # "demo" = Airwallex sandbox. Switch to "prod" only after prices, shipping and
@@ -36,6 +54,9 @@ AIRWALLEX_ENV = "demo"
 
 [observability]
 enabled = true
+
+[observability.issues]
+enabled = true   # Workers Issues: groups errors and notifies (where to is set in the dashboard, docs/ops/runbook.md)
 
 # Secrets (never commit): set locally in .dev.vars, remotely with
 #   npx wrangler secret put AIRWALLEX_CLIENT_ID
@@ -82,6 +103,24 @@ run_worker_first = true
 binding = "DB"
 database_name = "apgo-us-store-staging"
 database_id = "246c3158-a70e-420e-a165-cda01b4ca434"
+migrations_dir = "migrations"
+
+# Per-address limits on the endpoints that cost money or invite abuse (worker/rate-limit.js, M12-06): starting a payment,
+# the address check (a paid Google API) and quotes. Each environment has its own namespaces.
+[[env.staging.ratelimits]]
+name = "CHECKOUT_LIMITER"
+namespace_id = "3201"
+simple = { limit = 10, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "ADDRESS_LIMITER"
+namespace_id = "3202"
+simple = { limit = 20, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "QUOTE_LIMITER"
+namespace_id = "3203"
+simple = { limit = 60, period = 60 }
 
 [env.staging.vars]
 AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
@@ -96,6 +135,12 @@ CUSTOMER_EMAIL_POLICY_NOTE = "TEST EMAIL - Sample order and shipping details onl
 CUSTOMER_EMAIL_ENABLED = "true"             # staging only: dedicated key configured, exact owner-approved recipient allowlist
 CUSTOMER_EMAIL_RETRY_CRON = "true"          # recovers new payment instructions and outbox rows; no historical backfill
 REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw" # owner-approved test mailbox only; set a production team recipient separately
+# Amazon has no test environment, so staging sends orders to a fake (worker/fake-amazon.js) that takes the order, ships it
+# after a few minutes and can play out a stock-out. MCF_FAKE only works with SITE_ENV=staging; anywhere else it stops all
+# sending instead (never the real service). Auto-submit and the status sync run against the fake.
+MCF_FAKE = "true"
+MCF_AUTO_SUBMIT = "true"
+MCF_SYNC_CRON = "true"
 # Secrets (wrangler secret put <NAME> --env staging): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (sandbox keys only),
 # ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, STAGING_BASIC_AUTH_USER, STAGING_BASIC_AUTH_PASSWORD;
 # AIRWALLEX_WEBHOOK_SECRET once the sandbox webhook exists.
@@ -103,6 +148,9 @@ REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw" # owner-approved test mailbox only
 # https://staging.shopapgo.com/api/webhooks/paypal in the PayPal sandbox Dashboard.
 
 [env.staging.observability]
+enabled = true
+
+[env.staging.observability.issues]
 enabled = true
 
 [env.staging.triggers]
@@ -159,6 +207,24 @@ run_worker_first = true
 binding = "DB"
 database_name = "apgo-us-store"
 database_id = "b409b132-2f2d-4da8-970c-2cf5560ac830"
+migrations_dir = "migrations"   # applied only by the Deploy workflow, after it records a restore point (docs/ops/runbook.md)
+
+# Per-address limits on the endpoints that cost money or invite abuse (worker/rate-limit.js, M12-06): starting a payment,
+# the address check (a paid Google API) and quotes. Each environment has its own namespaces.
+[[env.production.ratelimits]]
+name = "CHECKOUT_LIMITER"
+namespace_id = "3301"
+simple = { limit = 10, period = 60 }
+
+[[env.production.ratelimits]]
+name = "ADDRESS_LIMITER"
+namespace_id = "3302"
+simple = { limit = 20, period = 60 }
+
+[[env.production.ratelimits]]
+name = "QUOTE_LIMITER"
+namespace_id = "3303"
+simple = { limit = 60, period = 60 }
 
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
@@ -181,11 +247,15 @@ CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
 # PayPal live: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV=live; PAYPAL_WEBHOOK_ID after registering
 # https://store.shopapgo.com/api/webhooks/paypal (and www path-route equivalent) in the PayPal live Dashboard.
 
-# Cron: every 15 minutes the Worker's scheduled() re-sends Meta CAPI events that failed, and (only when the MCF_SYNC_CRON var
-# is switched on) syncs Amazon MCF shipment status. Staging runs every 2 minutes for customer email retries; local dev
-# has no cron. Every job is a no-op when its switch is off.
+# Cron: every 5 minutes the Worker's scheduled() (worker/cron.js) re-sends Meta CAPI events that failed, retries customer
+# emails and (only when the MCF_SYNC_CRON var is switched on) syncs Amazon MCF shipment status; each run is recorded for
+# GET /api/health and pings HEALTHCHECK_PING_URL (a secret, optional) so a stopped cron raises an alert. Staging runs every
+# 2 minutes; local dev has no cron. Every job is a no-op when its switch is off.
 [env.production.triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/5 * * * *"]
 
 [env.production.observability]
+enabled = true
+
+[env.production.observability.issues]
 enabled = true

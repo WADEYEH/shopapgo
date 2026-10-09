@@ -1,6 +1,6 @@
 // Fulfilment (shipping) writes for the back office. Payment status lives in
 // orders.status; fulfilment lives in order_fulfillments (no row = "unfulfilled"), so
-// the two never get mixed and existing databases need no ALTER (see worker/schema.sql).
+// the two never get mixed and existing databases need no ALTER (see migrations/0001_baseline.sql).
 
 const now = () => new Date().toISOString();
 

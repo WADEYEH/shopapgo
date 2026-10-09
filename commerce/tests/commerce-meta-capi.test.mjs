@@ -27,6 +27,7 @@ import {
   sha256Hex,
 } from "../worker/meta-capi.js";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
+import { migrationSql } from "./helpers/migrations.mjs";
 import { FAKE_DATASET_ID, FAKE_META_ENV, FAKE_META_TOKEN, createFakeMeta } from "./helpers/fake-meta-capi.mjs";
 
 globalThis.fetch = async (url) => { throw new Error(`unexpected real network call: ${url}`); };
@@ -566,11 +567,19 @@ test("scheduled(): one handler runs the Meta re-send and still the MCF sync (mer
     assert.equal(eventRows(db, orderId)[0].status, "sent");
   });
 
-  // staging / local: no dataset id -> the handler must not even touch the database
-  const stagingEnv = baseEnv({ prepare() { throw new Error("database must not be touched"); } });
+  // staging / local: no dataset id -> the jobs do not touch the database; only the run itself is recorded (cron_runs)
+  const touched = [];
+  const stagingEnv = baseEnv({
+    prepare(sql) {
+      touched.push(sql);
+      if (!/\bcron_runs\b/.test(sql)) throw new Error("database must not be touched");
+      return { bind: () => ({ run: async () => ({ meta: { changes: 1 } }) }) };
+    },
+  });
   const ctx = ctxStub();
   await worker.scheduled({}, stagingEnv, ctx);
   await ctx.settled();
+  assert.ok(touched.length > 0 && touched.every((sql) => /\bcron_runs\b/.test(sql)));
 });
 
 // ---------- test_event_code, logs, secrets ----------
@@ -624,7 +633,7 @@ test("secrets: no token in code, toml or tests; the example env documents empty 
   const production = toml.slice(split);
   assert.ok(!/META_DATASET_ID\s*=/.test(beforeProduction.replace(/^\s*#.*$/gm, "")), "staging and the top level have no dataset id");
   assert.match(production, /^\[env\.production\.vars\][^[]*\nMETA_DATASET_ID = "2606879866471418"/m);
-  assert.match(production, /^\[env\.production\.triggers\]\s*\ncrons = \["\*\/15 \* \* \* \*"\]/m);
+  assert.match(production, /^\[env\.production\.triggers\]\s*\ncrons = \["\*\/5 \* \* \* \*"\]/m);
   assert.ok(!/^\s*(META_CAPI_ACCESS_TOKEN|META_TEST_EVENT_CODE)\s*=/m.test(toml), "token and test code are secrets");
   // Staging runs a cron for customer email retries only: the Meta re-send job is a no-op there without META_DATASET_ID.
   const testSiteCrons = [...beforeProduction.matchAll(/^\[([^\]]+)\]\s*\ncrons\s*=/gm)].map((match) => match[1]);
@@ -632,14 +641,12 @@ test("secrets: no token in code, toml or tests; the example env documents empty 
   assert.deepEqual(testSiteCrons.sort(), ["env.staging.triggers"]);
 });
 
-test("migrations: the two new tables exist after schema.sql, once, and need no ALTER", async () => {
-  const schema = await readFile(new URL("../worker/schema.sql", import.meta.url), "utf8");
+test("migrations: the two tables exist, once each", async () => {
+  const schema = await migrationSql();
   assert.match(schema, /CREATE TABLE IF NOT EXISTS order_attribution/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS order_meta_events[\s\S]*PRIMARY KEY \(order_id, event_name\)/);
-  assert.ok(!/ALTER TABLE/i.test(schema));
   if (hasSqlite) {
     const db = await createD1();
-    db.raw.exec(schema); // re-running the whole file is harmless
     const tables = db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
     assert.ok(tables.includes("order_attribution") && tables.includes("order_meta_events"));
   }

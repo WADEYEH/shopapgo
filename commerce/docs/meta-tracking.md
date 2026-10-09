@@ -85,9 +85,9 @@ There is no `db:migrate:production` / `deploy:production` npm script. The stagin
 Production, after the prerequisites in `docs/commerce.md` "Go-live checklist" (real D1 id in `[[env.production.d1_databases]]`, routes uncommented, secrets set):
 
 ```bash
-# 1. add the two new tables (schema.sql is idempotent: CREATE TABLE IF NOT EXISTS)
-npx wrangler d1 execute apgo-us-store --env production --remote --file worker/schema.sql
-# 2. deploy the Worker (this also registers the cron trigger)
+# Production deploys only through .github/workflows/deploy.yml (docs/ops/runbook.md): it records a restore point,
+# applies the migrations (the two tables are in migrations/0001_baseline.sql), then deploys (which registers the cron).
+npx wrangler d1 migrations apply DB --env production --remote
 npx wrangler deploy --env production
 ```
 
