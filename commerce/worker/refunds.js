@@ -1,5 +1,6 @@
-// Refunds are initiated in Airwallex. This module only reads provider state and
-// records minimal, order-scoped metadata; it never creates a refund or shipment.
+// Refunds are initiated in the Airwallex or PayPal dashboard (D24). This module only reads provider state and records
+// minimal, order-scoped metadata; it never creates a refund or shipment. Both providers go through recordRefund (PayPal
+// from worker/paypal-events.js); statuses are Airwallex's: RECEIVED (pending), ACCEPTED, SETTLED (returned), FAILED.
 import { retrieveRefund, listRefunds } from './airwallex.js';
 
 export const REFUND_EVENTS = new Set(['refund.received', 'refund.accepted', 'refund.settled', 'refund.failed']);
@@ -21,15 +22,30 @@ function validate(order, refund) {
 
 export async function saveRefund(db, order, refund) {
   const cents = validate(order, refund);
+  return recordRefund(db, order, {
+    id: refund.id, provider: 'airwallex', ref: order.payment_intent_id, amountCents: cents, currency: refund.currency,
+    status: refund.status, failureCode: safeCode(refund.failure_details?.code), createdAt: refund.created_at, updatedAt: refund.updated_at,
+  });
+}
+
+// One refund observation, either provider: { id, provider, ref (the payment it refunds), amountCents, currency, status,
+// failureCode, createdAt, updatedAt }. Returns the email instruction it created (refund:<id> | refund:failed:<id>) or null.
+export async function recordRefund(db, order, refund) {
+  if (!STATUSES.has(refund.status) || !validId(refund.id) || !Number.isSafeInteger(refund.amountCents) || refund.amountCents <= 0
+    || refund.amountCents > order.total_cents || refund.currency !== order.currency
+    || !Number.isFinite(Date.parse(refund.updatedAt)) || !Number.isFinite(Date.parse(refund.createdAt))) {
+    throw new Error('Refund data does not match the stored order.');
+  }
+  const cents = refund.amountCents;
   const previous = await db.prepare('SELECT order_id, amount_cents, currency FROM order_refunds WHERE id = ?').bind(refund.id).first();
   if (previous && (previous.order_id !== order.id || previous.amount_cents !== cents || previous.currency !== refund.currency)) {
     throw new Error('Refund identity conflicts with its stored record.');
   }
   // Notices go to a paid order, and to one cancelled after payment (worker/order-core.js): the refund is the money back.
   const noticeStatus = order.status === "cancelled" && order.paid_at ? "paid" : order.status;
-  const updated = new Date(refund.updated_at).toISOString();
+  const updated = new Date(refund.updatedAt).toISOString();
   const timestamp = new Date().toISOString();
-  const failureCode = safeCode(refund.failure_details?.code);
+  const failureCode = safeCode(refund.failureCode);
   // Failure communication is separate from an earlier acceptance notice. A
   // current FAILED observation may repair an old missing failure instruction;
   // settled, stale or conflicting observations can never create one. No scan
@@ -58,17 +74,17 @@ export async function saveRefund(db, order, refund) {
         timestamp,timestamp,refund.status,noticeStatus,refund.id,updated,order.id,cents,refund.currency),
     ...failureJobs,
     db.prepare(`INSERT INTO order_refunds
-    (id,order_id,payment_intent_id,amount_cents,currency,status,failure_code,provider_created_at,provider_updated_at,received_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+    (id,order_id,payment_intent_id,amount_cents,currency,status,failure_code,provider_created_at,provider_updated_at,received_at,provider)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
       status=excluded.status, failure_code=excluded.failure_code,
       provider_updated_at=excluded.provider_updated_at, received_at=excluded.received_at
     WHERE excluded.order_id=order_refunds.order_id AND excluded.amount_cents=order_refunds.amount_cents
       AND excluded.currency=order_refunds.currency AND excluded.provider_updated_at >= order_refunds.provider_updated_at
       AND NOT (order_refunds.status='SETTLED' AND excluded.status!='SETTLED')
       AND NOT (order_refunds.status IN ('ACCEPTED','FAILED') AND excluded.status='RECEIVED')`)
-    .bind(refund.id, order.id, order.payment_intent_id, cents, refund.currency, refund.status,
-      failureCode, new Date(refund.created_at).toISOString(),
-      updated, timestamp),
+    .bind(refund.id, order.id, refund.ref ?? order.payment_intent_id, cents, refund.currency, refund.status,
+      failureCode, new Date(refund.createdAt).toISOString(),
+      updated, timestamp, refund.provider ?? 'airwallex'),
   ]);
   return results[0].meta.changes > 0 ? `refund:${refund.id}`
     : results[1].meta.changes > 0 || results[2].meta.changes > 0 ? `refund:failed:${refund.id}` : null;
@@ -79,7 +95,7 @@ export async function refundHold(db, orderId) {
 }
 
 export async function refundView(db, order) {
-  const { results } = await db.prepare(`SELECT id,amount_cents AS amountCents,currency,status,
+  const { results } = await db.prepare(`SELECT id,provider,amount_cents AS amountCents,currency,status,
     failure_code AS failureCode,provider_created_at AS createdAt,provider_updated_at AS updatedAt
     FROM order_refunds WHERE order_id = ? ORDER BY provider_created_at DESC, id`).bind(order.id).all();
   const refundedCents = results.filter(item => ['ACCEPTED','SETTLED'].includes(item.status)).reduce((sum,item) => sum + item.amountCents,0);

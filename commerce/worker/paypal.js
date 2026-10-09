@@ -246,6 +246,19 @@ export function refundDuplicateCapture(env, captureId, requestId) {
   }, { idempotent: true, requestId });
 }
 
+// Read-only lookups for PayPal events (worker/paypal-events.js): a refund, the capture it belongs to, a dispute.
+export function retrievePaypalRefund(env, refundId) {
+  return request(env, "GET", `/v2/payments/refunds/${encodeURIComponent(refundId)}`, undefined, { idempotent: true });
+}
+
+export function retrievePaypalCapture(env, captureId) {
+  return request(env, "GET", `/v2/payments/captures/${encodeURIComponent(captureId)}`, undefined, { idempotent: true });
+}
+
+export function retrievePaypalDispute(env, disputeId) {
+  return request(env, "GET", `/v1/customer/disputes/${encodeURIComponent(disputeId)}`, undefined, { idempotent: true });
+}
+
 export function approveUrlFrom(paypalOrder) {
   const links = Array.isArray(paypalOrder?.links) ? paypalOrder.links : [];
   const approve = links.find((link) => link?.rel === "approve" && link?.href);

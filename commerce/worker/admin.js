@@ -35,7 +35,7 @@ import { accessMode, resolveAdmin } from "./admin-identity.js";
 import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember } from "./members.js";
 import { accessListStatus, syncAccessList } from "./access-list.js";
 import { activityActors, listActivity } from "./activity.js";
-import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView } from "./order-core.js";
+import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView, orderHolds } from "./order-core.js";
 import { runAfterPaid } from "./after-payment.js";
 import { listCheckouts } from "./checkouts.js";
 import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
@@ -143,6 +143,8 @@ async function handleShip(request, env, orderId, actor) {
   try {
     const shipment = validateShipment(body);
     if (await refundHold(env.DB, orderId)) return fail(409, 'refund_hold', 'Refund registered; review fulfillment in Airwallex and Amazon before shipping.', NO_INDEX);
+    const order0 = await getOrder(env.DB, orderId);
+    if (order0 && (await orderHolds(env.DB, order0)).some((hold) => hold.code === "dispute")) return fail(409, "dispute_hold", "A dispute is open for this order; it cannot ship until the dispute is won.", NO_INDEX);
     const order = await markShipped(env.DB, orderId, shipment, { actor: actor.id });
     // Emailed after the shipment is saved; a failure is recorded and never undoes it.
     const email = await processMessageJob(env, (await getOrder(env.DB, orderId)) ?? order, 'shipment');

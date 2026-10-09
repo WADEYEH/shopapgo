@@ -10,7 +10,7 @@
 //   GET  /api/orders/:id           public order status (syncs pending intents / PayPal)
 //   GET  /api/health               200 while the cron keeps running, 503 once it has stopped (worker/cron.js)
 //   POST /api/webhooks/airwallex   signed Airwallex events
-//   POST /api/webhooks/paypal      verified PayPal events (PAYMENT.CAPTURE.COMPLETED)
+//   POST /api/webhooks/paypal      verified PayPal events: captures, refunds and reversals, denials, disputes (worker/payment-events.js)
 //   POST /api/webhooks/resend      Svix-signed Resend email delivery events
 //   GET  /admin/api/orders[/:id]   order back office data (admin auth)
 //   GET  /admin/api/airwallex/intents/:id, /admin/api/paypal/orders/:id   read-only provider lookups (admin auth)
@@ -73,6 +73,7 @@ import { attributionMetadata, readAttribution, saveAttribution } from "./meta-at
 import { metaEnabled, metaEventId } from "./meta-capi.js";
 import { runMetaEvent, settleFollowUps } from "./after-payment.js";
 import { applyRefundsToOrder } from "./order-core.js";
+import { PAYPAL_EVENTS, handleAirwallexDisputeEvent, handlePaypalPaymentEvent, isAirwallexDisputeEvent } from "./payment-events.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
@@ -451,6 +452,8 @@ async function handleWebhook(request, env, services) {
   // Airwallex instead of being skipped as a duplicate.
   const snapshot = event.data?.object;
   const refundMessage = await handleRefundEvent(env, event);
+  // Disputes and chargebacks (worker/disputes.js): read back from Airwallex, then recorded against the order.
+  if (isAirwallexDisputeEvent(event.name)) await handleAirwallexDisputeEvent(env, event, { adminUrl: `${services.adminOrigin}/admin/` });
   await recordPaymentFailure(env.DB, event);
   if (String(event.name).startsWith("payment_intent.") && snapshot?.id && snapshot.merchant_order_id) {
     let intent = snapshot;
@@ -507,6 +510,18 @@ async function handlePaypalWebhook(request, env, services) {
         if (!(error instanceof PaypalError)) throw error;
         console.error("paypal_webhook_retrieve_failed", { orderId: storeOrder.id, status: error.status, code: error.code });
       }
+    }
+  }
+
+  // Refunds, reversals, denials and disputes (worker/payment-events.js). A PayPal outage answers 502 so PayPal sends the
+  // event again later.
+  if (PAYPAL_EVENTS.has(String(event.event_type))) {
+    try {
+      await handlePaypalPaymentEvent(env, event, { adminUrl: `${services.adminOrigin}/admin/` });
+    } catch (error) {
+      if (!(error instanceof PaypalError)) throw error;
+      console.error("paypal_event_retrieve_failed", { type: event.event_type, status: error.status, code: error.code });
+      return fail(502, "provider_unavailable", "PayPal could not be reached; send the event again later.");
     }
   }
 
