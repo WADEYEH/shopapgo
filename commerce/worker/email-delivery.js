@@ -16,9 +16,20 @@ export function refundEmailKind(kind) {
   const match = /^refund:(?:(failed|team-failed):)?([\w-]{1,120})$/.exec(kind);
   return match ? { id: match[2], failed: Boolean(match[1]), team: match[1] === 'team-failed' } : null;
 }
-// Customer notices kept in order_notice_jobs (migration 0007): the stock-out delay (worker/mcf.js); more in PR 3-7.
-export const NOTICE_KINDS = ['delay:stockout'];
-export const validEmailKind = kind => ['confirmation','shipment',...NOTICE_KINDS].includes(kind) || Boolean(refundEmailKind(kind));
+// Customer notices kept in order_notice_jobs (migration 0007, M8 §2): delay:stockout (worker/mcf.js), cancelled
+// (worker/order-core.js cancelOrder), address:<ms> (one per address change), duplicate:<payment ref> (a second payment
+// refunded, worker/checkouts.js). Returns { type, ref? } or null.
+export function noticeKind(kind) {
+  if (kind === 'delay:stockout') return { type: 'delay' };
+  if (kind === 'cancelled') return { type: 'cancelled' };
+  if (/^address:\d{13}$/.test(kind)) return { type: 'address' };
+  const duplicate = /^duplicate:([\w-]{1,120})$/.exec(kind);
+  return duplicate ? { type: 'duplicate', ref: duplicate[1] } : null;
+}
+export const validEmailKind = kind => ['confirmation','shipment'].includes(kind) || Boolean(refundEmailKind(kind)) || Boolean(noticeKind(kind));
+// What may still go to an order cancelled after payment: its refund notices, the cancellation itself, a second payment
+// refunded. Everything else needs a paid order.
+const SENDABLE_WHEN_CANCELLED = (kind) => Boolean(refundEmailKind(kind)) || ['cancelled', 'duplicate'].includes(noticeKind(kind)?.type);
 
 // The frozen recipient also owns bounce suppression. Staff alerts must never
 // suppress the customer address or silently move to a new configured mailbox.
@@ -92,8 +103,7 @@ async function postEmail(config, row, fetchImpl) {
 }
 
 export async function sendOutboxEmail(env, order, kind, config, makeMessage, { retry = false, resumeInitialJob = false, fetchImpl = fetch, nowMs = Date.now() } = {}) {
-  // Refund notices also go out for an order cancelled after payment (worker/order-core.js); nothing else does.
-  const sendable = order.status === 'paid' || (order.status === 'cancelled' && Boolean(order.paid_at) && Boolean(refundEmailKind(kind)));
+  const sendable = order.status === 'paid' || (order.status === 'cancelled' && Boolean(order.paid_at) && SENDABLE_WHEN_CANCELLED(kind));
   if (!validEmailKind(kind) || !sendable) return { status: 'blocked', detail: 'A paid order and valid email kind are required.' };
   const db = env.DB;
   const legacy = await db.prepare('SELECT status FROM order_emails WHERE order_id = ? AND kind = ?').bind(order.id, kind).first();

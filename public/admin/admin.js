@@ -399,7 +399,7 @@ async function cancelAndRefund(order, button, message) {
 }
 
 function renderHistory(order) {
-  const emailLabel = { confirmation: "Order confirmation", shipment: "Shipment notice", "delay:stockout": "Delay notice (out of stock)" };
+  const emailLabel = { confirmation: "Order confirmation", shipment: "Shipment notice", "delay:stockout": "Delay notice (out of stock)", cancelled: "Cancellation notice" };
   const emails = order.emails ?? [];
   const audit = order.audit ?? [];
   if (!emails.length && !audit.length) return null;
@@ -413,7 +413,9 @@ function renderHistory(order) {
       ...emails.map((mail) => {
         const label = emailLabel[mail.kind] ?? (mail.kind.startsWith('refund:team-failed:') ? `Team refund failure alert (${mail.kind.slice(19)})`
           : mail.kind.startsWith('refund:failed:') ? `Refund failure notice (${mail.kind.slice(14)})`
-          : mail.kind.startsWith('refund:') ? `Refund notice (${mail.kind.slice(7)})` : mail.kind);
+          : mail.kind.startsWith('refund:') ? `Refund notice (${mail.kind.slice(7)})`
+          : mail.kind.startsWith('address:') ? 'Address change notice'
+          : mail.kind.startsWith('duplicate:') ? `Second payment refunded notice (${mail.kind.slice(10)})` : mail.kind);
         const status = mail.deliveryStatus === "accepted" ? "Accepted by email service (delivery not confirmed)" : mail.deliveryStatus || (mail.status === "sent" ? "sent (legacy record; delivery not confirmed)" : mail.status);
         const retry = mail.canRetry ? el("button", { type: "button", class: "btn btn--sm" }, `Retry ${label}`) : null;
         if (retry) retry.addEventListener("click", async () => {

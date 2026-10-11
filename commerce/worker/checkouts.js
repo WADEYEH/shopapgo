@@ -18,6 +18,7 @@ import { refundDuplicateCapture } from "./paypal.js";
 import { toMajor } from "./catalog.js";
 import { recordAudit } from "./fulfillment.js";
 import { alertTeam } from "./team-alerts.js";
+import { sendNotice } from "./customer-email.js";
 
 export const CHECKOUT_TTL_MS = 24 * 60 * 60_000;
 export const PURGE_AFTER_MS = 30 * 24 * 60 * 60_000;
@@ -225,6 +226,7 @@ export async function refundDuplicate(env, { order, provider, ref, amountCents, 
       console.error("duplicate_payment_refund_failed", { orderId: order.id, provider, status: error?.status, code: error?.code });
     }
     await markPayment(db, provider, ref, outcome === "refunded" ? "duplicate_refunded" : "duplicate_refund_failed", detail);
+    if (outcome === "refunded") await sendNotice(env, order.id, `duplicate:${ref}`, { amountCents, currency, provider });
     await recordAudit(db, { orderId: order.id, action: outcome === "refunded" ? "order.duplicate_payment_refunded" : "order.duplicate_payment_refund_failed", actor: "system", detail: { provider, ref, amountCents, ...(detail ? { error: detail } : {}) } });
     const money = `${(amountCents / 100).toFixed(2)} ${currency}`;
     await alertTeam(env, {

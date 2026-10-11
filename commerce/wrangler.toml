@@ -134,7 +134,7 @@ ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
 # and, to keep Cloudflare's allowed-email list equal to the member list (worker/access-list.js):
 #   CLOUDFLARE_ACCOUNT_ID = "<account id>", ACCESS_LIST_ID = "<Zero Trust email list id>", secret ACCESS_LIST_API_TOKEN
 #   (wrangler secret put ACCESS_LIST_API_TOKEN --env staging; a token that can only edit Zero Trust lists).
-CUSTOMER_EMAIL_FROM = "APGO <orders@apgo.tw>"
+CUSTOMER_EMAIL_FROM = "APGO <orders@shopapgo.com>"   # O8: shopapgo.com verified in Resend 10/11 (us-east-1); production switches at the cutover
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"   # worker/contact.js: Contact us messages go to the approved test recipient on staging
