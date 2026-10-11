@@ -2,6 +2,7 @@
 // in a bare vm with a fake window/document, so hostname gating, the _fbc rule and the event
 // mapping are tested without a browser. Browser flows are in meta-pixel.spec.mjs.
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -13,13 +14,17 @@ import { DEFAULT_PRICING } from "../worker/pricing.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(ROOT, file), "utf8");
 const PIXEL_ID = "2606879866471418";
-test("the Next.js store pages (/products, product, cart, checkout, policy and contact pages) load it once, from the shop layout, and the brand pages do not", async () => {
-  const layout = await read("../app/(us)/(shop)/layout.js");
-  assert.equal(layout.split('<Script src="/js/meta-pixel.js" strategy="afterInteractive" />').length - 1, 1, "one pixel script");
-  assert.ok(layout.includes(`src="https://www.facebook.com/tr?id=${PIXEL_ID}&ev=PageView&noscript=1"`), "noscript pixel");
-  assert.match(layout, /<noscript>\s*\{[^}]*\}\s*<img [^>]*alt=""[^>]*\/>\s*<\/noscript>/, "noscript image has an empty alt");
-  // The brand pages have their own, env-gated pixel (components/us/MetaPixel.js); unifying the two is M10.
-  assert.ok(!(await read("../app/(us)/layout.js")).includes("meta-pixel.js"));
+test("every page, brand and store, loads the one pixel once from the site layout (M10-07); the 404 page too; no second pixel anywhere", async () => {
+  const tag = '<Script src="/js/meta-pixel.js" strategy="afterInteractive" />';
+  for (const file of ["../app/(us)/layout.js", "../app/global-not-found.js"]) {
+    const layout = await read(file);
+    assert.equal(layout.split(tag).length - 1, 1, `${file}: one pixel script`);
+    assert.ok(layout.includes('data-honor-gpc={config.honorGpc ? "true" : "false"}'), `${file}: the GPC switch reaches the pixel`);
+  }
+  const shop = await read("../app/(us)/(shop)/layout.js");
+  assert.ok(!/meta-pixel|facebook|noscript/.test(shop), "the store pages add no pixel of their own");
+  assert.ok(!existsSync(path.join(ROOT, "../components/us/MetaPixel.js")), "the brand pages' own pixel is gone");
+  assert.ok(!/fbq|AmazonClick/.test(await read("../lib/us/analytics.js")), "analytics.js sends nothing to Meta itself");
 });
 
 test("the back office never loads the pixel", async () => {
@@ -52,7 +57,7 @@ test("meta-pixel.js: fixed ids, hostname gate, event ids, and no hard-coded pric
 
 test("the checkout: attribution goes into the request body but never into the session cache key", async () => {
   const source = await read("../components/shop/checkout/CheckoutPage.js");
-  assert.ok(/body:\s*\{\s*\.\.\.payload,\s*checkoutId:\s*readCheckoutId\(\),\s*attribution:\s*readAttribution\(\)\s*\}/.test(source), "attribution (and the checkout id) ride along outside the payload");
+  assert.ok(/body:\s*\{\s*\.\.\.payload,\s*checkoutId:\s*readCheckoutId\(\),\s*\.\.\.checkoutTracking\(\)\s*\}/.test(source), "attribution or the GPC flag (and the checkout id) ride along outside the payload");
   assert.ok(/const key = JSON\.stringify\(payload\);/.test(source), "cache key is built from payload only");
   assert.ok(!/payload\s*=\s*\{[^}]*attribution/.test(source), "attribution is not part of payload");
   assert.ok(source.includes('track("checkout_session_created"'));
@@ -60,7 +65,7 @@ test("the checkout: attribution goes into the request body but never into the se
 
 // ---------- vm harness ----------
 
-function run({ hostname = "store.shopapgo.com", search = "", cookie = "", fbq, addToCartIds = [], config = null, storage = {} } = {}) {
+function run({ hostname = "store.shopapgo.com", search = "", cookie = "", fbq, addToCartIds = [], config = null, storage = {}, gpc, honorGpc } = {}) {
   const writes = [];
   const listeners = {};
   const appended = [];
@@ -79,6 +84,7 @@ function run({ hostname = "store.shopapgo.com", search = "", cookie = "", fbq, a
   };
   sandbox.window = sandbox;
   sandbox.location = { hostname, search };
+  if (gpc !== undefined) sandbox.navigator = { globalPrivacyControl: gpc };
   sandbox.fetch = async (url) => {
     sandbox.fetchCalls.push(url);
     return { ok: Boolean(config), json: async () => config };
@@ -95,6 +101,7 @@ function run({ hostname = "store.shopapgo.com", search = "", cookie = "", fbq, a
     getElementsByTagName: () => [],
     head: { appendChild: (node) => appended.push(node) },
     querySelectorAll: () => addToCartIds.map((id) => ({ getAttribute: () => id })),
+    documentElement: { getAttribute: (name) => (name === "data-honor-gpc" && honorGpc !== undefined ? honorGpc : null) },
   };
   sandbox.addEventListener = (name, handler) => { (listeners[name] ||= []).push(handler); };
   if (fbq) sandbox.fbq = fbq;
@@ -143,6 +150,23 @@ test("store.shopapgo.com, shopapgo.com and www.shopapgo.com initialise Meta; sta
     await live.load();
     assert.equal(typeof live.sandbox.fbq, "function", hostname);
     assert.deepEqual(live.calls(), [["init", PIXEL_ID], ["track", "PageView"]], hostname);
+  }
+});
+
+test("Global Privacy Control: a browser that sends it gets no Meta at all, unless the site switched honouring it off", async () => {
+  const blocked = run({ gpc: true, search: "?fbclid=abc", config: CONFIG, addToCartIds: ["d204"] });
+  await blocked.load();
+  assert.equal(blocked.sandbox.fbq, undefined);
+  assert.equal(blocked.appended.length, 0, "fbevents.js is never loaded");
+  assert.deepEqual(blocked.writes, [], "no _fbc cookie");
+  assert.equal(blocked.sandbox.fetchCalls.length, 0);
+  const honoured = run({ gpc: true, honorGpc: "true" });
+  await honoured.load();
+  assert.equal(honoured.sandbox.fbq, undefined);
+  for (const [gpc, honorGpc] of [[false, undefined], [undefined, undefined], [true, "false"]]) {
+    const live = run({ gpc, honorGpc });
+    await live.load();
+    assert.deepEqual(live.calls(), [["init", PIXEL_ID], ["track", "PageView"]], `gpc ${gpc}, data-honor-gpc ${honorGpc}`);
   }
 });
 

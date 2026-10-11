@@ -447,23 +447,29 @@ test("deploy workflow: staging after CI on main; production only by hand, from m
     assert.match(line, /--env (staging|production)\b/, line.trim());
   }
   assert.ok(!/echo .*secrets\./.test(workflow), "secrets are never printed");
+  // The production site loads the D40 container (GTM-TD5NTFH9 → GA4 G-YM10YMKE30) unless a repository variable overrides
+  // it, honours GPC (D46), and has no Pixel id to set: the one Pixel is public/js/meta-pixel.js (M10-07).
+  assert.ok(production.includes("NEXT_PUBLIC_APGO_US_GTM_ID: ${{ vars.APGO_US_GTM_ID || 'GTM-TD5NTFH9' }}"));
+  assert.ok(production.includes("NEXT_PUBLIC_APGO_US_ANALYTICS_READY: ${{ vars.APGO_US_ANALYTICS_READY || 'true' }}"));
+  assert.ok(production.includes("NEXT_PUBLIC_APGO_US_HONOR_GPC: ${{ vars.APGO_US_HONOR_GPC || 'true' }}"));
+  assert.ok(!workflow.includes("META_PIXEL_ID"));
 });
 
 test("production site build: refused unless the analytics values are given, and valid when analytics is on", async () => {
   const { PRODUCTION_SITE_ENV, TEST_SITE_ENV, productionEnvProblems } = await import("../scripts/build-site.mjs");
   assert.deepEqual(PRODUCTION_SITE_ENV, { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true" });
   assert.equal(TEST_SITE_ENV.NEXT_PUBLIC_APGO_US_ANALYTICS_READY, "false");
-  assert.equal(productionEnvProblems({}).length, 3);
-  const off = { NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false", NEXT_PUBLIC_APGO_US_GTM_ID: "", NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "" };
+  assert.equal(productionEnvProblems({}).length, 2);
+  const off = { NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false", NEXT_PUBLIC_APGO_US_GTM_ID: "" };
   assert.deepEqual(productionEnvProblems(off), []);
   assert.deepEqual(productionEnvProblems({ ...off, NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "yes" }), ['NEXT_PUBLIC_APGO_US_ANALYTICS_READY must be "true" or "false"']);
-  assert.equal(productionEnvProblems({ ...off, NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "true" }).length, 2, "on, but neither id would load");
-  assert.deepEqual(productionEnvProblems({ NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "true", NEXT_PUBLIC_APGO_US_GTM_ID: "GTM-AB12CD3", NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "2606879866471418" }), []);
+  assert.equal(productionEnvProblems({ ...off, NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "true" }).length, 1, "on, but the GTM id would not load");
+  assert.deepEqual(productionEnvProblems({ NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "true", NEXT_PUBLIC_APGO_US_GTM_ID: "GTM-AB12CD3" }), []);
 
   // The build's patterns are the site's own (lib/us/config.js), so the check and the site never disagree.
   const site = await readFile(new URL("../../lib/us/config.js", import.meta.url), "utf8");
   const script = await readFile(new URL("../scripts/build-site.mjs", import.meta.url), "utf8");
-  for (const [siteName, scriptName] of [["GTM_ID_RE", "GTM_ID"], ["META_PIXEL_ID_RE", "META_PIXEL_ID"]]) {
+  for (const [siteName, scriptName] of [["GTM_ID_RE", "GTM_ID"]]) {
     const pattern = (text, name) => text.match(new RegExp(`const ${name} = (/.+/);`))?.[1];
     assert.ok(pattern(site, siteName));
     assert.equal(pattern(script, scriptName), pattern(site, siteName), siteName);

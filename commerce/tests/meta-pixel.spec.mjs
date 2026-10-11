@@ -420,3 +420,70 @@ test.describe("accessibility with the pixel active", () => {
     });
   }
 });
+
+// ---------- PR 3-9 (M10): one pixel for the whole site, Global Privacy Control, GA4 e-commerce data ----------
+
+const withGpc = (page) => page.addInitScript(() => Object.defineProperty(Navigator.prototype, "globalPrivacyControl", { get: () => true, configurable: true }));
+
+test.describe("one pixel, GPC and GA4 (PR 3-9)", () => {
+  test("the brand home page loads the same single pixel as the store (M10-07)", async ({ page }) => {
+    const meta = await serveHost(page, "www.shopapgo.com");
+    await mockStore(page);
+    await page.goto("https://www.shopapgo.com/");
+    await expect.poll(() => meta.fbeventsRequests).toBe(1);
+    expect(await queue(page)).toEqual([["init", PIXEL_ID], ["track", "PageView"]]);
+    expect(await page.locator('script[src="/js/meta-pixel.js"]').count()).toBe(1);
+  });
+
+  test("a browser with Global Privacy Control gets no Meta, and its checkout sends no attribution (D46)", async ({ page }) => {
+    const meta = await serveHost(page, STORE);
+    await withGpc(page);
+    const calls = await mockStore(page);
+    await seedCart(page, [{ sku: "d204", qty: 1 }]);
+    await page.goto(`https://${STORE}/checkout?fbclid=IwAR_gpc`);
+    await fillToPayment(page);
+    await fillCard(page);
+    await page.locator("[data-place-order]").click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
+    expect(meta.fbeventsRequests).toBe(0);
+    expect(await page.evaluate(() => typeof window.fbq)).toBe("undefined");
+    expect((await page.context().cookies()).map((c) => c.name)).not.toContain("_fbc");
+    expect(calls.session[0].privacy).toEqual({ gpc: true });
+    expect(calls.session[0].attribution).toBeUndefined();
+    // GA4 measurement is not affected.
+    expect(await page.evaluate(() => window.dataLayer.some((e) => e.event === "purchase"))).toBe(true);
+  });
+
+  test("GA4 gets its e-commerce data: product view, cart, checkout and the purchase with order, shipping and tax", async ({ page }) => {
+    await mockStore(page);
+    await page.goto(`/products/atomic-colored-glaze`);
+    await page.locator("html[data-pdp-ready='true']").waitFor();
+    const viewItem = await page.evaluate(() => window.dataLayer.find((e) => e.event === "view_item"));
+    expect(viewItem.ecommerce).toMatchObject({ currency: "USD", items: [{ item_id: "D204", quantity: 1 }] });
+    expect(viewItem.ecommerce.items[0].price).toBe(d204.priceCents / 100);
+    const cleared = await page.evaluate(() => window.dataLayer.findIndex((e) => e.event === "view_item") - 1);
+    expect(await page.evaluate((i) => window.dataLayer[i], cleared)).toEqual({ ecommerce: null });
+
+    await page.locator('[data-buyrow] [data-pdp-add]').click();
+    const add = await page.evaluate(() => window.dataLayer.filter((e) => e.event === "add_to_cart").at(-1));
+    expect(add.ecommerce.items).toEqual([expect.objectContaining({ item_id: "D204", quantity: 1, price: d204.priceCents / 100 })]);
+
+    await page.goto("/cart");
+    await expect(page.locator('[data-cart-lines] [data-line="d204"]')).toBeVisible();
+    const viewCart = await page.evaluate(() => window.dataLayer.find((e) => e.event === "view_cart"));
+    expect(viewCart.ecommerce.items).toEqual([{ item_id: "D204", item_name: d204.name, price: d204.priceCents / 100, quantity: 1 }]);
+
+    await page.goto("/checkout");
+    await fillToPayment(page);
+    const begin = await page.evaluate(() => window.dataLayer.find((e) => e.event === "begin_checkout"));
+    expect(begin.ecommerce.items).toEqual([{ item_id: "D204", item_name: d204.name, price: d204.priceCents / 100, quantity: 1 }]);
+    await fillCard(page);
+    await page.locator("[data-place-order]").click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
+    const purchase = await page.evaluate(() => window.dataLayer.find((e) => e.event === "purchase"));
+    const shipping = DEFAULT_PRICING.shippingMethods[DEFAULT_PRICING.defaultShippingMethod].amountCents / 100;
+    expect(purchase.ecommerce).toMatchObject({ transaction_id: ORDER_ID, currency: "USD", shipping, tax: 0 });
+    expect(purchase.ecommerce.value).toBeCloseTo(d204.priceCents / 100 + shipping, 2);
+    expect(purchase.ecommerce.items).toEqual([expect.objectContaining({ item_id: "D204", quantity: 1, price: d204.priceCents / 100 })]);
+  });
+});

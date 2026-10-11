@@ -67,6 +67,7 @@ enabled = true   # Workers Issues: groups errors and notifies (where to is set i
 #   PAYPAL_WEBHOOK_ID  after the operator registers the Dashboard webhook URL
 # Address check at checkout (worker/address-check.js; optional, without it addresses are recorded "unverified"):
 #   GOOGLE_ADDRESS_VALIDATION_KEY  Google Cloud API key restricted to the Address Validation API
+# Global Privacy Control (worker/privacy.js, D46): honoured by default; a plain var HONOR_GPC = "false" stops honouring it.
 
 # ---------------------------------------------------------------------------------------------------------------
 # Environments. The top level above is local dev (`npm run dev`) and is left alone. Wrangler does NOT inherit

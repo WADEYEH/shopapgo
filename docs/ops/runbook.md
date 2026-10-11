@@ -121,7 +121,7 @@ staging 的特别设定：订单付款后会自动送到**假的 Amazon**（第 
 
 也可以在 Cloudflare 后台操作：Workers & Pages → `apgo-us-store` → Deployments → 版本右边的「⋯」→ Rollback。
 
-**演练纪录（staging）**：见第 18 节。
+**演练纪录（staging）**：见第 19 节。
 
 ---
 
@@ -148,7 +148,7 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 4. 检查：订单数、最近几张订单的状态（只读查询）；`/api/health`。
 5. 补回还原点之后发生、但应该保留的资料（例如付款服务那边成功的付款：付款服务会重送通知，或从后台付款查询补登）。
 
-**演练纪录（staging）**：见第 18 节。
+**演练纪录（staging）**：见第 19 节。
 
 ---
 
@@ -406,7 +406,36 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 ---
 
-## 18. 演练纪录
+## 18. 追踪：GA4、Meta Pixel、隐私讯号（PR 3-9，D40、D46）
+
+**一套 GTM**：正式网站的建置默认载入 9 月建的 `GTM-TD5NTFH9`（GA4 `G-YM10YMKE30`，在 mkt@apgo.com.tw 底下，D40）。要换别的容器，才需要在 GitHub 设 repository variable `APGO_US_GTM_ID`。staging 和本机一律不载入。
+
+**一份 Meta Pixel**：全站（品牌页加商店页）共用 `public/js/meta-pixel.js`，dataset `2606879866471418`，跟后端 Conversions API 同一个，购买事件靠同一个事件编号去重。只在 www.shopapgo.com、shopapgo.com、store.shopapgo.com 启动。
+
+**网站送给 GTM 的电商事件**（GA4 建议的名称，都带 `ecommerce` 物件：币别、金额、商品；购买另带订单编号、运费、税）：
+
+| 事件 | 时机 |
+|---|---|
+| `view_item` | 看商品页 |
+| `select_item` | 品牌页的商品按钮 |
+| `add_to_cart`、`remove_from_cart` | 加入、移除购物车 |
+| `view_cart` | 看购物车 |
+| `begin_checkout`、`add_shipping_info`、`add_payment_info` | 结账各步骤 |
+| `purchase` | 付款成功 |
+
+**GTM 容器要设好的（在 GTM 后台做，切换上线前确认一次）**：
+1. 用 mkt@apgo.com.tw 登录 tagmanager.google.com，打开容器 `GTM-TD5NTFH9`。
+2. 有一个 **Google 代码**（Google tag），ID 是 `G-YM10YMKE30`，触发条件是所有网页（Initialization – All Pages）。
+3. 有一个 **GA4 事件**代码：事件名称填 `{{Event}}`；勾选「**传送电子商务资料**」，资料来源选 **Data Layer**；触发条件是「自订事件」，事件名称用规则运算式 `^(view_item|select_item|view_cart|add_to_cart|remove_from_cart|begin_checkout|add_shipping_info|add_payment_info|purchase)$`。
+4. 如果容器里有以前的 `amazon_referral_click` 代码，可以删掉（网站已经不送这个事件）。
+5. 按「预览」，开 www.shopapgo.com 看商品、加入购物车，确认事件和 `ecommerce` 都出现（验收 M10-01）；没问题再「提交」。
+6. GA4 后台 → 资料串流 → 设定标记 → 确认「定义内部流量」和资料筛选器「Internal traffic」是**有效**（M10-06）。
+
+**隐私讯号 GPC**（D46，律师意见出来前的暂定做法）：浏览器送出 Global Privacy Control 时，那个人的网页不载入 Meta Pixel、不写 `_fbc`；他结账的订单也不留广告资料、后端不送 Meta 事件（订单记在 `order_privacy`）。GA4 照常。要关掉这个做法：网站在 GitHub 设 `APGO_US_HONOR_GPC = false` 后重新部署，Worker 在 `wrangler.toml` 的正式环境加 `HONOR_GPC = "false"`；两边要一起改。
+
+---
+
+## 19. 演练纪录
 
 | 日期 | 演练 | 环境 | 结果 | 花费时间 |
 |---|---|---|---|---|

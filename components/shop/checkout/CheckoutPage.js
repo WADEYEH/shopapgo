@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/shop/api";
-import { readAttribution } from "@/lib/shop/attribution";
+import { checkoutTracking } from "@/lib/shop/attribution";
 import { CART_KEY, CART_UPDATED, cartItems, clearCart } from "@/lib/shop/cart";
 import {
   AIRWALLEX_PAY_CONTAINER_ID,
@@ -34,7 +34,7 @@ import {
 } from "@/lib/shop/checkout";
 import { loadAirwallex, loadPaypal } from "@/lib/shop/payment-sdk";
 import { fetchStoreConfig, isEstimate, money } from "@/lib/shop/store-config";
-import { track } from "@/lib/us/analytics";
+import { quoteItems, track } from "@/lib/us/analytics";
 import { Estimate, Notice } from "@/components/shop/ui";
 import { AddressCheck, CardField, CheckOption, Field, OrderStatus, OrderSummary, STEPS, describedBy } from "./parts";
 
@@ -73,7 +73,7 @@ const addressKey = (shipping) => JSON.stringify(ADDRESS_FIELDS.map((name) => Str
 const orderUrl = (orderId) => `/checkout?order=${encodeURIComponent(orderId)}`;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // GA4-style item list; prices are the server's (quote line unit price).
-const analyticsItems = (lines) => lines.map((line) => ({ item_id: line.sku, item_name: line.name, quantity: line.qty, price: line.unitCents / 100 }));
+const analyticsItems = quoteItems;
 
 function payMethodChoices(config) {
   const choices = [];
@@ -400,7 +400,7 @@ export default function CheckoutPage() {
     const fresh = s.session && s.sessionKey === key && Date.now() - s.session.createdAt < SESSION_MAX_AGE_MS;
     if (fresh) return s.session;
 
-    const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, checkoutId: readCheckoutId(), attribution: readAttribution() } });
+    const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, checkoutId: readCheckoutId(), ...checkoutTracking() } });
     storeCheckoutId(session.orderId);
     // This checkout was already paid (another tab, an earlier try) or its payment is processing: show the order.
     if (session.settled) {
@@ -592,7 +592,7 @@ export default function CheckoutPage() {
         shipping: s.shipping,
         method: s.method,
         addressReview: s.addressReview,
-        attribution: readAttribution(),
+        ...checkoutTracking(),
         checkoutId: readCheckoutId(),
       }),
     });
@@ -617,7 +617,7 @@ export default function CheckoutPage() {
     } catch {
       // The order page may send a second dataLayer event; Meta still dedupes on eventID.
     }
-    track("purchase", { transaction_id: orderId, value: quote.totalCents / 100, currency: quote.currency, items: analyticsItems(quote.lines) });
+    track("purchase", { transaction_id: orderId, value: quote.totalCents / 100, currency: quote.currency, shipping: quote.shippingCents / 100, tax: (quote.taxCents ?? 0) / 100, items: analyticsItems(quote.lines) });
     return true;
   }
 
@@ -770,8 +770,8 @@ export default function CheckoutPage() {
       // Without storage a refresh may send it again; acceptable for analytics.
     }
     // GET /api/orders/:id lines carry lineCents but no unit price, so the unit price is derived.
-    const items = (paid.lines ?? []).map((line) => ({ item_id: line.sku, item_name: line.name, quantity: line.qty, price: line.lineCents / line.qty / 100 }));
-    track("purchase", { transaction_id: paid.id, value: paid.totalCents / 100, currency: paid.currency, ...(items.length ? { items } : {}) });
+    const items = quoteItems(paid.lines ?? []);
+    track("purchase", { transaction_id: paid.id, value: paid.totalCents / 100, currency: paid.currency, shipping: (paid.shippingCents ?? 0) / 100, tax: (paid.taxCents ?? 0) / 100, ...(items.length ? { items } : {}) });
   }
 
   async function showOrder(orderId) {
@@ -844,7 +844,7 @@ export default function CheckoutPage() {
     if (paypalCancelled) showMessage("info", "PayPal checkout cancelled", "No payment was taken. Continue below or pay by card.");
 
     const quote = await refreshQuote();
-    if (quote) track("begin_checkout", { value: quote.subtotalCents / 100, currency: quote.currency, items: quote.lines.length });
+    if (quote) track("begin_checkout", { value: quote.subtotalCents / 100, currency: quote.currency, items: analyticsItems(quote.lines) });
     if (!s.moved) goTo(restored ?? "contact", { focus: false, initial: true });
   }
 

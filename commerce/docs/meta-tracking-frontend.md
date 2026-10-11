@@ -7,11 +7,13 @@ Browser half of APGO US Meta tracking. The server half (Conversions API) lives i
 - Pixel (dataset) ID: `2606879866471418` (public value, written in `public/js/meta-pixel.js`)
 - Code: `public/js/meta-pixel.js`, `components/shop/checkout/CheckoutPage.js` (attribution +
   `checkout_session_created` event + order items on `purchase`)
-- Pages that load it: the store pages (`/products`, the product pages, `/cart`, `/checkout`, the policy pages and
-  `/contact`, D41), from their layout `app/(us)/(shop)/layout.js` (`next/script`, once the page is interactive, plus
-  the `<noscript>` image); events those pages sent before it ran are read from `window.dataLayer`.
-  **Not** loaded on `/admin/` (the back office has no tracking code at all) or the brand pages (their own pixel,
-  `components/us/MetaPixel.js`; unifying the two is M10).
+- Pages that load it: every page of the site, brand and store, from the site layout `app/(us)/layout.js` and the 404
+  page `app/global-not-found.js` (`next/script`, once the page is interactive). It is the one pixel of the site
+  (M10-07, PR 3-9): the brand pages' own pixel and the `<noscript>` image are gone. Events a page sent before it ran
+  are read from `window.dataLayer`. **Not** loaded on `/admin/` (the back office has no tracking code at all).
+- Global Privacy Control (D46, PR 3-9): when the browser sends it and `<html data-honor-gpc>` is not `"false"`
+  (`NEXT_PUBLIC_APGO_US_HONOR_GPC`, on by default), the script stops before anything else: no `fbq`, no fbevents.js,
+  no `_fbc` cookie. The checkout then sends `privacy: { gpc: true }` instead of `attribution`.
 
 ## When it runs
 

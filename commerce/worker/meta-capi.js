@@ -21,6 +21,7 @@
 // Logs contain only: time, event name/id, HTTP status, events_received, fbtrace_id, attempts. Never PII, IP or token.
 
 import { loadAttribution } from "./meta-attribution.js";
+import { gpcOptedOut } from "./privacy.js";
 
 // Latest Graph API version on 2026-10-05 (v26.0, released 2026-07-29; v20.0 was removed 2026-09-24).
 export const META_GRAPH_VERSION = "v26.0";
@@ -322,6 +323,8 @@ export async function sendMetaEvent(env, order, eventName) {
   }
   try {
     if (!order || !EVENT_NAMES.includes(eventName)) return { outcome: "skipped", reason: "nothing to send" };
+    // The shopper's browser sent Global Privacy Control at checkout (worker/privacy.js, D46).
+    if (await gpcOptedOut(env, order.id)) return { outcome: "skipped", reason: "gpc" };
     const eventTime = secondsOf(eventName === "Purchase" ? order.paid_at : order.created_at);
     const eventId = metaEventId(eventName, order.id);
     if (!(await claimNew(env.DB, order.id, eventName, eventId, eventTime))) return { outcome: "duplicate" };

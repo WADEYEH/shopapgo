@@ -25,16 +25,14 @@ export const SITE_DIR = path.join(COMMERCE, "..", "out");
 export const TEST_SITE_ENV = {
   NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false",
   NEXT_PUBLIC_APGO_US_GTM_ID: "",
-  NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "",
   NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true",
 };
 
 // The production build: the single site, with the analytics values the workflow passes in (repository variables).
 export const PRODUCTION_SITE_ENV = { NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true" };
-export const PRODUCTION_REQUIRED = ["NEXT_PUBLIC_APGO_US_ANALYTICS_READY", "NEXT_PUBLIC_APGO_US_GTM_ID", "NEXT_PUBLIC_APGO_US_META_PIXEL_ID"];
-// The same patterns as GTM_ID_RE / META_PIXEL_ID_RE in lib/us/config.js (tests/platform.test.mjs keeps them equal).
+export const PRODUCTION_REQUIRED = ["NEXT_PUBLIC_APGO_US_ANALYTICS_READY", "NEXT_PUBLIC_APGO_US_GTM_ID"];
+// The same pattern as GTM_ID_RE in lib/us/config.js (tests/platform.test.mjs keeps them equal).
 const GTM_ID = /^GTM-[A-Z0-9]{4,10}$/;
-const META_PIXEL_ID = /^\d{8,20}$/;
 
 // Why these settings must not build production ([] when fine). A value left out, or analytics switched on with an id the
 // site would silently ignore, stops the deploy instead of shipping a site that measures nothing.
@@ -44,7 +42,6 @@ export function productionEnvProblems(env) {
   if (env.NEXT_PUBLIC_APGO_US_ANALYTICS_READY !== undefined && !["true", "false"].includes(ready)) problems.push('NEXT_PUBLIC_APGO_US_ANALYTICS_READY must be "true" or "false"');
   if (ready === "true") {
     if (!GTM_ID.test(String(env.NEXT_PUBLIC_APGO_US_GTM_ID ?? "").trim())) problems.push("NEXT_PUBLIC_APGO_US_GTM_ID is not a GTM container id");
-    if (!META_PIXEL_ID.test(String(env.NEXT_PUBLIC_APGO_US_META_PIXEL_ID ?? "").trim())) problems.push("NEXT_PUBLIC_APGO_US_META_PIXEL_ID is not a Meta Pixel id");
   }
   return problems;
 }

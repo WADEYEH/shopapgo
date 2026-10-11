@@ -2,8 +2,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文件版本 | v0.1 草稿，待你审核 |
-| 日期 | 2026-10-06 |
+| 文件版本 | v0.2（PR 3-9 实作后更新差距表） |
+| 日期 | 2026-10-11 |
 | 上层文件 | `docs/commerce-plan.md`、`docs/design/scenarios.md` |
 | 对应情境 | K1–K4、L3 |
 
@@ -36,8 +36,11 @@
 | 时机 | GA4（经 GTM） | Meta Pixel（浏览器） | Meta CAPI（后端） |
 |---|---|---|---|
 | 看产品页 | `view_item` | ViewContent | — |
-| 加入购物车 | `add_to_cart` | AddToCart | — |
+| 点品牌页的商品按钮 | `select_item` | — | — |
+| 加入、移除购物车 | `add_to_cart`、`remove_from_cart` | AddToCart | — |
+| 看购物车 | `view_cart` | — | — |
 | 进入结账 | `begin_checkout` | InitiateCheckout | InitiateCheckout |
+| 填完地址、选付款方式 | `add_shipping_info`、`add_payment_info` | — | — |
 | 付款成功 | `purchase` | Purchase | Purchase |
 | 退款 | `refund`（由后端送） | — | — |
 
@@ -64,8 +67,9 @@
 
 | 项目 | 现在 | 要做的 |
 |---|---|---|
-| Meta Pixel、CAPI、广告归因 | ✓ landing 的商店页；品牌站另有一份 Pixel | 合成一份 |
-| GA4 电商事件 | ✗ | 新增 |
-| 退款回报 GA4 | ✗ | 新增 |
-| GTM | 两套；线上用的不是 9 月那套 | 正式网站改回 `GTM-TD5NTFH9`（D40），最晚在阶段 4 切换时 |
-| 品牌站导去 Amazon 的事件 | 还在 | 移除 |
+| Meta Pixel、CAPI、广告归因 | ✓ 全站一份 Pixel（PR 3-9） | — |
+| GA4 电商事件 | ✓ 都带 `ecommerce` 物件（PR 3-9） | GTM 容器里的 GA4 事件代码要勾「传送电子商务资料」（营运手册第 18 节） |
+| 退款回报 GA4 | ✗ | 3-11 |
+| GTM | ✓ 正式网站的建置默认 `GTM-TD5NTFH9`（PR 3-9）；切换后生效 | — |
+| 品牌站导去 Amazon 的事件 | ✓ 已移除 | — |
+| 隐私（GPC） | ✓ 预设尊重 GPC：不载入 Pixel、不送后端事件（PR 3-9，D46） | 律师意见出来后调开关 |

@@ -93,6 +93,8 @@ test("views and search ask the Worker, and the old #<order> links still open the
   expect(requests.some((r) => r.includes("view=cancelled"))).toBe(true);
 
   await page.locator('[data-view="all"]').click();
+  // The list is redrawn when the Worker answers: search only once the "all" view is on the page.
+  await expect(page.locator('[data-view="all"]')).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("searchbox", { name: "Search orders" }).fill("portland");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("[data-order]")).toHaveCount(1);

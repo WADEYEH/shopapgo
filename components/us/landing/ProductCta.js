@@ -4,8 +4,7 @@ import { productPathFor } from "@/lib/us/routes";
 import { track } from "@/lib/us/analytics";
 
 // Same-host store CTA. Navigates to the product page; Add to cart lives there.
-// Click events keep the existing GTM/Meta name amazon_referral_click so the
-// container contract is unchanged.
+// A click is GA4's select_item (which button led to which product); there is no Amazon event any more (M10 §1).
 export default function ProductCta({ sku, placement, children, style, className = "us-btn" }) {
   const href = productPathFor(sku);
   const disabled = !href;
@@ -14,7 +13,7 @@ export default function ProductCta({ sku, placement, children, style, className 
       e.preventDefault();
       return;
     }
-    track("amazon_referral_click", { sku, placement });
+    track("select_item", { sku, placement, item_list_name: placement });
   };
   return (
     <a

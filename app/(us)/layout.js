@@ -2,8 +2,9 @@ import "./us.css";
 import { barlow, barlowCondensed } from "./fonts";
 import SiteChrome from "@/components/us/SiteChrome";
 import SiteFooter from "@/components/us/SiteFooter";
+import Script from "next/script";
 import GtmScripts from "@/components/us/GtmScripts";
-import MetaPixel from "@/components/us/MetaPixel";
+import { config } from "@/lib/us/config";
 import { SITE_URL } from "@/lib/site";
 
 export const metadata = {
@@ -15,11 +16,12 @@ export const metadata = {
 
 export default function USLayout({ children }) {
   return (
-    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
+    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`} data-honor-gpc={config.honorGpc ? "true" : "false"}>
       <body className="us-site">
         <SiteChrome footer={<SiteFooter />}>{children}</SiteChrome>
         <GtmScripts />
-        <MetaPixel />
+        {/* The one Meta Pixel for every page, brand and store (M10-07); it stays silent off the store hostnames. */}
+        <Script src="/js/meta-pixel.js" strategy="afterInteractive" />
       </body>
     </html>
   );

@@ -72,6 +72,7 @@ import { handleRefundEvent } from './refunds.js';
 import { handleResendWebhook } from "./email-delivery.js";
 import { attributionMetadata, readAttribution, saveAttribution } from "./meta-attribution.js";
 import { metaEnabled, metaEventId } from "./meta-capi.js";
+import { gpcRequested, honorsGpc, recordGpc } from "./privacy.js";
 import { runMetaEvent, settleFollowUps } from "./after-payment.js";
 import { applyRefundsToOrder } from "./order-core.js";
 import { PAYPAL_EVENTS, handleAirwallexDisputeEvent, handlePaypalPaymentEvent, isAirwallexDisputeEvent } from "./payment-events.js";
@@ -356,7 +357,12 @@ async function handlePaypalCapture(request, env, services) {
 }
 
 // Stores the attribution for a new order. Returns it (for the PaymentIntent metadata) or null when Meta is off / on error.
+// Global Privacy Control (D46, worker/privacy.js): nothing is kept and the order is marked so Meta never hears of it.
 async function captureAttribution(env, request, body, orderId, origin) {
+  if (honorsGpc(env) && gpcRequested(request, body)) {
+    await recordGpc(env.DB, orderId).catch((error) => console.error("order_privacy_error", { orderId, reason: error?.name }));
+    return null;
+  }
   if (!metaEnabled(env)) return null;
   try {
     const attribution = readAttribution(body, request, { fallbackUrl: `${origin}/checkout?order=${orderId}` });

@@ -56,9 +56,11 @@ test("each enabled product CTA navigates on-site and reports the clicked SKU/pla
       assert.match(renderToStaticMarkup(button), new RegExp(`href="/products/${sku}"`));
       button.props.onClick({ preventDefault: () => assert.fail("Enabled CTA was prevented") });
       const event = f.window.dataLayer.at(-1);
-      assert.equal(event.event, "amazon_referral_click");
+      assert.equal(event.event, "select_item");
       assert.equal(event.sku, sku);
       assert.equal(event.placement, placement);
+      assert.equal(event.ecommerce.items[0].item_id, sku.toUpperCase());
+      assert.equal(event.ecommerce.item_list_name, placement);
       assert.equal(f.events.at(-1).type, "apgo:analytics");
     }
   }
