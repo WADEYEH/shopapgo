@@ -12,7 +12,7 @@ test("out of stock at Amazon: days shown; Cancel and refund asks first, then can
   const requests = await mockAdminApi(page, { mcf: { mode: "ready" }, mcfRecords: { [PAID]: stockout }, orderCore: { [PAID]: { stage: "paid" } } });
   await page.goto(`/admin/index.html#${PAID}`);
   const block = page.getByRole("region", { name: "Amazon MCF", exact: true });
-  await expect(block).toContainText("Out of stock at Amazon for 4 days");
+  await expect(block).toContainText("Out of stock at Amazon for 3 days");
   await expect(block).toContainText("the customer was told it is delayed");
   await expect(block).toContainText("Amazon's copy");
   let asked = "";

@@ -48,9 +48,10 @@ test("the admin page is noindex, writes only through the known back-office endpo
   assert.ok(!/localStorage|sessionStorage|ADMIN_TOKEN|Authorization/.test(script), "no credentials stored or sent by page code");
   assert.ok(!/method:\s*["'](PUT|PATCH|DELETE)/.test(script));
   const posts = script.match(/method:\s*["']POST["']/g) ?? [];
-  assert.equal(posts.length, 6, "writes: mark-as-shipped, MCF submit/sync, email retry, refund sync, sandbox refund check, MCF sync-all");
+  assert.equal(posts.length, 8, "writes: mark-as-shipped, MCF submit/sync/cancel, email retry, refund sync, sandbox refund check, MCF sync-all, cancel and refund, Hold test order");
   assert.ok(/\/ship`/.test(script));
   assert.ok(/\/mcf\/\$\{action\}`/.test(script) && script.includes('"/admin/api/mcf/sync"'));
   assert.ok(/\/emails\/\$\{encodeURIComponent\(mail\.kind\)\}\/retry`/.test(script));
   assert.ok(script.includes("/refunds/sync`") && script.includes("/refunds/sandbox-check`"));
+  assert.ok(script.includes("/cancel-refund`") && script.includes('"/admin/api/mcf/hold-test"'));
 });
