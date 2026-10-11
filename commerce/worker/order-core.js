@@ -23,6 +23,7 @@ import { checkShipping } from "../../lib/shop/address-rules.mjs";
 import { enforceAddress } from "./address-check.js";
 import { QuoteError } from "./catalog.js";
 import { alertTeam } from "./team-alerts.js";
+import { sendNotice } from "./customer-email.js";
 
 export const SYSTEM = { id: "system", via: "system", role: "member" };
 const DEFAULT_COOLING_OFF_MINUTES = 60;
@@ -259,6 +260,8 @@ export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }
   }
   const transition = transitionFor(stage, "cancelled");
   await recordAudit(db, { orderId, action: "order.cancelled", actor: actor.id, detail: { transition: transition.id, from: stage, reason: reasonCode, note: detail || undefined, amazonCancel: amazonCancel || undefined } });
+  // The customer is told (M8 §2), except after a chargeback: the bank already returned the money.
+  if (reasonCode !== "chargeback") await sendNotice(env, orderId, "cancelled", { reason: reasonCode });
   const order = await getOrder(db, orderId);
   return { changed: true, order, payment: await paymentFacts(env, order) };
 }
@@ -309,6 +312,7 @@ export async function changeAddress(env, orderId, { actor, shipping, reason, noU
   ).bind(JSON.stringify(after), at, orderId, state.order.paid_at).run();
   if (!(result.meta?.changes > 0)) throw new OrderError(409, "address_locked", "This order changed meanwhile (it may have been sent to Amazon). Reload it.");
   await recordAudit(env.DB, { orderId, action: "order.address_changed", actor: actor.id, detail: { reason: why, before: pickAddress(before), after: pickAddress(after), addressCheck: addressCheck.status } });
+  await sendNotice(env, orderId, `address:${Date.parse(at)}`);
   return { changed: true, order: await getOrder(env.DB, orderId) };
 }
 

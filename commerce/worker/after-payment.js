@@ -55,7 +55,28 @@ export function runAfterPaid(env, order, { adminOrigin }) {
     processConfirmationJob(env, order),
     runAmazonQueue(env, order),
     runMetaEvent(env, order.id, "Purchase"),
+    alertUncheckedAddress(env, order, adminOrigin),
   ]);
+}
+
+// The address check service (worker/address-check.js) could not be reached at checkout, so the order went through
+// with its address unchecked (M8 §3): the team looks at the address before it ships. Not for a service that is simply
+// not set up, nor for PayPal's address (checked by PayPal).
+async function alertUncheckedAddress(env, order, adminOrigin) {
+  try {
+    const check = JSON.parse(order.shipping_json || "{}").addressCheck;
+    if (check?.status !== "unverified" || check.reason !== "unavailable") return;
+    await alertTeam(env, {
+      key: `address-unchecked:${order.id}`, kind: "address_unchecked", orderId: order.id, adminUrl: `${adminOrigin}/admin/`,
+      subject: `Order ${order.id}: the address could not be checked`,
+      lines: [
+        "The address check service did not answer at checkout, so this order was accepted with its address unchecked.",
+        "Look at the shipping address before it goes to Amazon; during the cooling-off period you can correct it in the back office.",
+      ],
+    });
+  } catch (error) {
+    console.error("address_alert_failed", { orderId: order.id, reason: error?.message });
+  }
 }
 
 // After a settle attempt (webhook, return page, PayPal capture). Only the call that changed the order does anything.

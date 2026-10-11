@@ -12,6 +12,7 @@ import { scheduledMcfSubmissions, scheduledMcfSync } from "./mcf.js";
 import { scheduledCheckouts } from "./checkout-jobs.js";
 import { scheduledPaymentChecks } from "./reconcile.js";
 import { scheduledFulfillmentChecks } from "./fulfillment-checks.js";
+import { scheduledDigest } from "./team-digest.js";
 import { scheduledCustomerEmailRetry } from "./customer-email.js";
 import { scheduledMetaRetry } from "./meta-capi.js";
 
@@ -19,6 +20,7 @@ export const CRON_JOBS = {
   checkouts: scheduledCheckouts,
   payments: scheduledPaymentChecks,
   fulfillment: scheduledFulfillmentChecks,
+  digest: scheduledDigest,
   mcf_submit: scheduledMcfSubmissions,
   mcf_sync: scheduledMcfSync,
   email_retry: scheduledCustomerEmailRetry,

@@ -12,7 +12,7 @@
 import { isEmail } from "../../lib/shop/contact-rules.mjs";
 import { recordAdminAudit, updateAdminAuditDetail } from "./activity.js";
 import { syncAccessList } from "./access-list.js";
-import { emailOwners } from "./team-alerts.js";
+import { emailOwners, getsTeamAlerts } from "./team-alerts.js";
 
 export const ROLES = ["owner", "member"];
 const SYSTEM = { id: "system", via: "system", role: "owner" };
@@ -38,6 +38,7 @@ const publicMember = (row) => ({
   addedAt: row.added_at,
   updatedBy: row.updated_by,
   updatedAt: row.updated_at,
+  teamAlerts: row.status === "active" && getsTeamAlerts(row),
 });
 
 const getMember = (db, email) => db.prepare("SELECT * FROM admin_members WHERE email = ?").bind(email).first();
@@ -184,6 +185,34 @@ export async function removeMember(env, actor, body, { fetchImpl = fetch, now = 
   return afterChange(env, actor, { action: "member.removed", email, before, after, reason }, { fetchImpl, now });
 }
 
+// ---------- team emails (I12, M9-20) ----------
+
+// The signed-in person's own choice: get the team emails (worker/team-alerts.js) or not. Anyone on the list may change
+// their own; at least one active person must keep getting them. Logged in Activity.
+export async function teamAlertsOf(db, email) {
+  const row = email ? await activeMember(db, email) : null;
+  return row ? getsTeamAlerts(row) : null;
+}
+
+export async function setTeamAlerts(env, actor, body, { now = () => new Date().toISOString() } = {}) {
+  if (typeof body?.on !== "boolean") throw new MemberError(400, "invalid_choice", "Choose on or off.");
+  const db = env.DB;
+  const row = actor?.email ? await activeMember(db, actor.email) : null;
+  if (!row) throw new MemberError(409, "not_a_member", "This sign-in is not on the member list, so it has no team email setting.");
+  if (getsTeamAlerts(row) === body.on) return { teamAlerts: body.on };
+  if (!body.on) {
+    const { results } = await db.prepare("SELECT * FROM admin_members WHERE status = 'active' AND email != ?").bind(row.email).all();
+    if (!results.some(getsTeamAlerts)) throw new MemberError(409, "last_recipient", "At least one person must get the team emails. Ask someone else to turn theirs on first.");
+  }
+  const at = now();
+  await db.prepare("UPDATE admin_members SET team_alerts = ?, updated_by = ?, updated_at = ? WHERE email = ?").bind(body.on ? 1 : 0, actor.id, at, row.email).run();
+  await recordAdminAudit(db, {
+    actor, action: "member.alerts_changed", target: row.email,
+    before: { ...snapshot(row), teamAlerts: !body.on }, after: { ...snapshot(row), teamAlerts: body.on }, reason: "", at,
+  });
+  return { teamAlerts: body.on };
+}
+
 // ---------- telling the owners ----------
 
 const ACTION_TEXT = {
@@ -204,5 +233,5 @@ function notifyOwners(env, change, fetchImpl) {
     "",
     "You get this because you are an owner of the APGO back office. Members and the full history are on the Members and Activity sections of the back office.",
   ].join("\n");
-  return emailOwners(env, { subject: `Back office: ${what}`, text, idempotencyKey: `member-${change.auditId}` }, fetchImpl);
+  return emailOwners(env, { subject: `Back office: ${what}`, text, idempotencyKey: `member-${change.auditId}` }, fetchImpl, { audience: "owners" });
 }

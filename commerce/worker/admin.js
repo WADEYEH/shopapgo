@@ -33,7 +33,7 @@ import { processMessageJob, retryCustomerEmail } from "./customer-email.js";
 import { validEmailKind } from './email-delivery.js';
 import { MIN_ADMIN_TOKEN_LENGTH } from "./admin-auth.js";
 import { accessMode, resolveAdmin } from "./admin-identity.js";
-import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember } from "./members.js";
+import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember, setTeamAlerts, teamAlertsOf } from "./members.js";
 import { accessListStatus, syncAccessList } from "./access-list.js";
 import { activityActors, listActivity } from "./activity.js";
 import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView, orderHolds } from "./order-core.js";
@@ -191,7 +191,21 @@ async function handleShip(request, env, orderId, actor) {
 async function handleTeamApi(request, env, pathname, actor) {
   const url = new URL(request.url);
   if (pathname === "/admin/api/me" && request.method === "GET") {
-    return json({ actor: { id: actor.id, email: actor.email, role: actor.role, via: actor.via }, accessSignIn: accessMode(env) }, 200, NO_INDEX);
+    // teamAlerts: this person's own choice (worker/members.js); null when the sign-in is not on the member list.
+    return json({ actor: { id: actor.id, email: actor.email, role: actor.role, via: actor.via }, accessSignIn: accessMode(env), teamAlerts: await teamAlertsOf(env.DB, actor.email) }, 200, NO_INDEX);
+  }
+  if (pathname === "/admin/api/me/alerts") {
+    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+    const blocked = csrfProblem(request);
+    if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+    const body = await readJsonObject(request);
+    if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+    try {
+      return json(await setTeamAlerts(env, actor, body), 200, NO_INDEX);
+    } catch (error) {
+      if (error instanceof MemberError) return fail(error.status, error.code, error.message, NO_INDEX);
+      throw error;
+    }
   }
   if (pathname === "/admin/api/activity" && request.method === "GET") {
     const page = await listActivity(env.DB, {

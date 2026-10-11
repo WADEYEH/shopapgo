@@ -20,7 +20,7 @@
 
 import { getOrder, claimOrderEmail, finishOrderEmail } from "./orders.js";
 import { getFulfillment } from "./fulfillment.js";
-import { NOTICE_KINDS, sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
+import { noticeKind, sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
 
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
@@ -160,6 +160,43 @@ export function buildDelayEmail(order, { policyNote } = {}) {
   return { subject, ...body };
 }
 
+// The order was cancelled after payment (worker/order-core.js cancelOrder). Not sent for a chargeback (the bank already
+// returned the money and handles the conversation).
+const CANCEL_INTRO = {
+  customer_request: "As you asked, we've cancelled your order.",
+  out_of_stock: "We're sorry: an item in your order is out of stock, so we've cancelled your order.",
+  full_refund: "Your order has been cancelled and refunded in full.",
+  review_rejected: "We couldn't confirm the payment for your order, so we've cancelled it.",
+  other: "We've cancelled your order.",
+};
+export function buildCancellationEmail(order, notice = {}, { policyNote } = {}) {
+  const subject = `Your APGO order ${order.id} has been cancelled`;
+  const refund = "It will not ship. Your payment is refunded in full to your original payment method; you'll get a separate email when the refund is accepted. When the credit appears depends on your bank or payment method.";
+  const body = render({ heading: "Your order has been cancelled", intro: `${CANCEL_INTRO[notice.reason] ?? CANCEL_INTRO.other} ${refund}`, order, policyNote });
+  return { subject, ...body };
+}
+
+// The shipping address was changed during the cooling-off period (worker/order-core.js changeAddress).
+export function buildAddressChangeEmail(order, { policyNote } = {}) {
+  const subject = `Your APGO order ${order.id}: shipping address updated`;
+  const body = render({ heading: "Your shipping address was updated", intro: "We've updated the shipping address for your order. It will ship to the address below. If this isn't right, reply to this email right away.", order, policyNote });
+  return { subject, ...body };
+}
+
+// A second payment for the same checkout was refunded automatically (worker/checkouts.js refundDuplicate, M5-08).
+export function buildDuplicateRefundEmail(order, notice = {}, { policyNote } = {}) {
+  const subject = `Your APGO order ${order.id}: your second payment was refunded`;
+  const amount = Number.isSafeInteger(notice.amountCents) ? money(notice.amountCents, notice.currency || order.currency) : "the second payment";
+  const how = notice.provider === "paypal" ? "PayPal account" : "card";
+  const body = render({
+    heading: "Your second payment was refunded",
+    intro: `This order was paid twice. We refunded the second payment (${amount}) in full to the ${how} you used. Your order was paid once and ships as usual; you don't need to do anything.`,
+    order,
+    policyNote,
+  });
+  return { subject, ...body };
+}
+
 export function buildRefundEmail(order, refund, { policyNote } = {}) {
   const full = refund.refundedCents >= order.total_cents;
   const heading = full ? 'Your full refund was accepted' : 'Your partial refund was accepted';
@@ -226,12 +263,20 @@ export async function sendCustomerEmail(env, order, kind, options = {}) {
     }
     const parsed = refundEmailKind(kind);
     const config = parsed?.team ? refundAlertConfig(env) : customerEmailConfig(env);
-    return await sendOutboxEmail(env, order, kind, config, () => parsed?.failed
-      ? buildRefundFailureEmail(order,refund,{policyNote:config.policyNote,team:parsed.team,adminUrl:refundAdminUrl(env,order.id)}) : refund
-      ? buildRefundEmail(order,refund,{policyNote:config.policyNote}) : kind === "shipment"
-      ? buildShipmentEmail(order, options.shipment, { policyNote: config.policyNote }) : kind === "delay:stockout"
-      ? buildDelayEmail(order, { policyNote: config.policyNote })
-      : buildConfirmationEmail(order, { policyNote: config.policyNote }), options);
+    const notice = noticeKind(kind);
+    const payload = notice ? await noticePayload(env.DB, order.id, kind) : null;
+    const build = () => {
+      const policy = { policyNote: config.policyNote };
+      if (parsed?.failed) return buildRefundFailureEmail(order, refund, { ...policy, team: parsed.team, adminUrl: refundAdminUrl(env, order.id) });
+      if (refund) return buildRefundEmail(order, refund, policy);
+      if (kind === "shipment") return buildShipmentEmail(order, options.shipment, policy);
+      if (notice?.type === "delay") return buildDelayEmail(order, policy);
+      if (notice?.type === "cancelled") return buildCancellationEmail(order, payload, policy);
+      if (notice?.type === "address") return buildAddressChangeEmail(order, policy);
+      if (notice?.type === "duplicate") return buildDuplicateRefundEmail(order, payload, policy);
+      return buildConfirmationEmail(order, policy);
+    };
+    return await sendOutboxEmail(env, order, kind, config, build, options);
   } catch {
     console.error("customer_email_error", { orderId: order.id, kind, reason: "delivery processing failed" });
     return { status: "failed", detail: "Email processing failed; check delivery records." };
@@ -308,9 +353,18 @@ export async function processMessageJob(env, order, kind, options = {}) {
 
 // ---------- customer notices (order_notice_jobs) ----------
 
+async function noticePayload(db, orderId, kind) {
+  const job = await db.prepare("SELECT payload_json FROM order_notice_jobs WHERE order_id = ? AND kind = ?").bind(orderId, kind).first();
+  try {
+    return job ? JSON.parse(job.payload_json) : {};
+  } catch {
+    return {};
+  }
+}
+
 // Records that a notice is due, once per order and kind. Returns true for the call that created it.
 export async function queueNotice(db, orderId, kind, payload = {}) {
-  if (!NOTICE_KINDS.includes(kind)) throw new Error(`Unknown notice kind ${kind}.`);
+  if (!noticeKind(kind)) throw new Error(`Unknown notice kind ${kind}.`);
   const at = new Date().toISOString();
   const result = await db.prepare("INSERT OR IGNORE INTO order_notice_jobs (order_id, kind, payload_json, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)")
     .bind(orderId, kind, JSON.stringify(payload), at, at).run();
@@ -319,7 +373,7 @@ export async function queueNotice(db, orderId, kind, payload = {}) {
 
 // Hands a pending notice to the durable outbox (same lifecycle as processMessageJob). Never throws.
 export async function processNoticeJob(env, order, kind, options = {}) {
-  if (!NOTICE_KINDS.includes(kind)) return { status: 'blocked', detail: 'Invalid notice.' };
+  if (!noticeKind(kind)) return { status: 'blocked', detail: 'Invalid notice.' };
   try {
     const job = await env.DB.prepare('SELECT status FROM order_notice_jobs WHERE order_id=? AND kind=?').bind(order.id, kind).first();
     if (!job || job.status !== 'pending') return { status: 'duplicate', detail: '' };
@@ -335,6 +389,19 @@ export async function processNoticeJob(env, order, kind, options = {}) {
   } catch {
     console.error('customer_notice_job_error', { orderId: order.id, kind, reason: 'notice handoff failed' });
     return { status: 'failed', detail: 'Notice instruction retained for recovery.' };
+  }
+}
+
+// Records a notice and hands it to the outbox at once (the email retry job sends any that could not go yet). Once per
+// order and kind. Never throws: the change that caused it is already saved.
+export async function sendNotice(env, orderId, kind, payload = {}) {
+  try {
+    if (!(await queueNotice(env.DB, orderId, kind, payload))) return { status: 'duplicate', detail: '' };
+    const order = await getOrder(env.DB, orderId);
+    return order ? await processNoticeJob(env, order, kind) : { status: 'blocked', detail: 'Order not found.' };
+  } catch (error) {
+    console.error('customer_notice_failed', { orderId, kind, reason: String(error?.message ?? error).slice(0, 200) });
+    return { status: 'failed', detail: 'Notice not recorded.' };
   }
 }
 

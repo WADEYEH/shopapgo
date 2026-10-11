@@ -1,7 +1,7 @@
 // Emails to the team about things someone has to look at (M4 §6, M8): an order that needs review, a refund that put
 // shipping on hold, a refused order-state change, an order that could not be sent to Amazon. Recipients: the active
-// back-office owners (PR 3-7 lets each member choose). Sent through Resend like the other team emails; staging sends
-// only to its allowlist.
+// back-office people who chose to get them (owners by default; worker/members.js). Sent through Resend like the other
+// team emails; staging sends only to its allowlist.
 //
 // alertTeam() sends each alert once: the key (e.g. "review:APGO-US-…") is claimed in team_alerts first, so a webhook
 // delivered twice or a cron run repeated never emails twice. Never throws; the outcome is stored on the row.
@@ -10,20 +10,29 @@ import { allowedEmailRecipient } from "./email-delivery.js";
 
 const clip = (value, max) => String(value ?? "").slice(0, max);
 
-// The active owners; before anyone has opened the Members page (no owner row yet), the first owner, ADMIN_OWNER_EMAIL.
-async function owners(env) {
-  const { results } = await env.DB.prepare("SELECT email FROM admin_members WHERE role = 'owner' AND status = 'active' ORDER BY email").all();
-  if (results.length) return results.map((row) => row.email);
+// Who gets the team emails ("team"): every active person who chose to (owners do unless they turned it off, members
+// only when they turned it on; worker/members.js); if nobody did, e.g. after removals, the active owners anyway.
+// "owners" (member changes, a security matter): every active owner, whatever they chose. Before anyone has opened the
+// Members page (no rows yet): the first owner, ADMIN_OWNER_EMAIL.
+export const getsTeamAlerts = (row) => row.team_alerts === 1 || (row.team_alerts == null && row.role === "owner");
+
+async function recipientsFor(env, audience) {
+  const { results } = await env.DB.prepare("SELECT * FROM admin_members WHERE status = 'active' ORDER BY email").all();
+  const chosen = audience === "team" ? results.filter(getsTeamAlerts) : [];
+  if (chosen.length) return chosen.map((row) => row.email);
+  const active = results.filter((row) => row.role === "owner");
+  if (active.length) return active.map((row) => row.email);
   const first = String(env.ADMIN_OWNER_EMAIL ?? "").trim().toLowerCase();
   return first ? [first] : [];
 }
 
-// Sends one email to every active owner. Returns { sent, skipped, failed } counts. Never throws.
-export async function emailOwners(env, { subject, text, idempotencyKey }, fetchImpl = fetch) {
+// Sends one email to the team (or, with audience "owners", to every active owner). Returns { sent, skipped, failed }
+// counts. Never throws.
+export async function emailOwners(env, { subject, text, idempotencyKey }, fetchImpl = fetch, { audience = "team" } = {}) {
   const counts = { sent: 0, skipped: 0, failed: 0 };
   let recipients = [];
   try {
-    recipients = await owners(env);
+    recipients = await recipientsFor(env, audience);
   } catch (error) {
     console.error("team_alert_recipients_unreadable", { message: clip(error?.message ?? error, 200) });
   }

@@ -13,6 +13,7 @@ const ACTION_LABEL = {
   "member.added": "Member added",
   "member.role_changed": "Role changed",
   "member.removed": "Member removed",
+  "member.alerts_changed": "Team emails changed",
   "access_list.synced": "Cloudflare list updated",
   "access_list.sync_failed": "Cloudflare list update failed",
   "order.shipped": "Marked shipped",
@@ -32,11 +33,15 @@ const SYNC_TEXT = {
 
 export async function initTeam({ adminApi, openOrder }) {
   let me;
+  let teamAlerts = null;
   try {
-    me = (await adminApi("/admin/api/me")).actor;
+    const whoami = await adminApi("/admin/api/me");
+    me = whoami.actor;
+    teamAlerts = whoami.teamAlerts ?? null;
   } catch {
     return; // signed-in identity unavailable (older Worker): the order pages still work
   }
+  initTeamAlerts({ adminApi, on: teamAlerts });
   const who = $("[data-admin-whoami]");
   if (who) {
     who.textContent = `${me.email ?? me.id} · ${ROLE_LABEL[me.role] ?? me.role}`;
@@ -46,6 +51,33 @@ export async function initTeam({ adminApi, openOrder }) {
   if (me.role === "owner") initMembers({ adminApi, me });
   // The Hold test order (admin.js) is for owners.
   if (me.role === "owner") $("[data-admin-hold-test]")?.removeAttribute("hidden");
+}
+
+// ---------- Team emails (I12): each person turns their own on or off; at least one person keeps them ----------
+
+function initTeamAlerts({ adminApi, on }) {
+  const button = $("[data-admin-team-alerts]");
+  if (!button || on === null) return; // a sign-in that is not on the member list has no setting
+  const show = (value) => {
+    button.textContent = `Team emails: ${value ? "on" : "off"}`;
+    button.setAttribute("aria-pressed", String(value));
+    button.title = value ? "You get the team emails (problems with orders, payments and shipping). Click to stop." : "You do not get the team emails. Click to get them.";
+  };
+  let current = on;
+  show(current);
+  button.hidden = false;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      current = (await adminApi("/admin/api/me/alerts", { method: "POST", body: { on: !current } })).teamAlerts;
+      show(current);
+      $("[data-admin-message]")?.replaceChildren(notice("success", "Team emails", current ? "You will get the team emails." : "You will no longer get the team emails."));
+    } catch (error) {
+      $("[data-admin-message]")?.replaceChildren(notice("warning", "Team emails not changed", error.message));
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 // ---------- Activity ----------
@@ -196,6 +228,7 @@ function initMembers({ adminApi, me }) {
         el("strong", {}, member.email),
         el("span", { class: `status status--${member.role === "owner" ? "paid" : "pending"}` }, ROLE_LABEL[member.role]),
         member.email === me.email && el("small", {}, "(you)"),
+        member.status === "active" && el("small", { "data-member-alerts": String(Boolean(member.teamAlerts)) }, member.teamAlerts ? "Team emails: on" : "Team emails: off"),
         el("small", {}, `Added by ${member.addedBy}, ${formatDate(member.addedAt)}`),
       ),
       el("details", { class: "admin-member__change" },
