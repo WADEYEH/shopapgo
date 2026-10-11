@@ -39,7 +39,9 @@ import { activityActors, listActivity } from "./activity.js";
 import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView, orderHolds } from "./order-core.js";
 import { runAfterPaid } from "./after-payment.js";
 import { listCheckouts } from "./checkouts.js";
-import { checkMcfConnection, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
+import { cancelMcfOrder, checkMcfConnection, getMcfRecord, isStockout, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
+import { listHoldTests, runHoldTest } from "./mcf-hold-test.js";
+import { cancelAndRefund, refundRequestOf } from "./order-refunds.js";
 import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
 import { AIRWALLEX_INTENT_LOOKUP, PAYPAL_ORDER_LOOKUP, lookupAirwallexIntent, lookupPaypalOrder } from "./payment-lookup.js";
@@ -94,7 +96,7 @@ async function adminOrderView(env, orderId) {
   const row = await getOrder(env.DB, orderId);
   const paymentProvider = row.payment_intent_id ? (await getOrderPayment(env.DB, orderId))?.provider ?? "airwallex" : null;
   return {
-    ...order, paymentProvider, disputes: await disputesForOrder(env.DB, orderId),
+    ...order, paymentProvider, disputes: await disputesForOrder(env.DB, orderId), refundRequest: await refundRequestOf(env.DB, orderId),
     sandboxRefundChecks: sandboxRefundChecksEnabled(env) && paymentProvider !== "paypal",
     mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId),
   };
@@ -123,6 +125,26 @@ async function handleMcfSubmit(request, env, orderId, actor) {
   if (row.status !== "paid") return fail(409, "not_paid", "Only paid orders can be sent to MCF.", NO_INDEX);
   const result = await submitOrderToMcf(env, row, { actor: actor.id });
   return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
+}
+
+// POST .../mcf/cancel: stop the Amazon order only (the order stays paid and can be sent again).
+async function handleMcfCancel(request, env, orderId, actor) {
+  const blocked = csrfProblem(request);
+  if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+  if (!(await readJsonObject(request))) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+  if (!(await getOrder(env.DB, orderId))) return fail(404, "not_found", "Order not found.", NO_INDEX);
+  const result = await cancelMcfOrder(env, orderId, { actor: actor.id });
+  return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) }, result.outcome === "failed" ? 502 : 200, NO_INDEX);
+}
+
+// POST /admin/api/mcf/hold-test (owners): the Hold test order (worker/mcf-hold-test.js).
+async function handleHoldTest(request, env, actor) {
+  const blocked = csrfProblem(request);
+  if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+  if (actor.role !== "owner") return fail(403, "owner_only", "Only an owner can create a Hold test order.", NO_INDEX);
+  if (!(await readJsonObject(request))) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+  const result = await runHoldTest(env, { actor: actor.id });
+  return json({ result, tests: await listHoldTests(env.DB) }, 200, NO_INDEX);
 }
 
 // POST .../mcf/sync (one order) and POST /admin/api/mcf/sync (every order waiting on Amazon).
@@ -220,10 +242,17 @@ async function handleOrderAction(request, env, orderId, action, actor) {
       if (result.changed) await runAfterPaid(env, result.order, { adminOrigin });
     } else if (action === "cancel") {
       result = await cancelOrder(env, orderId, { actor, reasonCode: body.reason, note: body.note }, { adminUrl: `${adminOrigin}/admin/` });
+    } else if (action === "cancel-refund") {
+      // Out of stock at Amazon (M6-06): cancel and refund in one step; pressed again it only retries a failed refund.
+      const cancellation = await env.DB.prepare("SELECT reason_code FROM order_cancellations WHERE order_id = ?").bind(orderId).first();
+      const allowed = isStockout(await getMcfRecord(env.DB, orderId)) || cancellation?.reason_code === "out_of_stock";
+      if (!allowed) throw new OrderError(409, "not_out_of_stock", "Cancel and refund is for orders Amazon cannot fill. Use Cancel, and refund in the payment provider's dashboard.");
+      const outcome = await cancelAndRefund(env, orderId, { actor, reasonCode: "out_of_stock", note: body.note }, { adminUrl: `${adminOrigin}/admin/` });
+      result = { changed: outcome.cancelled, refund: outcome };
     } else {
       result = await changeAddress(env, orderId, { actor, shipping: body.shipping, reason: body.reason, noUnit: body.noUnit === true });
     }
-    return json({ result: { changed: result.changed, payment: result.payment ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
+    return json({ result: { changed: result.changed, payment: result.payment ?? null, refund: result.refund ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
   } catch (error) {
     if (error instanceof OrderError) {
       return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, error.status, NO_INDEX);
@@ -273,7 +302,7 @@ export async function handleAdminApi(request, env, pathname) {
     await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: actor.id, detail: { kind, result: email.status } });
     return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
-  const orderAction = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address)$/);
+  const orderAction = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address|cancel-refund)$/);
   if (orderAction) {
     const id = decodeURIComponent(orderAction[1]);
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
@@ -306,21 +335,27 @@ export async function handleAdminApi(request, env, pathname) {
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
     return handleShip(request, env, id, actor);
   }
-  const mcf = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync)$/);
+  const mcf = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/mcf\/(submit|sync|cancel)$/);
   if (mcf) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
     const id = decodeURIComponent(mcf[1]);
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    if (mcf[2] === "cancel") return handleMcfCancel(request, env, id, actor);
     return mcf[2] === "submit" ? handleMcfSubmit(request, env, id, actor) : handleMcfSync(request, env, id, actor);
   }
   if (pathname === "/admin/api/mcf/sync") {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
     return handleMcfSync(request, env, null, actor);
   }
+  if (pathname === "/admin/api/mcf/hold-test") {
+    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+    return handleHoldTest(request, env, actor);
+  }
   if (request.method !== "GET") return fail(405, "method_not_allowed", "Method not allowed.", { ...NO_INDEX, Allow: "GET" });
 
   // Read-only: list + preview against the Amazon outbound service. Creates and cancels nothing.
   if (pathname === "/admin/api/mcf/check") return json(await checkMcfConnection(env), 200, NO_INDEX);
+  if (pathname === "/admin/api/mcf/hold-tests") return json({ tests: await listHoldTests(env.DB) }, 200, NO_INDEX);
 
   // Read-only: ask Airwallex or PayPal about one payment (worker/payment-lookup.js).
   const intentLookup = pathname.match(AIRWALLEX_INTENT_LOOKUP);

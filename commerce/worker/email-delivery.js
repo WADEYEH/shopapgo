@@ -16,7 +16,9 @@ export function refundEmailKind(kind) {
   const match = /^refund:(?:(failed|team-failed):)?([\w-]{1,120})$/.exec(kind);
   return match ? { id: match[2], failed: Boolean(match[1]), team: match[1] === 'team-failed' } : null;
 }
-export const validEmailKind = kind => ['confirmation','shipment'].includes(kind) || Boolean(refundEmailKind(kind));
+// Customer notices kept in order_notice_jobs (migration 0007): the stock-out delay (worker/mcf.js); more in PR 3-7.
+export const NOTICE_KINDS = ['delay:stockout'];
+export const validEmailKind = kind => ['confirmation','shipment',...NOTICE_KINDS].includes(kind) || Boolean(refundEmailKind(kind));
 
 // The frozen recipient also owns bounce suppression. Staff alerts must never
 // suppress the customer address or silently move to a new configured mailbox.

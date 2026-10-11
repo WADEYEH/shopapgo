@@ -241,12 +241,19 @@ export function capturePaypalOrder(env, paypalOrderId, requestId) {
 // Refunds a whole capture that should never have happened: the second successful payment of one checkout (C11,
 // M5-08; worker/checkouts.js). PayPal-Request-Id is fixed per capture, so a retry can never refund twice.
 export function refundDuplicateCapture(env, captureId, requestId) {
+  return refundCapture(env, captureId, { requestId, note: "Duplicate payment for the same order. Your order was paid once." });
+}
+
+// Refunds a capture: in full without `amount`, otherwise { value, currency_code }. The same PayPal-Request-Id never
+// refunds twice. Returns { id, status } (COMPLETED or PENDING).
+export function refundCapture(env, captureId, { requestId, note, amount = null }) {
   return request(env, "POST", `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {
-    note_to_payer: "Duplicate payment for the same order. Your order was paid once.",
+    ...(amount ? { amount } : {}),
+    note_to_payer: note,
   }, { idempotent: true, requestId });
 }
 
-// Read-only lookups for PayPal events (worker/paypal-events.js): a refund, the capture it belongs to, a dispute.
+// Read-only lookups for PayPal events (worker/payment-events.js): a refund, the capture it belongs to, a dispute.
 export function retrievePaypalRefund(env, refundId) {
   return request(env, "GET", `/v2/payments/refunds/${encodeURIComponent(refundId)}`, undefined, { idempotent: true });
 }

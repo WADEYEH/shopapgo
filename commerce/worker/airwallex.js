@@ -163,11 +163,17 @@ export function cancelPaymentIntent(env, intentId, requestId) {
 // M5-08; worker/checkouts.js). Never used for ordinary refunds, which are made in the Airwallex dashboard (D24).
 // request_id is fixed per payment, so a retry can never refund twice.
 export function refundDuplicatePayment(env, { intentId, amount, requestId }) {
+  return createRefund(env, { intentId, amount, requestId, reason: "Duplicate payment for the same checkout" });
+}
+
+// A refund the store asks for itself (a duplicate payment, or an order cancelled and refunded from the back office).
+// The same request_id never refunds twice. Returns the Airwallex refund object (status RECEIVED at first).
+export function createRefund(env, { intentId, amount, requestId, reason }) {
   return request(env, "POST", "/api/v1/pa/refunds/create", {
     request_id: requestId,
     payment_intent_id: intentId,
     amount,
-    reason: "Duplicate payment for the same checkout",
+    reason,
   }, { idempotent: true });
 }
 

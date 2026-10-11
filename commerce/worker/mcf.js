@@ -20,6 +20,7 @@ import { alertTeam } from "./team-alerts.js";
 
 import {
   McfError,
+  amazonAddress,
   cancelFulfillmentOrder,
   createFulfillmentOrder,
   getFulfillmentOrder,
@@ -32,9 +33,10 @@ import {
   shipmentFromMcfOrder,
 } from "./amazon-mcf.js";
 import { FulfillmentError, markShipped, recordAudit, validateShipment } from "./fulfillment.js";
-import { processMessageJob } from "./customer-email.js";
+import { processMessageJob, processNoticeJob, queueNotice } from "./customer-email.js";
 import { getOrder } from "./orders.js";
 import { PRODUCTS } from "./catalog.js";
+import { adminHost } from "./hosts.js";
 
 const now = () => new Date().toISOString();
 const STALE_SUBMITTING_MS = 5 * 60_000;
@@ -42,6 +44,8 @@ const RETRYABLE = ["failed", "rejected"];
 const SYNC_BATCH = 25;
 const TERMINAL_BAD = ["CANCELLED", "UNFULFILLABLE", "INVALID"];
 const clip = (value, max) => String(value ?? "").slice(0, max);
+const adminUrlOf = (env) => `${adminHost(env) ? `https://${adminHost(env)}` : "https://www.shopapgo.com"}/admin/`;
+const CANCEL_REQUESTED = "Cancellation requested; sync to confirm.";
 
 export function getMcfRecord(db, orderId) {
   return db.prepare("SELECT * FROM order_mcf WHERE order_id = ?").bind(orderId).first();
@@ -63,6 +67,8 @@ function publicRecord(row) {
     submittedAt: row.submitted_at,
     lastSyncedAt: row.last_synced_at,
     updatedAt: row.updated_at,
+    check: row.check_status ? { status: row.check_status, detail: row.check_detail || null, at: row.checked_at ?? null } : null,
+    stockoutAt: row.stockout_at ?? null,
   };
 }
 
@@ -82,15 +88,23 @@ export async function mcfView(env, order, fulfillment) {
   const cooling = coolingOff(env, order);
   const eligible = order.status === "paid" && !fulfillment && !holds.length;
   const retryable = !row || RETRYABLE.includes(row.status) || isStaleSubmitting(row);
+  const stockout = row && isStockout(row) && order.status === "paid" && !fulfillment;
   return {
     mode: readiness.mode, // off | not_configured | ready
     reason: holds.find((hold) => hold.code === "refund") ? "Refund registered; review fulfillment before submitting to Amazon." : holds[0]?.message ?? readiness.reason,
     coolingOffEndsAt: cooling.active ? cooling.endsAt : null,
     canSubmit: readiness.ok && eligible && retryable && !cooling.active,
     canSync: Boolean(row) && ["submitted", "submitting"].includes(row.status) && readiness.config.connectionOk,
+    // Stop the Amazon order only (the order stays paid and can be sent again), e.g. after a failed read-back check.
+    canCancelAtAmazon: Boolean(row) && row.status === "submitted" && readiness.config.connectionOk && row.note !== CANCEL_REQUESTED,
+    // Out of stock at Amazon (M6-06): since when; the order can be cancelled and refunded from here.
+    stockout: stockout ? { since: row.stockout_at, days: Math.floor((Date.now() - Date.parse(row.stockout_at)) / 86_400_000), canCancelAndRefund: true } : null,
     record: publicRecord(row),
   };
 }
+
+// Amazon said it could not fill the order (the latest attempt is closed as UNFULFILLABLE).
+export const isStockout = (row) => Boolean(row?.stockout_at) && row.status === "rejected" && row.mcf_status === "UNFULFILLABLE";
 
 // ---------- building the Amazon request from an order ----------
 
@@ -118,6 +132,62 @@ export function buildMcfInput(order, config) {
     // Amazon only emails the shopper when MCF_NOTIFY_AMAZON_EMAIL=true (default off: our own emails are the only ones).
     notificationEmails: config.notifyAmazonEmail && order.email ? [order.email] : [],
   };
+}
+
+// ---------- the read-back check (D26, M6-16) ----------
+
+const norm = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+const ADDRESS_FIELDS = [["name", "name"], ["addressLine1", "street"], ["addressLine2", "street line 2"], ["city", "city"], ["stateOrRegion", "state"]];
+
+// What was sent ({ address, items: [{ sku, qty }] }) against Amazon's copy (normalizeMcfOrder). Returns the differences
+// in words, [] when they agree, or null when Amazon's copy has no items or address to compare.
+export function compareAmazonCopy(input, amazonOrder) {
+  if (!amazonOrder?.address || !amazonOrder.items?.length) return null;
+  const sent = amazonAddress(input.address);
+  const differences = [];
+  const count = (items) => items.reduce((map, item) => map.set(item.sku, (map.get(item.sku) ?? 0) + Number(item.qty)), new Map());
+  const ours = count(input.items);
+  const theirs = count(amazonOrder.items);
+  for (const sku of new Set([...ours.keys(), ...theirs.keys()])) {
+    if ((ours.get(sku) ?? 0) !== (theirs.get(sku) ?? 0)) differences.push(`${sku}: sent ${ours.get(sku) ?? 0}, Amazon has ${theirs.get(sku) ?? 0}`);
+  }
+  for (const [key, label] of ADDRESS_FIELDS) {
+    if (norm(sent[key]) !== norm(amazonOrder.address[key])) differences.push(`${label}: sent "${sent[key] ?? ""}", Amazon has "${amazonOrder.address[key] ?? ""}"`);
+  }
+  const zip = (value) => String(value ?? "").trim().slice(0, 5);
+  if (zip(sent.postalCode) !== zip(amazonOrder.address.postalCode)) differences.push(`ZIP: sent "${sent.postalCode}", Amazon has "${amazonOrder.address.postalCode}"`);
+  return differences;
+}
+
+// Reads Amazon's copy of the order just sent and compares it with what was sent; a mismatch is recorded and the team
+// told (cancel it at Amazon from the back office while it has not been picked). An unreadable copy is checked again on
+// the next sync. Never throws.
+async function verifyAmazonCopy(env, orderId, { input, sellerOrderId, actor, amazonOrder }) {
+  try {
+    const copy = amazonOrder === undefined ? await getFulfillmentOrder(env, sellerOrderId).catch(() => null) : amazonOrder;
+    const differences = copy ? compareAmazonCopy(input, copy) : null;
+    const at = now();
+    if (!differences) {
+      await env.DB.prepare("UPDATE order_mcf SET check_status = 'unreadable', check_detail = ?, checked_at = ? WHERE order_id = ?")
+        .bind("Amazon's copy could not be read yet; it is checked again at the next sync.", at, orderId).run();
+      return "unreadable";
+    }
+    const status = differences.length ? "mismatch" : "ok";
+    await env.DB.prepare("UPDATE order_mcf SET check_status = ?, check_detail = ?, checked_at = ? WHERE order_id = ?")
+      .bind(status, clip(differences.join("; "), 500), at, orderId).run();
+    if (status === "mismatch") {
+      await audit(env.DB, orderId, "mcf.mismatch", actor, { sellerOrderId, differences: differences.slice(0, 10) });
+      await alertTeam(env, {
+        key: `mcf-mismatch:${sellerOrderId}`, kind: "mcf_mismatch", orderId, adminUrl: adminUrlOf(env),
+        subject: `Order ${orderId}: Amazon's copy does not match what was sent`,
+        lines: ["Amazon's copy of this shipment differs from the order:", ...differences.map((line) => `- ${line}`), "If Amazon has not started picking it, use \"Cancel at Amazon\" in the back office, check the order, then send it again."],
+      });
+    }
+    return status;
+  } catch (error) {
+    console.error("mcf_check_failed", { orderId, reason: error?.message });
+    return "unreadable";
+  }
 }
 
 // ---------- bookkeeping ----------
@@ -153,7 +223,7 @@ async function claim(db, orderId, tier) {
   const result = await db
     .prepare(
       `UPDATE order_mcf SET status = 'submitting', seller_order_id = ?, attempts = ?, service_tier = ?, mcf_status = '',
-         error_kind = '', error_message = '', note = '', updated_at = ?
+         error_kind = '', error_message = '', note = '', check_status = '', check_detail = '', checked_at = NULL, updated_at = ?
        WHERE order_id = ? AND status = ? AND updated_at = ?
          AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=order_mcf.order_id AND r.status!='FAILED')
          AND EXISTS (SELECT 1 FROM orders o WHERE o.id = order_mcf.order_id AND o.status = 'paid')`,
@@ -212,7 +282,7 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs =
     // A retry first asks Amazon whether an earlier attempt with this same id actually landed (e.g. a timeout).
     if (claimed.row) {
       const existing = await getFulfillmentOrder(env, sellerOrderId).catch(() => undefined);
-      if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts);
+      if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts, input);
     }
 
     try {
@@ -220,17 +290,18 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs =
       // The endpoint never re-creates a known id: Amazon already had this order (an earlier request landed).
       if (created.alreadyExists) {
         const existing = created.existing ?? (await getFulfillmentOrder(env, sellerOrderId).catch(() => null));
-        if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts);
+        if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts, input);
       }
       await saveState(env.DB, orderId, { status: "submitted", mcfStatus: created.status, submittedAt: now(), errorKind: "", errorMessage: "", note: "" });
       await audit(env.DB, orderId, "mcf.submitted", actor, { sellerOrderId, tier: input.tier, attempts, items: input.items });
       console.log("mcf_submitted", { orderId, sellerOrderId, tier: input.tier });
+      await verifyAmazonCopy(env, orderId, { input, sellerOrderId, actor });
       return { outcome: "submitted", record: publicRecord(await getMcfRecord(env.DB, orderId)) };
     } catch (error) {
       // Timeout / network / 5xx: the order may exist at Amazon. Reconcile by id before calling it a failure.
       if (error instanceof McfError && error.ambiguous) {
         const existing = await getFulfillmentOrder(env, sellerOrderId).catch(() => undefined);
-        if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts);
+        if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts, input);
       }
       const state = failure(error);
       await saveState(env.DB, orderId, state);
@@ -246,9 +317,10 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs =
 }
 
 // Amazon already has this order id (our earlier request landed): record it and apply its current status.
-async function adopt(env, orderId, sellerOrderId, amazonOrder, actor, attempts) {
+async function adopt(env, orderId, sellerOrderId, amazonOrder, actor, attempts, input) {
   await saveState(env.DB, orderId, { status: "submitted", mcfStatus: amazonOrder.status, submittedAt: now(), errorKind: "", errorMessage: "", note: "Found at Amazon after an unconfirmed attempt." });
   await audit(env.DB, orderId, "mcf.submitted", actor, { sellerOrderId, recovered: true, attempts });
+  if (input) await verifyAmazonCopy(env, orderId, { input, sellerOrderId, actor, amazonOrder });
   const synced = await applyAmazonOrder(env, orderId, amazonOrder, actor);
   if (!synced.shipped && !TERMINAL_BAD.includes(amazonOrder.status)) {
     const current = await getMcfRecord(env.DB, orderId);
@@ -277,8 +349,18 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
   const base = { mcfStatus: amazonOrder.status, lastSyncedAt: timestamp };
 
   if (TERMINAL_BAD.includes(amazonOrder.status)) {
+    const before = await getMcfRecord(env.DB, orderId);
     await saveState(env.DB, orderId, { ...base, status: "rejected", errorKind: "amazon", errorMessage: `Amazon closed the MCF order as ${amazonOrder.status}.`, note: "" });
     await audit(env.DB, orderId, "mcf.closed", actor, { mcfStatus: amazonOrder.status });
+    if (amazonOrder.status === "UNFULFILLABLE") await onStockout(env, orderId);
+    else if (before?.note !== CANCEL_REQUESTED && (await getOrder(env.DB, orderId))?.status === "paid") {
+      // Amazon closed it without being asked: the order is paid and not on its way.
+      await alertTeam(env, {
+        key: `mcf-closed:${before?.seller_order_id ?? orderId}`, kind: "mcf_closed", orderId, adminUrl: adminUrlOf(env),
+        subject: `Order ${orderId}: Amazon closed the shipment (${amazonOrder.status})`,
+        lines: [`Amazon closed the MCF order for ${orderId} as ${amazonOrder.status}; nothing will ship.`, "Check the address and the items, then use Retry send in the back office, or cancel and refund the order."],
+      });
+    }
     return { changed: true, shipped: false, email: null };
   }
 
@@ -319,6 +401,26 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
   }
 }
 
+// Amazon could not fill the order (M6-06, F2): the first time, record when, tell the team and send the customer one delay
+// notice. The order is sent again once a day (worker/fulfillment-checks.js); on day 3 the team decides (cancel and refund
+// from the back office, 10/9 decision).
+async function onStockout(env, orderId) {
+  const at = now();
+  const first = await env.DB.prepare("UPDATE order_mcf SET stockout_at = ? WHERE order_id = ? AND stockout_at IS NULL").bind(at, orderId).run();
+  if (!(first.meta?.changes > 0)) return;
+  await audit(env.DB, orderId, "mcf.stockout", "mcf", {});
+  await alertTeam(env, {
+    key: `stockout:${orderId}`, kind: "stockout", orderId, adminUrl: adminUrlOf(env),
+    subject: `Order ${orderId}: out of stock at Amazon`,
+    lines: [
+      `Amazon could not fill order ${orderId} (UNFULFILLABLE, usually out of stock). The customer was told it is delayed.`,
+      "It is sent to Amazon again once a day. If it still cannot ship after 3 days, cancel and refund it from the back office (you will be reminded).",
+    ],
+  });
+  const order = await getOrder(env.DB, orderId);
+  if (order?.status === "paid" && (await queueNotice(env.DB, orderId, "delay:stockout"))) await processNoticeJob(env, order, "delay:stockout");
+}
+
 // Asks Amazon about one order. Never throws. Returns { outcome: "synced" | "skipped" | "failed", ... }.
 export async function syncMcfOrder(env, orderId, { actor = "admin" } = {}) {
   try {
@@ -337,6 +439,11 @@ export async function syncMcfOrder(env, orderId, { actor = "admin" } = {}) {
         await saveState(env.DB, orderId, { lastSyncedAt: now(), note: "Amazon does not know this order id yet." });
       }
       return { outcome: "synced", shipped: false, record: publicRecord(await getMcfRecord(env.DB, orderId)) };
+    }
+    // The read-back check could not run right after sending (or the row predates it): do it now.
+    if (["", "unreadable"].includes(row.check_status ?? "") && !TERMINAL_BAD.includes(amazonOrder.status)) {
+      const order = await getOrder(env.DB, orderId);
+      if (order) await verifyAmazonCopy(env, orderId, { input: buildMcfInput(order, readiness.config), sellerOrderId: row.seller_order_id, actor, amazonOrder });
     }
     const applied = await applyAmazonOrder(env, orderId, amazonOrder, actor);
     return { outcome: "synced", ...applied, record: publicRecord(await getMcfRecord(env.DB, orderId)) };
@@ -454,15 +561,19 @@ export async function previewOrderForMcf(env, order) {
   return getFulfillmentPreview(env, input);
 }
 
-// Asks Amazon to stop an MCF order (only possible before picking). Used by tests / future UI; the row becomes "rejected".
+// Asks Amazon to stop an MCF order (only possible before picking) while the order itself stays paid: the back office's
+// "Cancel at Amazon" (e.g. after a failed read-back check). The next sync sees CANCELLED, the row becomes "rejected" and
+// Retry send creates a new Amazon order. Cancelling the whole order goes through worker/order-core.js cancelOrder.
 export async function cancelMcfOrder(env, orderId, { actor = "admin" } = {}) {
   const row = await getMcfRecord(env.DB, orderId);
-  if (!row || !["submitted", "submitting"].includes(row.status)) return { outcome: "skipped" };
+  if (!row || !["submitted", "submitting"].includes(row.status)) return { outcome: "skipped", reason: "There is no open Amazon order to cancel." };
   try {
     await cancelFulfillmentOrder(env, row.seller_order_id);
-    await saveState(env.DB, orderId, { note: "Cancellation requested; sync to confirm." });
+    await saveState(env.DB, orderId, { note: CANCEL_REQUESTED });
     await audit(env.DB, orderId, "mcf.cancel_requested", actor, { sellerOrderId: row.seller_order_id });
-    return { outcome: "requested" };
+    // Amazon usually confirms at once: read it back so the back office shows the result.
+    await syncMcfOrder(env, orderId, { actor });
+    return { outcome: "requested", record: publicRecord(await getMcfRecord(env.DB, orderId)) };
   } catch (error) {
     return { outcome: "failed", reason: clip(error?.message, 200) };
   }

@@ -7,6 +7,9 @@
 //             FAKE_MCF_SHIP_MINUTES (default 10)
 //   stockout  any recipient name containing "STOCKOUT": RECEIVED -> UNFULFILLABLE after 2 minutes (Amazon could not
 //             fill it; the after-payment stock-out case)
+//   hold      fulfillment_action "Hold" (the Hold test order, worker/mcf-hold-test.js): stays RECEIVED, never ships
+//   mismatch  any recipient name containing "MISMATCH": Amazon's copy has one unit more of the first item, so the
+//             read-back check after sending (D26, M6-16) can be tried on staging
 //   cancel    allowed while RECEIVED or PROCESSING, as at Amazon
 //
 // MCF_FAKE anywhere else (production, local dev without SITE_ENV=staging) is "blocked": nothing is sent at all, neither
@@ -17,6 +20,7 @@ const PROCESS_MINUTES = 2;
 const DEFAULT_SHIP_MINUTES = 10;
 const LIST_LIMIT = 200;
 const STOCKOUT = /STOCKOUT/i;
+const MISMATCH = /MISMATCH/i;
 
 // "on" | "blocked" | null (off).
 export function fakeMode(env = {}) {
@@ -52,6 +56,7 @@ export function fakeProgress(row, nowMs, env = {}) {
   const received = Date.parse(row.received_at);
   const ship = shipMinutes(env) * 60_000;
   const process = Math.min(PROCESS_MINUTES * 60_000, ship);
+  if (row.scenario === "hold") return { status: "RECEIVED", updatedAt: row.received_at, shipped: false };
   if (row.scenario === "stockout") {
     return nowMs >= received + process ? { status: "UNFULFILLABLE", updatedAt: iso(received + process), shipped: false } : { status: "RECEIVED", updatedAt: row.received_at, shipped: false };
   }
@@ -74,8 +79,13 @@ function view(row, progress) {
         fulfillmentOrderStatus: progress.status,
         statusUpdatedDate: progress.updatedAt,
         shippingSpeedCategory: request.shipping_speed_category,
+        fulfillmentAction: request.fulfillment_action ?? "Ship",
+        destinationAddress: request.destination_address,
       },
-      fulfillmentOrderItems: (request.items ?? []).map((item) => ({ sellerSku: item.sellerSku, sellerFulfillmentOrderItemId: item.sellerFulfillmentOrderItemId, quantity: item.quantity })),
+      fulfillmentOrderItems: (request.items ?? []).map((item, index) => ({
+        sellerSku: item.sellerSku, sellerFulfillmentOrderItemId: item.sellerFulfillmentOrderItemId,
+        quantity: item.quantity + (MISMATCH.test(String(request.destination_address?.name ?? "")) && index === 0 ? 1 : 0),
+      })),
       fulfillmentShipments: progress.shipped
         ? [{
             amazonShipmentId: `FAKE-${number}`,
@@ -133,7 +143,7 @@ async function create(env, body, nowMs) {
   if (!id || String(id).length > 40 || !body.items?.length || !body.destination_address?.postalCode || !body.shipping_speed_category || !body.displayable_order_id) {
     return invalid("seller_fulfillment_order_id, items, destination_address and shipping_speed_category are required");
   }
-  const scenario = STOCKOUT.test(String(body.destination_address.name ?? "")) ? "stockout" : "ship";
+  const scenario = body.fulfillment_action === "Hold" ? "hold" : STOCKOUT.test(String(body.destination_address.name ?? "")) ? "stockout" : "ship";
   const stamp = iso(nowMs);
   const inserted = await db
     .prepare(

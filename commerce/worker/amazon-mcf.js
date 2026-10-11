@@ -8,7 +8,8 @@
 //   Errors    { error, spapiStatus, details }; validation failures are 400 with `issues`
 //
 //   POST /internal/outbound/preview                          read-only: fees + arrival window per shipping speed
-//   POST /internal/outbound/orders                           REALLY creates an MCF order (ships + uses FBA stock).
+//   POST /internal/outbound/orders                           REALLY creates an MCF order (ships + uses FBA stock;
+//                                                            fulfillment_action "Hold" only reserves the stock).
 //                                                            { created:true, sellerFulfillmentOrderId, response } or
 //                                                            { created:false, alreadyExists:true, existing } (never re-created)
 //   GET  /internal/outbound/orders/:sellerFulfillmentOrderId status, shipments, carrier, tracking (404 = unknown id)
@@ -262,7 +263,8 @@ async function outbound(env, method, path, { body, query, label } = {}) {
 
 // ---------- payloads ----------
 
-const amazonAddress = (address) => {
+// Exported: the read-back check (worker/mcf.js) compares Amazon's copy with exactly what was sent.
+export const amazonAddress = (address) => {
   const out = {
     name: clip(address.name, 50),
     addressLine1: clip(address.addressLine1, 60),
@@ -283,9 +285,12 @@ export function buildPreviewRequest({ address, items, tier }) {
   return { address: amazonAddress(address), items: amazonItems(items), shipping_speed_categories: [WIRE_TIER[tier]], include_delivery_windows: false };
 }
 
-// Fulfilment action Ship releases the order for picking at once (Hold would only reserve stock).
+// Fulfilment action Ship releases the order for picking at once. Hold only reserves the stock and never ships unless it
+// is released in Seller Central: used for the Hold test order (worker/mcf-hold-test.js, D26), which is then cancelled.
+// The MCP Worker's create endpoint accepts both ("Ship" | "Hold", checked in its code 10/9).
 // displayable_order_id is our order number; notification_emails only when MCF_NOTIFY_AMAZON_EMAIL=true.
-export function buildCreateRequest({ orderId, address, items, tier, displayableOrderDate, notificationEmails }) {
+export const FULFILLMENT_ACTIONS = ["Ship", "Hold"];
+export function buildCreateRequest({ orderId, address, items, tier, displayableOrderDate, notificationEmails, action = "Ship" }) {
   return {
     seller_fulfillment_order_id: orderId,
     displayable_order_id: orderId,
@@ -294,7 +299,7 @@ export function buildCreateRequest({ orderId, address, items, tier, displayableO
     items: amazonItems(items),
     ...(displayableOrderDate ? { displayable_order_date: displayableOrderDate } : {}),
     displayable_order_comment: DISPLAY_COMMENT,
-    fulfillment_action: "Ship",
+    fulfillment_action: action,
     ...(notificationEmails?.length ? { notification_emails: notificationEmails } : {}),
   };
 }
@@ -336,7 +341,8 @@ export function normalizePreview(body, tier) {
   };
 }
 
-// getFulfillmentOrder payload -> { orderId, status, statusUpdatedAt, shipments: [{ status, shipTime, packages: [...] }] }.
+// getFulfillmentOrder payload -> { orderId, status, statusUpdatedAt, action, address, items: [{ sku, qty }],
+// shipments: [{ status, shipTime, packages: [...] }] }. address and items are Amazon's copy, for the read-back check.
 export function normalizeMcfOrder(body) {
   const payload = unwrap(body);
   const order = payload.fulfillmentOrder ?? payload;
@@ -351,10 +357,16 @@ export function normalizeMcfOrder(body) {
       trackingUrl: clip(pkg?.trackingUrl ?? pkg?.carrierURL ?? "", 500),
     })),
   }));
+  const destination = isPlainObject(order.destinationAddress) ? order.destinationAddress : null;
   return {
     orderId: clip(order.sellerFulfillmentOrderId, 60),
     status: clip(order.fulfillmentOrderStatus, 40).toUpperCase(),
     statusUpdatedAt: order.statusUpdatedDate ?? null,
+    action: clip(order.fulfillmentAction, 20),
+    address: destination
+      ? Object.fromEntries(["name", "addressLine1", "addressLine2", "city", "stateOrRegion", "postalCode"].map((key) => [key, clip(destination[key], 120)]))
+      : null,
+    items: asArray(payload.fulfillmentOrderItems).map((item) => ({ sku: clip(item?.sellerSku, 60), qty: Number(item?.quantity) || 0 })),
     shipments,
   };
 }
@@ -395,14 +407,15 @@ export async function getFulfillmentPreview(env, { address, items, tier }) {
 // the endpoint never creates a second order for an id it already knows, which is what makes retries duplicate-proof.
 // Returns { accepted, created, alreadyExists, existing, status }; `existing` is the normalised Amazon order when the
 // id was already there (status is then Amazon's current status).
-export async function createFulfillmentOrder(env, { orderId, address, items, tier, displayableOrderDate, notificationEmails }) {
+export async function createFulfillmentOrder(env, { orderId, address, items, tier, displayableOrderDate, notificationEmails, action = "Ship" }) {
   if (!orderId || !/^[A-Za-z0-9._-]{1,40}$/.test(orderId)) {
     throw new McfError("config", "A valid SellerFulfillmentOrderId (<= 40 chars) is required.", { code: "invalid_order_id" });
   }
   if (!SERVICE_TIERS.includes(tier)) throw new McfError("config", `Unknown MCF service tier "${tier}".`, { code: "invalid_tier" });
   if (!items?.length) throw new McfError("config", "No items to fulfil.", { code: "no_items" });
+  if (!FULFILLMENT_ACTIONS.includes(action)) throw new McfError("config", `Unknown fulfillment action "${action}".`, { code: "invalid_action" });
   const { status, body } = await outbound(env, "POST", "/internal/outbound/orders", {
-    body: buildCreateRequest({ orderId, address, items, tier, displayableOrderDate, notificationEmails }),
+    body: buildCreateRequest({ orderId, address, items, tier, displayableOrderDate, notificationEmails, action }),
     label: "create order",
   });
   if (body?.alreadyExists === true || body?.created === false) {
