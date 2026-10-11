@@ -100,7 +100,7 @@
 |---|---|---|
 | Airwallex（正式） | 正式金钥有效；付款通知有收到（78 则，付款单与付款尝试事件），签章验证通过；还没有任何一笔付款成功 | 在 Airwallex 后台确认通知网址、退款事件有没有订阅、5 笔刷卡失败的原因；之后加订阅争议事件 |
 | PayPal（正式） | 正式收款已开启（landing） | 建立付款通知（webhook），设定 `PAYPAL_WEBHOOK_ID` |
-| Resend | 正式没有设定；staging 有 | 新版上线前设定；寄件网域待 O8 |
+| Resend | 正式没有设定；staging 有 | 新版上线前设定；寄件网域 shopapgo.com（O8 已定），验证步骤见营运手册第 16 节 |
 | Google 地址验证（`GOOGLE_ADDRESS_VALIDATION_KEY`） | 正式、staging 都还没有 | 你在 Google Cloud 建金钥（只开 Address Validation API，设每日用量上限和费用提醒），先设到 staging，上线前再设正式（D32） |
 | Amazon（经 `amazon-spapi-mcp`） | 正式没有连线；staging 有连线设定 | 新版上线前设定；先确认危险品分类（F11） |
 | Meta | Dataset／Pixel `2606879866471418`；正式有 CAPI 金钥，也有测试事件代码 | 确认后移除测试事件代码 |

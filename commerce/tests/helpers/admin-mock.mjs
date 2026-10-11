@@ -110,8 +110,18 @@ function teamMock(team, writes) {
   let accessList = structuredClone(team.accessList ?? { configured: false, last: null });
   const syncResult = () => (accessList.configured ? { status: "synced", added: 1, removed: 0, detail: "" } : { status: "not_configured", added: 0, removed: 0, detail: "The Cloudflare Access list sync is not set up." });
   const owners = () => members.filter((m) => m.status === "active" && m.role === "owner").length;
+  // Team emails (I12): team.teamAlerts is this person's setting (null = not on the list); team.othersGetAlerts says
+  // whether anyone else still gets them (else turning off is refused).
+  let teamAlerts = team.teamAlerts === undefined ? true : team.teamAlerts;
   return (url, request, reply) => {
-    if (url.pathname === "/admin/api/me") return reply(200, { actor: me, accessSignIn: Boolean(team.accessSignIn) });
+    if (url.pathname === "/admin/api/me") return reply(200, { actor: me, accessSignIn: Boolean(team.accessSignIn), teamAlerts });
+    if (url.pathname === "/admin/api/me/alerts") {
+      const body = request.postDataJSON();
+      writes.push({ path: url.pathname, contentType: request.headers()["content-type"], body });
+      if (!body.on && !team.othersGetAlerts) return reply(409, { error: { code: "last_recipient", message: "At least one person must get the team emails. Ask someone else to turn theirs on first." } });
+      teamAlerts = body.on;
+      return reply(200, { teamAlerts });
+    }
     if (url.pathname === "/admin/api/activity") {
       const actor = url.searchParams.get("actor");
       return reply(200, { entries: activity.filter((e) => !actor || e.actor === actor), nextCursor: null, actors: [...new Set(activity.map((e) => e.actor))].sort() });
