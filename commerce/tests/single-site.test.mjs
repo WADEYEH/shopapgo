@@ -60,7 +60,7 @@ test("the export checked: the back office, the pixel, the 404 page and the store
   for (const file of ["index.html", "404.html", "products.html", "cart.html", "checkout.html", "contact.html", "admin/index.html", "js/meta-pixel.js", ".assetsignore"]) {
     assert.ok(REQUIRED_FILES.includes(file), file);
   }
-  for (const file of ["admin/index.html", "admin/admin.js", "admin/ui.js", "admin/admin.css", "admin/commerce.css", "js/meta-pixel.js", "apple-pay/README.txt", ".assetsignore"]) {
+  for (const file of ["admin/index.html", "admin/admin.js", "admin/ui.js", "admin/admin.css", "admin/strings.js", "admin/i18n.js", "js/meta-pixel.js", "apple-pay/README.txt", ".assetsignore"]) {
     assert.ok(existsSync(repo(`public/${file}`)), `public/${file}`);
   }
 });

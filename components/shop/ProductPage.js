@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BEFORE_AFTER, BRAND, MIN_VERIFIED_REVIEWS, PRODUCTS, QUIZ, REVIEWS, SEO, SKUS, productPath } from "@/lib/shop/catalog";
 import { MAX_QTY, addToCart } from "@/lib/shop/cart";
 import { averageRating, reviewsToShow } from "@/lib/shop/reviews";
-import { priceCents, priceText, useStoreConfig } from "@/lib/shop/store-config";
+import { onSale, priceCents, priceText, useStoreConfig } from "@/lib/shop/store-config";
 import { track } from "@/lib/us/analytics";
 import { asset } from "@/lib/us/routes";
 import { SITE_URL } from "@/lib/site";
@@ -54,6 +54,8 @@ function ProductJsonLd({ sku, config }) {
   const cents = priceCents(config, sku);
   if (config?.estimate === false && cents !== null) {
     data.offers = { "@type": "Offer", url: absolute(seo.path), priceCurrency: config.currency || "USD", price: (cents / 100).toFixed(2) };
+    // Stopped by an owner (commerce/worker/products.js).
+    if (!onSale(config, sku)) data.offers.availability = "https://schema.org/OutOfStock";
   }
   return <script type="application/ld+json" id="pdp-jsonld" dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }} />;
 }
@@ -135,7 +137,7 @@ function HowTo({ sku }) {
   );
 }
 
-function Quiz({ sku, onAdd }) {
+function Quiz({ sku, onAdd, selling = true }) {
   const [answers, setAnswers] = useState([]);
   const inputs = useRef([]);
   const focusNext = useRef(null);
@@ -165,7 +167,7 @@ function Quiz({ sku, onAdd }) {
           <span className="quiz__rec-name"><span className={`routine routine--md routine--${r.routine}`}>{word(rec)}</span><span className="product-name">{r.name}</span></span>
         </div>
         {rec === sku ? (
-          <button className="btn" type="button" data-pdp-add="" data-placement="quiz" onClick={() => onAdd("quiz")}>Add to cart <span aria-hidden="true">→</span></button>
+          <button className="btn" type="button" data-pdp-add="" data-placement="quiz" disabled={!selling} onClick={() => onAdd("quiz")}>Add to cart <span aria-hidden="true">→</span></button>
         ) : (
           <a className="btn" href={productPath(rec)} data-switch-to={rec}>Switch to {r.word} <span aria-hidden="true">→</span></a>
         )}
@@ -209,7 +211,7 @@ function Quiz({ sku, onAdd }) {
   );
 }
 
-function Compare({ sku, config, onAdd }) {
+function Compare({ sku, config, onAdd, selling = true }) {
   const rows = [
     ["Product", (p) => p.name],
     ["When", (p) => p.when],
@@ -246,7 +248,7 @@ function Compare({ sku, config, onAdd }) {
               {SKUS.map((s) => (
                 <td key={s} data-col={s} className={cell(s)}>
                   {s === sku ? (
-                    <button className="btn btn--md" type="button" data-pdp-add="" data-placement="compare" onClick={() => onAdd("compare")}>Add to cart <span aria-hidden="true">→</span></button>
+                    <button className="btn btn--md" type="button" data-pdp-add="" data-placement="compare" disabled={!selling} onClick={() => onAdd("compare")}>Add to cart <span aria-hidden="true">→</span></button>
                   ) : (
                     <a className="btn btn--text" href={productPath(s)} data-switch-to={s}>View {PRODUCTS[s].word} <span className="glyph" aria-hidden="true">→</span></a>
                   )}
@@ -274,7 +276,11 @@ export default function ProductPage({ sku }) {
 
   const currency = config?.currency || "USD";
   const maxQty = config?.maxQtyPerLine ?? MAX_QTY;
-  const lines = pair ? [{ sku, qty }, { sku: other, qty: 1 }] : [{ sku, qty }];
+  // An owner can stop selling a product (commerce/worker/products.js): no Add to cart, and no pair with a stopped one.
+  const selling = onSale(config, sku);
+  const pairable = onSale(config, other);
+  const paired = pair && pairable;
+  const lines = paired ? [{ sku, qty }, { sku: other, qty: 1 }] : [{ sku, qty }];
   const prices = lines.map((line) => priceCents(config, line.sku));
   const total = prices.every((cents) => cents !== null) ? lines.reduce((sum, line, i) => sum + prices[i] * line.qty, 0) : null;
   const reviews = reviewsToShow(REVIEWS[sku], MIN_VERIFIED_REVIEWS);
@@ -324,6 +330,7 @@ export default function ProductPage({ sku }) {
   }, []);
 
   const add = (placement) => {
+    if (!selling) return;
     const items = analyticsItems(lines, config);
     lines.forEach((line, i) => {
       addToCart(line.sku, line.qty, {
@@ -335,7 +342,7 @@ export default function ProductPage({ sku }) {
       });
     });
     setAdded(lines.map((line) => `${PRODUCTS[line.sku].word} · ${PRODUCTS[line.sku].name} × ${line.qty}`).join(" + "));
-    if (pair && total !== null) track("pdp_pair_added", { value: total / 100, currency });
+    if (paired && total !== null) track("pdp_pair_added", { value: total / 100, currency });
   };
 
   return (
@@ -371,7 +378,7 @@ export default function ProductPage({ sku }) {
                   ))}
                 </nav>
 
-                <label className="check pdp-pair" data-pair-card="">
+                {selling && pairable && <label className="check pdp-pair" data-pair-card="">
                   <span className="check__control"><input type="checkbox" data-pair="" checked={pair} onChange={(event) => setPair(event.target.checked)} /><span className="check__box" aria-hidden="true" /></span>
                   <span className="pdp-pair__text">
                     <span className="check__label" data-pair-label="">Add {o.word} too — try both routines</span>
@@ -379,19 +386,25 @@ export default function ProductPage({ sku }) {
                   </span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img className="pdp-pair__img" data-pair-img="" src={SEO[other].image} alt="" width="56" height="56" />
-                </label>
+                </label>}
 
                 <div className="pdp-buyrow" data-buyrow="" ref={buyRow}>
                   <div className="pdp-price">
-                    <span className="label" data-size="">{pair ? "Dry + Wet" : `${p.size} · ${p.oz}`}</span>
+                    <span className="label" data-size="">{paired ? "Dry + Wet" : `${p.size} · ${p.oz}`}</span>
                     <span className="pdp-price__value" data-price="" aria-live="polite">{priceText(total, currency)}</span>
                   </div>
-                  <div className="qty" role="group" aria-label="Quantity">
-                    <button type="button" aria-label="Decrease quantity" data-qty-dec="" disabled={qty <= 1} onClick={() => setQty((n) => Math.max(1, n - 1))}>−</button>
-                    <output data-qty="" aria-live="polite">{qty}</output>
-                    <button type="button" aria-label="Increase quantity" data-qty-inc="" disabled={qty >= maxQty} onClick={() => setQty((n) => Math.min(maxQty, n + 1))}>+</button>
-                  </div>
-                  <button className="btn pdp-add" type="button" data-pdp-add="" data-placement="buybox" onClick={() => add("buybox")}>Add to cart <span aria-hidden="true">→</span></button>
+                  {selling ? (
+                    <>
+                      <div className="qty" role="group" aria-label="Quantity">
+                        <button type="button" aria-label="Decrease quantity" data-qty-dec="" disabled={qty <= 1} onClick={() => setQty((n) => Math.max(1, n - 1))}>−</button>
+                        <output data-qty="" aria-live="polite">{qty}</output>
+                        <button type="button" aria-label="Increase quantity" data-qty-inc="" disabled={qty >= maxQty} onClick={() => setQty((n) => Math.min(maxQty, n + 1))}>+</button>
+                      </div>
+                      <button className="btn pdp-add" type="button" data-pdp-add="" data-placement="buybox" onClick={() => add("buybox")}>Add to cart <span aria-hidden="true">→</span></button>
+                    </>
+                  ) : (
+                    <p className="pdp-price-note label" data-unavailable="">Not available right now. Please check back soon.</p>
+                  )}
                 </div>
                 {status === "unavailable" && <p className="pdp-price-note label" data-price-note="">Price unavailable right now. You can still add to your cart.</p>}
                 <div className="pdp-added" data-added="" aria-live="polite">
@@ -444,10 +457,10 @@ export default function ProductPage({ sku }) {
         <HowTo key={`how-${sku}`} sku={sku} />
 
         {/* 5. Fit quiz */}
-        <Quiz key={`quiz-${sku}`} sku={sku} onAdd={add} />
+        <Quiz key={`quiz-${sku}`} sku={sku} onAdd={add} selling={selling} />
 
         {/* 6. Dry vs Wet */}
-        <Compare sku={sku} config={config} onAdd={add} />
+        <Compare sku={sku} config={config} onAdd={add} selling={selling} />
 
         {/* 7. Reviews: only with 3 verified reviews (FTC 16 CFR 465) */}
         {reviews.length > 0 && (
@@ -503,15 +516,15 @@ export default function ProductPage({ sku }) {
       </main>
 
       {/* Sticky add-to-cart: appears once the main buy row has scrolled out of view */}
-      <aside className="pdp-sticky" data-sticky="" data-visible={String(sticky)} aria-label="Quick add to cart" aria-hidden={!sticky} inert={!sticky}>
+      <aside className="pdp-sticky" data-sticky="" data-visible={String(sticky && selling)} aria-label="Quick add to cart" aria-hidden={!(sticky && selling)} inert={!(sticky && selling)}>
         <div className="pdp-sticky__inner">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={seo.image} alt="" width="44" height="44" data-sticky-img="" />
           <div className="pdp-sticky__text">
             <span className="pdp-sticky__line"><span className={`routine routine--sm routine--${p.routine}`} data-sticky-word="">{word(sku)}</span><span className="pdp-sticky__price" data-sticky-price="">{priceText(total, currency)}</span></span>
-            <span className="pdp-sticky__name" data-sticky-name="">{pair ? "Dry + Wet pair" : p.name}</span>
+            <span className="pdp-sticky__name" data-sticky-name="">{paired ? "Dry + Wet pair" : p.name}</span>
           </div>
-          <button className="btn btn--md" type="button" data-pdp-add="" data-placement="sticky" onClick={() => add("sticky")}>Add to cart <span aria-hidden="true">→</span></button>
+          <button className="btn btn--md" type="button" data-pdp-add="" data-placement="sticky" disabled={!selling} onClick={() => add("sticky")}>Add to cart <span aria-hidden="true">→</span></button>
         </div>
       </aside>
     </>

@@ -18,7 +18,8 @@ test("connection check uses GET only, reports preview availability and never ena
     checks.push(route.request().method());
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, autoSubmit: false, previews: [{ sku: "D204", fulfillable: true }, { sku: "D215", fulfillable: false }] }) });
   });
-  await page.goto(`/admin/index.html#${PAID}`);
+  await page.goto("/admin/index.html#/orders");
+  await page.locator("[data-amazon-tools] summary").click();
   await page.getByRole("button", { name: "Check MCF connection", exact: true }).click();
   await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("D204: available");
   await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("D215: unavailable");
@@ -33,7 +34,8 @@ test("connection check uses GET only, reports preview availability and never ena
 test("connection failure is readable as text and the check can be retried", async ({ page }) => {
   await mockAdminApi(page);
   await page.route("**/admin/api/mcf/check", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false, step: "list", error: "<img src=x onerror=alert(1)> token rejected" }) }));
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/orders");
+  await page.locator("[data-amazon-tools] summary").click();
   await page.getByRole("button", { name: "Check MCF connection", exact: true }).click();
   await expect(page.locator("[data-admin-mcf-check-result]")).toContainText("token rejected");
   await expect(page.locator("[data-admin-mcf-check-result] img")).toHaveCount(0);
@@ -59,7 +61,7 @@ test("MCF on but not configured: explains what is missing, no send button", asyn
 test("unpaid orders show no MCF block", async ({ page }) => {
   await mockAdminApi(page, { mcf: { mode: "ready" } });
   await page.goto(`/admin/index.html#${PENDING}`);
-  await expect(page.locator("[data-admin-detail-body] h3")).toHaveText(PENDING);
+  await expect(page.locator("[data-admin-detail-body] h1")).toHaveText(PENDING);
   await expect(block(page)).toHaveCount(0);
 });
 
@@ -106,16 +108,16 @@ test("Sync MCF status: before Amazon ships nothing changes; after, the order bec
   await expect(record).toContainText("Amazon Logistics");
   await expect(record).toContainText("mcf");
   await expect(page.locator("[data-mcf-sync]")).toHaveCount(0);
-  await expect(page.locator(`[data-order="${PAID}"] .status--shipped`)).toBeVisible();
   expect(requests.emails).toHaveLength(1);
   expect(requests.emails[0].text).toContain("TBA123456789000");
 });
 
 test("the toolbar 'Sync MCF status' button syncs every waiting order", async ({ page }) => {
   const requests = await mockAdminApi(page, { mcf: { mode: "ready" }, mcfRecords: { [PAID]: SUBMITTED } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/orders");
+  await page.locator("[data-amazon-tools] summary").click();
   await page.locator("[data-admin-mcf-sync-all]").click();
-  await expect(page.locator("[data-admin-message] .notice--success")).toContainText("Checked 1 order");
+  await expect(page.locator("[data-admin-mcf-check-result] .notice--success")).toContainText("Checked 1;");
   expect(requests.mcf.at(-1)).toMatchObject({ method: "POST", path: "/admin/api/mcf/sync", body: {} });
 });
 

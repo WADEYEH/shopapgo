@@ -1,147 +1,81 @@
-// Back office: who is signed in, the site-wide Activity log, and the Members section (owners only).
-// API: commerce/worker/admin.js (/admin/api/me, /activity, /members...). Everything is rendered as text, never HTML.
-import { el, notice } from "./ui.js";
+// The site-wide Activity log (M9-19) and Members (owners only, M9-09, M9-10). API: commerce/worker/admin.js
+// (/admin/api/activity, /members...). Everything is rendered as text, never HTML.
+import { formatDate, t } from "./i18n.js";
+import { badge, el, field, notice } from "./ui.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
-const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
-const formatDate = (iso) => (iso ? dateTime.format(new Date(iso)) : "—");
 
-const ROLE_LABEL = { owner: "Owner", member: "Member" };
-const VIA_LABEL = { access: "Cloudflare sign-in", password: "shared login", token: "script token", "staging-login": "staging login", system: "system" };
-const ACTION_LABEL = {
-  "member.bootstrap": "First owner set",
-  "member.added": "Member added",
-  "member.role_changed": "Role changed",
-  "member.removed": "Member removed",
-  "member.alerts_changed": "Team emails changed",
-  "access_list.synced": "Cloudflare list updated",
-  "access_list.sync_failed": "Cloudflare list update failed",
-  "order.shipped": "Marked shipped",
-  "order.email.retry": "Email retried",
-  "mcf.submitted": "Sent to Amazon",
-  "mcf.failed": "Sending to Amazon failed",
-  "mcf.shipped": "Shipped by Amazon",
-  "mcf.closed": "Closed by Amazon",
-  "mcf.cancel_requested": "Amazon cancellation requested",
-  "staging.refund.check": "Staging refund check",
-};
-const SYNC_TEXT = {
-  synced: (s) => `Cloudflare list updated${s.added || s.removed ? ` (${s.added} added, ${s.removed} removed)` : ""}.`,
-  not_configured: () => "Cloudflare list sync is not set up.",
-  failed: (s) => `Cloudflare list not updated: ${s.detail}`,
-};
+const actionLabel = (action) => (t(`action.${action}`) === `action.${action}` ? action : t(`action.${action}`));
+const role = (value) => t(`role.${value}`);
+const via = (value) => (t(`via.${value}`) === `via.${value}` ? value : t(`via.${value}`));
 
-export async function initTeam({ adminApi, openOrder }) {
-  let me;
-  let teamAlerts = null;
-  try {
-    const whoami = await adminApi("/admin/api/me");
-    me = whoami.actor;
-    teamAlerts = whoami.teamAlerts ?? null;
-  } catch {
-    return; // signed-in identity unavailable (older Worker): the order pages still work
-  }
-  initTeamAlerts({ adminApi, on: teamAlerts });
-  const who = $("[data-admin-whoami]");
-  if (who) {
-    who.textContent = `${me.email ?? me.id} · ${ROLE_LABEL[me.role] ?? me.role}`;
-    who.hidden = false;
-  }
-  initActivity({ adminApi, openOrder });
-  if (me.role === "owner") initMembers({ adminApi, me });
-  // The Hold test order (admin.js) is for owners.
-  if (me.role === "owner") $("[data-admin-hold-test]")?.removeAttribute("hidden");
+function syncText(sync) {
+  if (!sync) return "";
+  if (sync.status === "synced") return sync.added || sync.removed ? t("members.syncedCounts", { added: sync.added, removed: sync.removed }) : t("members.synced");
+  if (sync.status === "not_configured") return t("members.syncNotSetUp");
+  return t("members.syncFailed", { detail: sync.detail });
 }
-
-// ---------- Team emails (I12): each person turns their own on or off; at least one person keeps them ----------
-
-function initTeamAlerts({ adminApi, on }) {
-  const button = $("[data-admin-team-alerts]");
-  if (!button || on === null) return; // a sign-in that is not on the member list has no setting
-  const show = (value) => {
-    button.textContent = `Team emails: ${value ? "on" : "off"}`;
-    button.setAttribute("aria-pressed", String(value));
-    button.title = value ? "You get the team emails (problems with orders, payments and shipping). Click to stop." : "You do not get the team emails. Click to get them.";
-  };
-  let current = on;
-  show(current);
-  button.hidden = false;
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    try {
-      current = (await adminApi("/admin/api/me/alerts", { method: "POST", body: { on: !current } })).teamAlerts;
-      show(current);
-      $("[data-admin-message]")?.replaceChildren(notice("success", "Team emails", current ? "You will get the team emails." : "You will no longer get the team emails."));
-    } catch (error) {
-      $("[data-admin-message]")?.replaceChildren(notice("warning", "Team emails not changed", error.message));
-    } finally {
-      button.disabled = false;
-    }
-  });
-}
-
-// ---------- Activity ----------
 
 function describe(entry) {
   const parts = [];
-  if (entry.action === "member.role_changed" && entry.before && entry.after) parts.push(`${ROLE_LABEL[entry.before.role]} → ${ROLE_LABEL[entry.after.role]}`);
-  if (entry.action === "member.added" && entry.after) parts.push(`as ${ROLE_LABEL[entry.after.role]}`);
-  if (entry.action.startsWith("access_list.") && entry.detail) parts.push(SYNC_TEXT[entry.detail.status]?.(entry.detail) ?? "");
+  if (entry.action === "member.role_changed" && entry.before && entry.after) parts.push(`${role(entry.before.role)} → ${role(entry.after.role)}`);
+  if (entry.action === "member.added" && entry.after) parts.push(t("activity.asRole", { role: role(entry.after.role) }));
+  if (entry.action.startsWith("access_list.") && entry.detail) parts.push(syncText(entry.detail));
   if (entry.detail?.trackingNumber) parts.push(`${entry.detail.carrier ?? ""} ${entry.detail.trackingNumber}`.trim());
   if (entry.detail?.kind && entry.action === "order.email.retry") parts.push(`${entry.detail.kind}: ${entry.detail.result}`);
   return parts.filter(Boolean).join(" · ");
 }
 
-function initActivity({ adminApi, openOrder }) {
-  const section = $("[data-admin-activity-section]");
-  if (!section) return;
-  section.hidden = false;
-  const form = $("[data-admin-activity-filter]", section);
-  const host = $("[data-admin-activity]", section);
-  const person = $("select[name=actor]", form);
+// ---------- Activity ----------
+
+export async function renderActivity(host, { adminApi, isCurrent }) {
   const state = { entries: [], nextCursor: null, filters: {} };
+  const results = el("div", { "data-admin-activity": true, "aria-live": "polite" });
+  const person = el("select", { id: "activity-actor", name: "actor" }, el("option", { value: "" }, t("activity.everyone")));
+  const submit = el("button", { class: "btn btn--ghost", type: "submit" }, t("activity.show"));
+  const form = el("form", { class: "filters", "data-admin-activity-filter": true },
+    field("activity-actor", t("activity.person"), el("span", { class: "select" }, person)),
+    field("activity-from", t("activity.from"), el("input", { id: "activity-from", type: "date", name: "from" })),
+    field("activity-to", t("activity.to"), el("input", { id: "activity-to", type: "date", name: "to" })),
+    submit);
 
   const render = () => {
-    if (!state.entries.length) return host.replaceChildren(el("p", { class: "body body--sm" }, "Nothing in this period."));
-    host.replaceChildren(
-      el("ul", { class: "admin-activity-list" }, ...state.entries.map((entry) => {
+    if (!state.entries.length) return results.replaceChildren(el("p", { class: "hint" }, t("activity.none")));
+    results.replaceChildren(
+      el("ul", { class: "record-list" }, ...state.entries.map((entry) => {
         const target = entry.source === "order" && entry.target
-          ? el("a", { href: `#${entry.target}`, onclick: (event) => { event.preventDefault(); openOrder(entry.target); } }, entry.target)
+          ? el("a", { href: `#/orders/${encodeURIComponent(entry.target)}` }, entry.target)
+          : entry.target && entry.action.startsWith("product.") ? el("a", { href: `#/products/${encodeURIComponent(entry.target.toLowerCase())}` }, entry.target)
           : entry.target;
-        return el("li", { class: "admin-activity", "data-activity-action": entry.action },
-          el("div", { class: "admin-message__head" },
-            el("strong", {}, ACTION_LABEL[entry.action] ?? entry.action),
-            target || null,
-            el("small", {}, formatDate(entry.at)),
-          ),
-          el("p", { class: "admin-activity__who" }, `By ${entry.actor}${entry.via ? ` (${VIA_LABEL[entry.via] ?? entry.via})` : ""}`),
-          describe(entry) ? el("p", { class: "admin-activity__what" }, describe(entry)) : null,
-          entry.reason && el("p", { class: "admin-activity__why" }, `Reason: ${entry.reason}`),
-        );
+        return el("li", { class: "record", "data-activity-action": entry.action },
+          el("div", { class: "record__head" }, el("strong", {}, actionLabel(entry.action)), target || null, el("small", {}, formatDate(entry.at))),
+          el("p", { class: "record__meta" }, t("activity.by", { who: entry.actor, via: entry.via ? ` (${via(entry.via)})` : "" })),
+          describe(entry) ? el("p", { class: "record__text" }, describe(entry)) : null,
+          entry.reason && el("p", { class: "record__why" }, t("activity.reason", { reason: entry.reason })));
       })),
-      ...[state.nextCursor && el("button", { class: "btn btn--sm btn--text", type: "button", onclick: () => load() }, "Load older activity")].filter(Boolean),
+      ...[state.nextCursor && el("button", { class: "btn btn--text", type: "button", onclick: () => load() }, t("activity.older"))].filter(Boolean),
     );
   };
 
   async function load({ reset = false } = {}) {
-    const button = $("button[type=submit]", form);
-    button.disabled = true;
+    submit.disabled = true;
     try {
       const params = new URLSearchParams(state.filters);
       if (!reset && state.nextCursor) params.set("cursor", state.nextCursor);
       const page = await adminApi(`/admin/api/activity?${params}`);
+      if (!isCurrent()) return;
       state.entries = reset ? page.entries : [...state.entries, ...page.entries];
       state.nextCursor = page.nextCursor;
       if (page.actors) {
         const chosen = person.value;
-        person.replaceChildren(el("option", { value: "" }, "Everyone"), ...page.actors.map((actor) => el("option", { value: actor }, actor)));
+        person.replaceChildren(el("option", { value: "" }, t("activity.everyone")), ...page.actors.map((actor) => el("option", { value: actor }, actor)));
         person.value = page.actors.includes(chosen) ? chosen : "";
       }
       render();
     } catch (error) {
-      host.replaceChildren(notice("warning", "Activity unavailable", error.message));
+      results.replaceChildren(notice("warning", t("activity.unavailable"), error.message));
     } finally {
-      button.disabled = false;
+      submit.disabled = false;
     }
   }
 
@@ -158,24 +92,28 @@ function initActivity({ adminApi, openOrder }) {
     state.filters = Object.fromEntries(Object.entries({ actor: data.actor, from: day(data.from), to: day(data.to, 1) }).filter(([, value]) => value));
     load({ reset: true });
   });
+
+  host.replaceChildren(
+    el("header", { class: "page-head" }, el("p", { class: "eyebrow" }, t("activity.eyebrow")), el("h1", { class: "page-title" }, t("nav.activity"))),
+    el("section", { class: "card", "data-admin-activity-section": true }, el("p", { class: "hint" }, t("activity.intro")), form, results),
+  );
+  await load({ reset: true });
 }
 
 // ---------- Members (owners only) ----------
 
-function initMembers({ adminApi, me }) {
-  const section = $("[data-admin-members-section]");
-  if (!section) return;
-  section.hidden = false;
-  const host = $("[data-admin-members]", section);
+export async function renderMembers(host, { adminApi, isCurrent, me }) {
+  const results = el("div", { "data-admin-members": true, "aria-live": "polite" });
   const message = el("div", { "data-members-message": true, "aria-live": "polite" });
-  let data = null;
+  let data = await adminApi("/admin/api/members");
+  if (!isCurrent()) return;
 
   const outcome = (title, result) => notice(
     result.sync?.status === "failed" ? "warning" : "success",
     title,
     [
-      result.notified ? `Owners emailed: ${result.notified.sent}${result.notified.skipped ? `, not emailed: ${result.notified.skipped}` : ""}${result.notified.failed ? `, failed: ${result.notified.failed}` : ""}.` : "",
-      result.sync ? SYNC_TEXT[result.sync.status]?.(result.sync) ?? "" : "",
+      result.notified ? t("members.notified", { sent: result.notified.sent, skipped: result.notified.skipped ? t("members.notEmailed", { n: result.notified.skipped }) : "", failed: result.notified.failed ? t("members.emailFailed", { n: result.notified.failed }) : "" }) : "",
+      syncText(result.sync),
     ].filter(Boolean).join(" "),
   );
 
@@ -187,74 +125,66 @@ function initMembers({ adminApi, me }) {
       render();
       message.replaceChildren(outcome(title, result));
     } catch (error) {
-      message.replaceChildren(notice("warning", "Not changed", error.message));
+      message.replaceChildren(notice("warning", t("actions.notChanged"), error.message));
       if (button) button.disabled = false;
     }
   }
 
   function signInNotice() {
-    if (!data.accessSignIn) {
-      return notice("info", "Sign-in", "The back office still uses the shared login. Once Cloudflare Access sign-in is switched on, only the active members below can open it, each with their own Google account or email code.");
-    }
+    if (!data.accessSignIn) return notice("info", t("members.signIn"), t("members.sharedLogin"));
     const list = data.accessList;
-    if (!list.configured) return notice("warning", "Cloudflare list sync is not set up", "Add or remove the same email in Cloudflare Access as well, or people you add here cannot sign in.");
+    if (!list.configured) return notice("warning", t("members.syncNotSetUpTitle"), t("members.syncNotSetUpBody"));
     const last = list.last;
-    const retry = el("button", { class: "btn btn--sm", type: "button", "data-members-sync": true }, "Update Cloudflare list now");
-    retry.addEventListener("click", () => act("/admin/api/members/sync", {}, "Cloudflare list", retry));
-    return el("div", { class: "admin-members__sync" },
+    const retry = el("button", { class: "btn btn--ghost btn--sm", type: "button", "data-members-sync": true }, t("members.syncNow"));
+    retry.addEventListener("click", () => act("/admin/api/members/sync", {}, t("members.cloudflareList"), retry));
+    return el("div", { class: "button-row" },
       last?.status === "failed"
-        ? notice("warning", "Cloudflare list not updated", `${last.detail} (${formatDate(last.at)})`)
-        : notice("success", "Cloudflare list", last ? `Up to date as of ${formatDate(last.at)}.` : "Not updated yet."),
-      retry,
-    );
+        ? notice("warning", t("members.notUpdated"), `${last.detail} (${formatDate(last.at)})`)
+        : notice("success", t("members.cloudflareList"), last ? t("members.upToDate", { at: formatDate(last.at) }) : t("members.notUpdatedYet")),
+      retry);
   }
 
   function memberRow(member) {
-    const reason = el("input", { type: "text", name: "reason", maxlength: "300", autocomplete: "off", "aria-label": `Reason for the change to ${member.email}` });
-    const role = el("select", { name: "role", "aria-label": `Role for ${member.email}` },
-      ...Object.entries(ROLE_LABEL).map(([value, label]) => el("option", { value, selected: value === member.role }, label)));
-    const save = el("button", { class: "btn btn--sm", type: "button" }, "Change role");
-    const remove = el("button", { class: "btn btn--sm btn--text", type: "button" }, "Remove");
+    const reason = el("input", { type: "text", name: "reason", maxlength: "300", autocomplete: "off", "aria-label": t("members.reasonFor", { email: member.email }) });
+    const select = el("select", { name: "role", "aria-label": t("members.roleFor", { email: member.email }) },
+      ...["owner", "member"].map((value) => el("option", { value, selected: value === member.role }, role(value))));
+    const save = el("button", { class: "btn btn--ghost btn--sm", type: "button" }, t("members.changeRole"));
+    const remove = el("button", { class: "btn btn--danger-ghost btn--sm", type: "button" }, t("members.remove"));
     save.addEventListener("click", () => {
-      if (role.value === member.role) return message.replaceChildren(notice("info", "No change", `${member.email} is already ${ROLE_LABEL[member.role].toLowerCase()}.`));
-      act("/admin/api/members/role", { email: member.email, role: role.value, reason: reason.value }, `Role changed for ${member.email}`, save);
+      if (select.value === member.role) return message.replaceChildren(notice("info", t("members.noChange"), t("members.alreadyRole", { email: member.email, role: role(member.role) })));
+      act("/admin/api/members/role", { email: member.email, role: select.value, reason: reason.value }, t("members.roleChanged", { email: member.email }), save);
     });
     remove.addEventListener("click", () => {
-      if (!window.confirm(`Remove ${member.email}? They lose access to the back office right away.`)) return;
-      act("/admin/api/members/remove", { email: member.email, reason: reason.value }, `${member.email} removed`, remove);
+      if (!window.confirm(t("members.removeConfirm", { email: member.email }))) return;
+      act("/admin/api/members/remove", { email: member.email, reason: reason.value }, t("members.removed", { email: member.email }), remove);
     });
-    return el("li", { class: "admin-member", "data-member": member.email },
-      el("div", { class: "admin-message__head" },
+    return el("li", { class: "record", "data-member": member.email },
+      el("div", { class: "record__head" },
         el("strong", {}, member.email),
-        el("span", { class: `status status--${member.role === "owner" ? "paid" : "pending"}` }, ROLE_LABEL[member.role]),
-        member.email === me.email && el("small", {}, "(you)"),
-        member.status === "active" && el("small", { "data-member-alerts": String(Boolean(member.teamAlerts)) }, member.teamAlerts ? "Team emails: on" : "Team emails: off"),
-        el("small", {}, `Added by ${member.addedBy}, ${formatDate(member.addedAt)}`),
-      ),
-      el("details", { class: "admin-member__change" },
-        el("summary", {}, "Change"),
-        el("div", { class: "admin-member__controls" },
-          el("label", { class: "field" }, el("span", { class: "field__label" }, "Role"), el("span", { class: "select" }, role)),
-          el("label", { class: "field" }, el("span", { class: "field__label" }, "Reason (optional)"), reason),
-          el("div", { class: "admin-mcf__actions" }, save, remove),
-        ),
-      ),
-    );
+        badge(member.role === "owner" ? "ok" : "neutral", role(member.role)),
+        member.email === me?.email && el("small", {}, t("members.you")),
+        member.status === "active" && el("small", { "data-member-alerts": String(Boolean(member.teamAlerts)) }, t(member.teamAlerts ? "nav.teamEmailsOn" : "nav.teamEmailsOff")),
+        el("small", {}, t("members.addedBy", { who: member.addedBy, at: formatDate(member.addedAt) }))),
+      el("details", { class: "disclosure" },
+        el("summary", {}, t("members.change")),
+        el("div", { class: "form-grid" },
+          el("label", { class: "field" }, el("span", { class: "field__label" }, t("members.role")), el("span", { class: "select" }, select)),
+          el("label", { class: "field" }, el("span", { class: "field__label" }, t("members.reason")), reason),
+          el("div", { class: "button-row form-grid__wide" }, save, remove))));
   }
 
   function addForm() {
-    const form = el("form", { class: "admin-member-add", "data-member-add": true, novalidate: true },
-      el("label", { class: "field" }, el("span", { class: "field__label" }, "Email"), el("input", { type: "email", name: "email", required: true, maxlength: "254", autocomplete: "off", inputmode: "email" })),
-      el("label", { class: "field" }, el("span", { class: "field__label" }, "Role"),
-        el("span", { class: "select" }, el("select", { name: "role" }, el("option", { value: "member" }, "Member"), el("option", { value: "owner" }, "Owner")))),
-      el("label", { class: "field" }, el("span", { class: "field__label" }, "Reason (optional)"), el("input", { type: "text", name: "reason", maxlength: "300", autocomplete: "off" })),
-      el("button", { class: "btn btn--md", type: "submit" }, "Add member"),
-    );
+    const form = el("form", { class: "form-grid form-grid--add", "data-member-add": true, novalidate: true },
+      el("label", { class: "field" }, el("span", { class: "field__label" }, t("members.email")), el("input", { type: "email", name: "email", required: true, maxlength: "254", autocomplete: "off", inputmode: "email" })),
+      el("label", { class: "field" }, el("span", { class: "field__label" }, t("members.role")),
+        el("span", { class: "select" }, el("select", { name: "role" }, el("option", { value: "member" }, role("member")), el("option", { value: "owner" }, role("owner"))))),
+      el("label", { class: "field" }, el("span", { class: "field__label" }, t("members.reason")), el("input", { type: "text", name: "reason", maxlength: "300", autocomplete: "off" })),
+      el("button", { class: "btn btn--primary", type: "submit" }, t("members.add")));
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const body = Object.fromEntries(new FormData(form));
-      if (!body.email.trim()) return message.replaceChildren(notice("warning", "Missing email", "Enter the email they sign in with."));
-      act("/admin/api/members", body, `${body.email.trim().toLowerCase()} added`, $("button[type=submit]", form));
+      if (!body.email.trim()) return message.replaceChildren(notice("warning", t("members.missingEmail"), t("members.missingEmailBody")));
+      act("/admin/api/members", body, t("members.added", { email: body.email.trim().toLowerCase() }), $("button[type=submit]", form));
     });
     return form;
   }
@@ -262,24 +192,21 @@ function initMembers({ adminApi, me }) {
   function render() {
     const active = data.members.filter((member) => member.status === "active");
     const former = data.members.filter((member) => member.status !== "active");
-    host.replaceChildren(
+    results.replaceChildren(
       signInNotice(),
-      el("ul", { class: "admin-message-list", "data-member-list": true }, ...active.map(memberRow)),
-      el("h3", { class: "admin-subhead" }, "Add a member"),
+      el("ul", { class: "record-list", "data-member-list": true }, ...active.map(memberRow)),
+      el("h2", { class: "sub__title" }, t("members.addTitle")),
       addForm(),
       message,
-      ...[former.length && el("details", { class: "admin-member-former" },
-        el("summary", {}, `Former members (${former.length})`),
-        el("ul", { class: "admin-lines" }, ...former.map((member) => el("li", {}, el("span", {}, member.email), el("small", {}, `Removed by ${member.updatedBy}, ${formatDate(member.updatedAt)}`)))))].filter(Boolean),
+      ...[former.length && el("details", { class: "disclosure" },
+        el("summary", {}, t("members.former", { n: former.length })),
+        el("ul", { class: "record-list" }, ...former.map((member) => el("li", { class: "record" }, el("span", {}, member.email), el("small", {}, t("members.removedBy", { who: member.updatedBy, at: formatDate(member.updatedAt) }))))))].filter(Boolean),
     );
   }
 
-  (async () => {
-    try {
-      data = await adminApi("/admin/api/members");
-      render();
-    } catch (error) {
-      host.replaceChildren(notice("warning", "Members unavailable", error.message));
-    }
-  })();
+  render();
+  host.replaceChildren(
+    el("header", { class: "page-head" }, el("p", { class: "eyebrow" }, t("members.eyebrow")), el("h1", { class: "page-title" }, t("nav.members"))),
+    el("section", { class: "card", "data-admin-members-section": true }, el("p", { class: "hint" }, t("members.intro")), results),
+  );
 }

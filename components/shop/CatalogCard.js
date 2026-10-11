@@ -2,13 +2,14 @@
 
 import { addToCart, useCartQty } from "@/lib/shop/cart";
 import { PRODUCTS, SEO, productPath } from "@/lib/shop/catalog";
-import { priceCents, priceText, useStoreConfig } from "@/lib/shop/store-config";
+import { onSale, priceCents, priceText, useStoreConfig } from "@/lib/shop/store-config";
 import { useState } from "react";
 
 const word = (p) => (p.routine === "dry" ? "DRY" : "WET");
 
 // One product on the /products overview (D39): price from the Worker, Add to cart, a link to the product page. A product
-// the Worker no longer sells (missing from its config) is not shown.
+// the Worker no longer sells (missing from its config) is not shown; one an owner stopped selling says it is not
+// available instead of offering Add to cart.
 export default function CatalogCard({ sku }) {
   const p = PRODUCTS[sku];
   const { status, config } = useStoreConfig();
@@ -43,9 +44,13 @@ export default function CatalogCard({ sku }) {
         <p className="label">{p.size} · {p.oz} · Lasts up to {p.lasts}</p>
         <div className="catalog-card__buy">
           <span className="catalog-card__price" data-price-sku={sku}>{priceText(cents, config?.currency)}</span>
-          <button className="btn btn--md" type="button" data-add-to-cart={sku} data-placement="shop" onClick={add}>
-            Add to cart <span aria-hidden="true">→</span>
-          </button>
+          {onSale(config, sku) ? (
+            <button className="btn btn--md" type="button" data-add-to-cart={sku} data-placement="shop" onClick={add}>
+              Add to cart <span aria-hidden="true">→</span>
+            </button>
+          ) : (
+            <span className="label" data-unavailable={sku}>Not available right now</span>
+          )}
         </div>
         <p className="catalog-card__added" data-shop-added={sku} aria-live="polite">
           {added && <><span>Added · {inCart} in cart</span> <a href="/cart">View cart →</a></>}

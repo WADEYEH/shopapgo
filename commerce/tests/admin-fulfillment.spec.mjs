@@ -17,9 +17,8 @@ test("marks a paid order shipped: form, success notice, shipped record, list bad
   const requests = await mockAdminApi(page);
   await page.goto(`/admin/index.html#${PAID}`);
   const detail = page.locator("[data-admin-detail-body]");
-  await expect(detail.locator("h3")).toHaveText(PAID);
-  await expect(page.locator(".admin-tab", { hasText: "To ship" })).toContainText("1");
-  await expect(page.locator(`[data-order="${PAID}"] .status--to-ship`)).toBeVisible();
+  await expect(detail.locator("h1")).toHaveText(PAID);
+  await expect(detail.locator('[data-shipping="waiting"]')).toBeVisible();
   await expect(detail).not.toContainText("null");
 
   await fillShipment(page);
@@ -31,11 +30,9 @@ test("marks a paid order shipped: form, success notice, shipped record, list bad
   await expect(record).toContainText("1Z999AA10123456784");
   await expect(record.getByRole("link", { name: "Open tracking page" })).toHaveAttribute("href", /ups\.com\/track/);
   await expect(page.locator("[data-ship-form]")).toHaveCount(0);
-  await expect(detail).toContainText("order.shipped by admin");
+  await expect(detail).toContainText("Marked shipped · UPS 1Z999AA10123456784 · admin");
   await expect(detail).toContainText("Shipment notice: sent");
-  await expect(page.locator(`[data-order="${PAID}"] .status--shipped`)).toBeVisible();
-  await expect(page.locator(".admin-tab", { hasText: "To ship" })).toContainText("0");
-  await expect(page.locator(".admin-tab", { hasText: "Shipped" })).toContainText("1");
+  await expect(detail.locator('[data-shipping="shipped"]')).toBeVisible();
 
   expect(requests.writes).toHaveLength(1);
   expect(requests.writes[0]).toMatchObject({ method: "POST", path: `/admin/api/orders/${PAID}/ship`, contentType: "application/json" });
@@ -127,22 +124,19 @@ test("only paid orders offer shipping: a pending order shows a note instead of t
   await expect(page.locator("[data-ship-form]")).toHaveCount(0);
 });
 
-test("filters the list by shipping status", async ({ page }) => {
+test("the To ship and Shipped views list the right orders", async ({ page }) => {
   const requests = await mockAdminApi(page);
-  await page.goto("/admin/index.html");
-  await expect(page.locator(".admin-row")).toHaveCount(3);
-
-  await page.locator(".admin-tab", { hasText: "To ship" }).click();
-  await expect(page.locator(".admin-row")).toHaveCount(1);
-  await expect(page.locator(".admin-row")).toContainText(PAID);
-  expect(requests.some((r) => r.includes("fulfillment=unfulfilled"))).toBe(true);
-
-  await page.locator(".admin-tab", { hasText: "Shipped" }).click();
-  await expect(page.locator(".admin-empty")).toHaveText("No orders match.");
-  expect(requests.some((r) => r.includes("fulfillment=shipped"))).toBe(true);
-
-  await page.locator(".admin-tab", { hasText: "Any shipping" }).click();
-  await expect(page.locator(".admin-row")).toHaveCount(3);
+  await page.goto("/admin/index.html#/orders");
+  await expect(page.locator("[data-order]")).toHaveCount(3);
+  await page.locator('[data-view="to_ship"]').click();
+  await expect(page.locator("[data-order]")).toHaveCount(1);
+  await expect(page.locator("[data-order]")).toContainText(PAID);
+  expect(requests.some((r) => r.includes("view=to_ship"))).toBe(true);
+  await page.locator('[data-view="shipped"]').click();
+  await expect(page.locator(".table-empty")).toHaveText("No orders match.");
+  expect(requests.some((r) => r.includes("view=shipped"))).toBe(true);
+  await page.locator('[data-view="all"]').click();
+  await expect(page.locator("[data-order]")).toHaveCount(3);
 });
 
 test("a signed-out (401) or unconfigured (503) write shows a clear message and keeps the form", async ({ page }) => {

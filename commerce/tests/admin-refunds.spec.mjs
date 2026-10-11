@@ -21,7 +21,7 @@ test('refund sync displays partial totals, locks new shipping and performs no fi
   await page.getByRole('button',{name:'Sync refunds',exact:true}).click();
   const refunds=page.getByRole('region',{name:'Refunds',exact:true});
   await expect(refunds).toContainText('Refunded: $5.00');
-  await expect(refunds).toContainText('ACCEPTED');
+  await expect(refunds).toContainText('Accepted');
   await expect(page.getByRole('region',{name:'Fulfilment',exact:true})).toContainText('Existing shipments are not cancelled automatically.');
   await expect(page.getByRole('button',{name:'Mark as shipped',exact:true})).toHaveCount(0);
   await expect(page.getByRole('region',{name:'Amazon MCF',exact:true})).toContainText('new Amazon and manual fulfillment are on hold');
@@ -63,7 +63,7 @@ test('failed refunds are prominent and per-refund email retries use the correct 
   await expect(page.getByRole('region',{name:'Refunds',exact:true})).toContainText('Refund failed — review required');
   await page.getByRole('button',{name:`Retry Refund notice (${refundId})`,exact:true}).click();
   expect(requests).toEqual([`/admin/api/orders/${ID}/emails/${kind}/retry`]);
-  await expect(page.getByRole('region',{name:'History',exact:true})).toContainText(`Refund notice (${refundId}): delivered`);
+  await expect(page.getByRole('region',{name:'Timeline',exact:true})).toContainText(`Refund notice (${refundId}): delivered`);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
 
@@ -94,7 +94,7 @@ test('failure follow-up and team alert retain separate delivery histories and sc
   const requests=[];
   await page.route(`**/admin/api/orders/${ID}/emails/**/retry`,route=>{requests.push(decodeURIComponent(new URL(route.request().url()).pathname));
     return route.fulfill({json:{email:{status:'sent'},order:{...order,emails:order.emails.map(email=>email.kind===teamKind ? {...email,status:'sent',deliveryStatus:'delivered',canRetry:false} : email)}}});});
-  await page.goto(`/admin/index.html#${ID}`);const history=page.getByRole('region',{name:'History',exact:true});
+  await page.goto(`/admin/index.html#${ID}`);const history=page.getByRole('region',{name:'Timeline',exact:true});
   await expect(history).toContainText(`Refund failure notice (${refundId}): delivered`);
   await expect(history).toContainText(`Team refund failure alert (${refundId}): failed`);
   await expect(page.getByRole('region',{name:'Refunds',exact:true})).toContainText('No financial refund is retried automatically');

@@ -1,53 +1,39 @@
-// Back office, order detail: where the order stands (stage, cooling-off, holds) and the people-driven changes
-// (confirm a review order, cancel, change the address in the cooling-off period). API: commerce/worker/order-core.js
-// through POST /admin/api/orders/:id/confirm | cancel | address. Every change asks for a reason.
-import { el, money, notice } from "./ui.js";
+// Order page: the people-driven changes (confirm a review order, cancel, change the address in the cooling-off period).
+// API: commerce/worker/order-core.js through POST /admin/api/orders/:id/confirm | cancel | address. Every change asks
+// for a reason; cancelling asks again before it happens.
+import { formatDate, lang, t } from "./i18n.js";
+import { cardHead, el, field, money, notice } from "./ui.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
-
-
-const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
-const formatDate = (iso) => (iso ? dateTime.format(new Date(iso)) : "—");
-
-const STAGE = {
-  checkout: ["Awaiting payment", "pending"],
-  review: ["Needs review", "review"],
-  paid: ["Paid", "paid"],
-  fulfilling: ["With Amazon", "to-ship"],
-  shipped: ["Shipped", "shipped"],
-  cancelled: ["Cancelled", "cancelled"],
-};
 const PROVIDER = { airwallex: "Airwallex", paypal: "PayPal" };
 
-// The stage line under the order number: the stage, the cooling-off period and anything holding the order.
-export function renderStage(order) {
-  const core = order.core;
-  if (!core) return null;
-  const [label] = STAGE[core.stage] ?? [core.stage];
-  const parts = [el("span", { class: "admin-stage__label" }, "Stage: ", el("strong", { "data-order-stage": core.stage }, label))];
-  if (core.coolingOff?.active) parts.push(el("span", { class: "admin-stage__note" }, `Cooling-off until ${formatDate(core.coolingOff.endsAt)}: it goes to Amazon after that.`));
-  return el("div", { class: "admin-stage" },
-    el("p", {}, ...parts),
-    ...core.holds.map((hold) => notice("warning", "On hold", hold.message)),
-  );
-}
+export const cancelReason = (code, fallback) => (t(`cancelReason.${code}`) !== `cancelReason.${code}` ? t(`cancelReason.${code}`) : fallback ?? code);
 
-function refundReminder(payment) {
+// Why the order waits (worker/order-core.js orderHolds): the Worker's sentence in English, a translation in Chinese.
+export const holdText = (hold) => (lang() === "en" || t(`hold.${hold.code}`) === `hold.${hold.code}` ? hold.message : t(`hold.${hold.code}`));
+
+export function refundReminder(payment) {
   if (!payment?.paidCents) return null;
   const left = payment.paidCents - (payment.refundedCents ?? 0);
-  if (left <= 0) return notice("success", "Refunded", `${money(payment.refundedCents)} has been refunded.`);
-  return notice("warning", "Refund the payment", `Refund ${money(left)} in ${PROVIDER[payment.provider] ?? "the payment provider"}. The order does not refund by itself; the refund shows up here once ${PROVIDER[payment.provider] ?? "the provider"} reports it.`);
+  const where = PROVIDER[payment.provider] ?? t("actions.theProvider");
+  if (left <= 0) return notice("success", t("actions.refunded"), t("actions.refundedBody", { amount: money(payment.refundedCents) }));
+  return notice("warning", t("actions.refundThePayment"), t("actions.refundThePaymentBody", { amount: money(left), where }));
 }
 
 export function renderOrderActions(order, { adminApi, onChange }) {
   const core = order.core;
   if (!core) return null;
   const message = el("div", { "data-order-action-message": true, "aria-live": "polite" });
-  const children = [el("h4", {}, "Order")];
+  const children = [cardHead(t("actions.title"))];
 
   if (core.cancellation) {
     const c = core.cancellation;
-    children.push(notice("info", "Cancelled", `${core.cancelReasons?.[c.reason] ?? c.reason}${c.note ? `: ${c.note}` : ""}. By ${c.by}, ${formatDate(c.at)}.${c.amazonCancel ? " Amazon was asked to cancel the shipment." : ""}`));
+    children.push(notice("info", t("actions.cancelled"), t("actions.cancelledBody", {
+      reason: `${cancelReason(c.reason, core.cancelReasons?.[c.reason])}${c.note ? `: ${c.note}` : ""}`,
+      by: c.by,
+      at: formatDate(c.at),
+      amazon: c.amazonCancel ? t("actions.amazonAsked") : "",
+    })));
     children.push(refundReminder(core.payment));
   }
 
@@ -57,73 +43,71 @@ export function renderOrderActions(order, { adminApi, onChange }) {
       const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/${action}`, { method: "POST", body });
       onChange(result.order, success(result));
     } catch (error) {
-      message.replaceChildren(notice("warning", "Not changed", error.message));
+      message.replaceChildren(notice("warning", t("actions.notChanged"), error.message));
       button.disabled = false;
     }
   }
 
-  const field = (id, label, control, hint) => el("div", { class: "field" }, el("label", { class: "field__label", for: id }, label), control, hint && el("span", { class: "field__hint" }, hint));
-
   if (core.actions.confirm) {
     const reason = el("input", { id: "order-confirm-reason", type: "text", maxlength: "300", autocomplete: "off" });
-    const button = el("button", { class: "btn btn--md", type: "button" }, "Confirm order");
+    const button = el("button", { class: "btn btn--primary", type: "button" }, t("actions.confirm"));
     button.addEventListener("click", () => {
-      if (!reason.value.trim()) return message.replaceChildren(notice("warning", "Reason needed", "Write why the payment is fine."));
-      run("confirm", { reason: reason.value }, button, () => notice("success", "Order confirmed", "It is now paid; the customer gets the confirmation email and it goes to Amazon after the cooling-off period."));
+      if (!reason.value.trim()) return message.replaceChildren(notice("warning", t("actions.reasonNeeded"), t("actions.confirmReasonNeeded")));
+      run("confirm", { reason: reason.value }, button, () => notice("success", t("actions.confirmed"), t("actions.confirmedBody")));
     });
-    children.push(el("div", { class: "admin-ship__form", "data-order-confirm": true },
-      el("p", { class: "body body--sm" }, "The amount paid did not match. Check the payment in the provider, then confirm or cancel."),
-      field("order-confirm-reason", "Why it is fine", reason), button));
+    children.push(el("div", { class: "form-stack", "data-order-confirm": true },
+      el("p", { class: "hint" }, t("actions.confirmHint")),
+      field("order-confirm-reason", t("actions.confirmReason"), reason), button));
   }
 
   if (core.actions.changeAddress) {
     const s = order.shipping ?? {};
     const input = (name, label, attrs = {}) => field(`order-address-${name}`, label, el("input", { id: `order-address-${name}`, name, value: s[name] ?? "", autocomplete: "off", ...attrs }));
-    const form = el("form", { class: "admin-ship__form admin-address-form", "data-order-address": true, novalidate: true },
-      el("div", { class: "admin-address-grid" },
-        input("firstName", "First name", { maxlength: "50" }),
-        input("lastName", "Last name", { maxlength: "50" }),
-        input("street", "Street address", { maxlength: "60" }),
-        input("street2", "Apt, suite, unit (optional)", { maxlength: "60" }),
-        input("city", "City", { maxlength: "50" }),
-        input("state", "State (2 letters)", { maxlength: "2" }),
-        input("zip", "ZIP", { maxlength: "10", inputmode: "numeric" }),
+    const form = el("form", { class: "form-stack", "data-order-address": true, novalidate: true },
+      el("div", { class: "form-grid" },
+        input("firstName", t("address.firstName"), { maxlength: "50" }),
+        input("lastName", t("address.lastName"), { maxlength: "50" }),
+        input("street", t("address.street"), { maxlength: "60" }),
+        input("street2", t("address.street2"), { maxlength: "60" }),
+        input("city", t("address.city"), { maxlength: "50" }),
+        input("state", t("address.state"), { maxlength: "2" }),
+        input("zip", t("address.zip"), { maxlength: "10", inputmode: "numeric" }),
       ),
-      el("label", { class: "admin-check" }, el("input", { type: "checkbox", name: "noUnit" }), " This address has no apartment or unit number"),
-      field("order-address-reason", "Why it changes", el("input", { id: "order-address-reason", name: "reason", maxlength: "300", autocomplete: "off" })),
-      el("button", { class: "btn btn--md", type: "submit" }, "Save address"),
+      el("label", { class: "check" }, el("input", { type: "checkbox", name: "noUnit" }), t("address.noUnit")),
+      field("order-address-reason", t("actions.addressReason"), el("input", { id: "order-address-reason", name: "reason", maxlength: "300", autocomplete: "off" })),
+      el("button", { class: "btn btn--primary", type: "submit" }, t("actions.saveAddress")),
     );
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(form));
-      if (!String(data.reason ?? "").trim()) return message.replaceChildren(notice("warning", "Reason needed", "Write why the address changes."));
+      if (!String(data.reason ?? "").trim()) return message.replaceChildren(notice("warning", t("actions.reasonNeeded"), t("actions.addressReasonNeeded")));
       const shipping = Object.fromEntries(["firstName", "lastName", "street", "street2", "city", "state", "zip"].map((key) => [key, data[key] ?? ""]));
-      run("address", { shipping, reason: data.reason, noUnit: data.noUnit === "on" }, $("button[type=submit]", form), () => notice("success", "Address changed", "The new address was checked and is what Amazon will get."));
+      run("address", { shipping, reason: data.reason, noUnit: data.noUnit === "on" }, $("button[type=submit]", form), () => notice("success", t("actions.addressChanged"), t("actions.addressChangedBody")));
     });
-    children.push(el("details", { class: "admin-order-change" }, el("summary", {}, "Change the address (cooling-off period only)"), form));
+    children.push(el("details", { class: "disclosure", "data-order-change-address": true }, el("summary", {}, t("actions.changeAddress")), form));
   }
 
   if (core.actions.cancel) {
     const reason = el("select", { id: "order-cancel-reason" },
-      el("option", { value: "" }, "Choose a reason"),
-      ...Object.entries(core.cancelReasons ?? {}).filter(([value]) => value !== "full_refund").map(([value, label]) => el("option", { value }, label)));
+      el("option", { value: "" }, t("actions.chooseReason")),
+      ...Object.entries(core.cancelReasons ?? {}).filter(([value]) => value !== "full_refund").map(([value, label]) => el("option", { value }, cancelReason(value, label))));
     const note = el("input", { id: "order-cancel-note", type: "text", maxlength: "300", autocomplete: "off" });
-    const button = el("button", { class: "btn btn--md", type: "button" }, "Cancel order");
+    const button = el("button", { class: "btn btn--danger", type: "button" }, t("actions.cancelOrder"));
     button.addEventListener("click", () => {
-      if (!reason.value) return message.replaceChildren(notice("warning", "Reason needed", "Choose why the order is cancelled."));
-      const withAmazon = core.stage === "fulfilling" ? " Amazon is asked to cancel the shipment first; if Amazon cannot, nothing changes." : "";
-      if (!window.confirm(`Cancel order ${order.id}?${withAmazon}`)) return;
-      run("cancel", { reason: reason.value, note: note.value }, button, (result) => el("div", {}, notice("success", "Order cancelled", "The order will not ship."), refundReminder(result.result.payment)));
+      if (!reason.value) return message.replaceChildren(notice("warning", t("actions.reasonNeeded"), t("actions.cancelReasonNeeded")));
+      const withAmazon = core.stage === "fulfilling" ? ` ${t("actions.cancelAsksAmazon")}` : "";
+      if (!window.confirm(`${t("actions.cancelConfirm", { id: order.id })}${withAmazon}`)) return;
+      run("cancel", { reason: reason.value, note: note.value }, button, (result) => el("div", {}, notice("success", t("actions.orderCancelled"), t("actions.orderCancelledBody")), refundReminder(result.result.payment)));
     });
-    children.push(el("details", { class: "admin-order-change", "data-order-cancel": true },
-      el("summary", {}, core.stage === "fulfilling" ? "Cancel the order (asks Amazon first)" : "Cancel the order"),
-      el("div", { class: "admin-ship__form" },
-        field("order-cancel-reason", "Reason", el("span", { class: "select" }, reason)),
-        field("order-cancel-note", "Details (needed for Other)", note),
+    children.push(el("details", { class: "disclosure disclosure--danger", "data-order-cancel": true },
+      el("summary", {}, t(core.stage === "fulfilling" ? "actions.cancelWithAmazon" : "actions.cancel")),
+      el("div", { class: "form-stack" },
+        field("order-cancel-reason", t("actions.reason"), el("span", { class: "select" }, reason)),
+        field("order-cancel-note", t("actions.details"), note),
         button)));
   }
 
   if (children.length === 1) return null;
   children.push(message);
-  return el("section", { class: "admin-ship admin-order-actions", "aria-label": "Order", "data-order-actions": core.stage }, ...children.filter(Boolean));
+  return el("section", { class: "card", "aria-label": t("actions.title"), "data-order-actions": core.stage }, ...children.filter(Boolean));
 }

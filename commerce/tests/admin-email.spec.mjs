@@ -14,7 +14,7 @@ test('email retry shows provider acceptance separately from delivery, and disabl
   });
   await page.goto(`/admin/index.html#${ID}`);
   await page.getByRole('button',{name:'Retry Order confirmation',exact:true}).click();
-  const history=page.getByRole('region',{name:'History'});
+  const history=page.getByRole('region',{name:'Timeline'});
   await expect(history).toContainText('Accepted by email service (delivery not confirmed)');
   await expect(history).toContainText('Message ID: mail_demo');
   await expect(page.getByRole('button',{name:'Retry Order confirmation',exact:true})).toHaveCount(0);
@@ -31,7 +31,7 @@ test('bounce/complaint records have no retry button; safely rendered server erro
   await page.goto(`/admin/index.html#${ID}`);
   await expect(page.getByRole('button',{name:'Retry Order confirmation',exact:true})).toHaveCount(0);
   const button=page.getByRole('button',{name:'Retry Shipment notice',exact:true});await button.click();
-  await expect(page.getByRole('region',{name:'History'})).toContainText('retry window expired');
-  await expect(page.getByRole('region',{name:'History'}).locator('img')).toHaveCount(0);
+  await expect(page.getByRole('region',{name:'Timeline'})).toContainText('retry window expired');
+  await expect(page.getByRole('region',{name:'Timeline'}).locator('img')).toHaveCount(0);
   await expect(button).toBeEnabled();
 });

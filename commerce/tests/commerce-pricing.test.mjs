@@ -102,6 +102,9 @@ test("front-end code contains no price, shipping fee or tax rate of its own", as
 test("worker code takes every amount from pricing.js", async () => {
   const catalog = await readFile("worker/catalog.js", "utf8");
   const index = await readFile("worker/index.js", "utf8");
-  assert.ok(!/\b(5999|2999|900)\b/.test(catalog + index), "no literal price in catalog.js / index.js");
-  assert.ok(index.includes("resolvePricing(env)"));
+  const products = await readFile("worker/products.js", "utf8");
+  assert.ok(!/\b(5999|2999|900)\b/.test(catalog + index + products), "no literal price in catalog.js / index.js / products.js");
+  // The storefront and checkout price through livePricing (pricing.js plus the owners' on-sale switch).
+  assert.ok(index.includes("await livePricing(env)") && !index.includes("resolvePricing(env)"));
+  assert.ok(products.includes("resolvePricing(env)"));
 });

@@ -139,7 +139,12 @@ window.paypal = {
 };
 `;
 
-export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false } = {}) {
+// stopped: product ids an owner stopped selling (worker/products.js livePricing).
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [] } = {}) {
+  const livePricing = () => {
+    const pricing = resolvePricing(env);
+    return { ...pricing, products: Object.fromEntries(Object.entries(pricing.products).map(([id, product]) => [id, stopped.includes(id) ? { ...product, onSale: false } : product])) };
+  };
   const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [], contact: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
     route.fulfill({ contentType: "application/javascript", body: AIRWALLEX_STUB }));
@@ -153,7 +158,7 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
     const reply = (status, data) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
     try {
       if (pathname === "/api/store/config") {
-        const config = publicConfig(env);
+        const config = publicConfig(env, livePricing());
         if (paypal !== undefined) config.paypal = paypal;
         return reply(200, config);
       }
@@ -167,7 +172,7 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         calls.contact.push(value);
         return reply(200, { ok: true });
       }
-      if (pathname === "/api/cart/quote") return reply(200, quote(body.items, { state: body.state, method: body.method }, resolvePricing(env)));
+      if (pathname === "/api/cart/quote") return reply(200, quote(body.items, { state: body.state, method: body.method }, livePricing()));
       if (pathname === "/api/checkout/address") {
         calls.address.push(body);
         const { value, errors } = checkShipping(body?.shipping);
@@ -179,13 +184,13 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         calls.session.push(body);
         const checkout = validateCheckout(body);
         enforceAddress(addressCheck, checkout);
-        const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, resolvePricing(env));
+        const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, livePricing());
         return reply(200, { orderId: ORDER_ID, quote: priced, intent: { id: "int_test", clientSecret: "secret_test", currency: "USD" } });
       }
       if (pathname === "/api/checkout/paypal/order") {
         calls.paypalOrder.push(body);
         if (body.shipping) enforceAddress(addressCheck, validateCheckout(body));
-        const priced = quote(body.items, { state: body.shipping?.state, method: body.method }, resolvePricing(env));
+        const priced = quote(body.items, { state: body.shipping?.state, method: body.method }, livePricing());
         return reply(200, {
           orderId: ORDER_ID,
           quote: priced,

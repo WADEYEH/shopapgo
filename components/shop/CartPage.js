@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/shop/api";
 import { MAX_QTY, addToCart, removeFromCart, setCartQty, useCartItems } from "@/lib/shop/cart";
-import { fetchStoreConfig, isEstimate, money } from "@/lib/shop/store-config";
+import { fetchStoreConfig, isEstimate, money, onSale } from "@/lib/shop/store-config";
+import { PRODUCTS } from "@/lib/shop/catalog";
 import { track } from "@/lib/us/analytics";
 import { Estimate, Notice, PriceRows, ProductName, RoutineWord, productImage } from "@/components/shop/ui";
 
@@ -41,6 +42,9 @@ export default function CartPage() {
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState("");
   const [estimate, setEstimate] = useState(false);
+  const [config, setConfig] = useState(null);
+  // The quote refused the cart because an owner stopped selling something in it (commerce/worker/products.js).
+  const [unavailable, setUnavailable] = useState(false);
   const quoteSeq = useRef(0);
   const viewTracked = useRef(false);
 
@@ -55,7 +59,10 @@ export default function CartPage() {
   }, []);
 
   useEffect(() => {
-    fetchStoreConfig().then((config) => setEstimate(isEstimate(config)), () => {});
+    fetchStoreConfig().then((next) => {
+      setConfig(next);
+      setEstimate(isEstimate(next));
+    }, () => {});
   }, []);
 
   // A new quote for every change to the lines; an older answer that arrives late is ignored.
@@ -71,6 +78,7 @@ export default function CartPage() {
       (next) => {
         if (seq !== quoteSeq.current) return;
         setError("");
+        setUnavailable(false);
         setQuote(next);
         if (!viewTracked.current) {
           viewTracked.current = true;
@@ -80,6 +88,8 @@ export default function CartPage() {
       (failure) => {
         if (seq !== quoteSeq.current) return;
         setError(failure.message);
+        setUnavailable(failure.code === "product_unavailable");
+        if (failure.code === "product_unavailable") fetchStoreConfig().then(setConfig, () => {});
       },
     );
   }, [items]);
@@ -96,7 +106,20 @@ export default function CartPage() {
       </div>
 
       <div data-cart-message="" aria-live="polite">
-        {error && <Notice tone="warning" title="Cart unavailable">{error}</Notice>}
+        {error && <Notice tone="warning" title={unavailable ? "Not available right now" : "Cart unavailable"}>{error}</Notice>}
+        {unavailable && (
+          <ul className="line-items" data-cart-unavailable="">
+            {(items ?? []).filter((item) => !onSale(config, item.sku)).map((item) => (
+              <li key={item.sku} className="line-item" data-line={item.sku}>
+                <div className="line-item__body">
+                  <span className="line-item__title">{PRODUCTS[item.sku]?.name ?? item.sku}</span>
+                  <span className="line-item__meta">Not available right now</span>
+                </div>
+                <button type="button" className="line-item__remove" onClick={() => removeFromCart(item.sku)}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="shop-grid">

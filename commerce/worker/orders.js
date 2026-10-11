@@ -268,8 +268,42 @@ const IS_ORDER = `(o.status IN ('paid', 'review') OR (o.status = 'cancelled' AND
   OR EXISTS (SELECT 1 FROM order_cancellations c WHERE c.order_id = o.id))))`;
 
 const ADMIN_LIST_LIMIT = 100;
+const DAY_MS = 24 * 60 * 60_000;
 
-function adminSummary(row) {
+// Where a listed order is (D50, the order list's two status columns), from the columns listOrders selects:
+//   payment   paid | review | disputed | refund_failed | partly_refunded | refunded | cancelled (never paid)
+//   shipping  review | cooling_off | waiting | with_amazon | out_of_stock | not_sent | on_hold | shipped | cancelled
+//   todo      what someone has to do: { code: review | dispute | stockout | not_sent | refund_failed, ... } or null
+function listedState(row, { coolingMinutes, nowMs }) {
+  const refunded = row.refunded_cents ?? 0;
+  const payment = row.status === "review" ? "review"
+    : row.disputed ? "disputed"
+    : row.refund_failed ? "refund_failed"
+    : refunded > 0 && refunded >= row.total_cents ? "refunded"
+    : refunded > 0 ? "partly_refunded"
+    : row.status === "cancelled" && !row.paid_at ? "cancelled"
+    : "paid";
+  const stockout = row.mcf_state === "rejected" && row.mcf_status === "UNFULFILLABLE";
+  const cooling = row.status === "paid" && row.paid_at && Date.parse(row.paid_at) + coolingMinutes * 60_000 > nowMs;
+  const shipping = row.status === "cancelled" ? "cancelled"
+    : row.status === "review" ? "review"
+    : row.shipped_at ? "shipped"
+    : row.disputed || row.refund_hold ? "on_hold"
+    : ["submitting", "submitted"].includes(row.mcf_state) ? "with_amazon"
+    : stockout ? "out_of_stock"
+    : ["failed", "rejected"].includes(row.mcf_state) ? "not_sent"
+    : cooling ? "cooling_off"
+    : "waiting";
+  const todo = row.status === "review" ? { code: "review" }
+    : row.disputed ? { code: "dispute", dueAt: row.dispute_due_at ?? null }
+    : row.refund_failed ? { code: "refund_failed" }
+    : row.status === "paid" && shipping === "out_of_stock" ? { code: "stockout", days: row.stockout_at ? Math.floor((nowMs - Date.parse(row.stockout_at)) / DAY_MS) : null }
+    : row.status === "paid" && shipping === "not_sent" ? { code: "not_sent" }
+    : null;
+  return { payment, shipping, todo };
+}
+
+function adminSummary(row, options) {
   const shipping = JSON.parse(row.shipping_json);
   const lines = JSON.parse(row.lines_json);
   return {
@@ -277,10 +311,14 @@ function adminSummary(row) {
     status: row.status,
     email: row.email,
     name: `${shipping.firstName} ${shipping.lastName}`.trim(),
+    city: shipping.city ?? "",
     state: shipping.state,
     itemCount: lines.reduce((sum, line) => sum + line.qty, 0),
+    items: lines.map((line) => ({ sku: line.sku, qty: line.qty })),
     currency: row.currency,
     totalCents: row.total_cents,
+    refundedCents: row.refunded_cents ?? 0,
+    paymentProvider: row.payment_intent_id ? row.provider ?? "airwallex" : null,
     createdAt: row.created_at,
     paidAt: row.paid_at,
     notification: row.notification_status ?? null,
@@ -289,14 +327,32 @@ function adminSummary(row) {
     refundHold: Boolean(row.refund_hold),
     disputed: Boolean(row.disputed),
     disputeDueAt: row.dispute_due_at ?? null,
+    ...listedState(row, options),
   };
 }
 
 // Issue filters: "disputes" = orders with an open dispute (worker/disputes.js), earliest response deadline first (I13).
 export const ISSUE_FILTERS = ["disputes"];
 const OPEN_DISPUTE = "EXISTS (SELECT 1 FROM order_disputes d WHERE d.order_id = o.id AND d.status = 'open')";
+const REFUND_FAILED = `(EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id = o.id AND r.status = 'FAILED')
+  OR EXISTS (SELECT 1 FROM order_refund_requests q WHERE q.order_id = o.id AND q.status = 'failed'))`;
 
-export async function listOrders(db, { status, fulfillment, issue, q, limit = 50, before } = {}) {
+// The order list's views (D50): to ship = paid and not shipped; problems = paid orders Amazon did not take or cannot
+// fill, and refunds that did not go through.
+export const ORDER_VIEWS = ["all", "to_ship", "review", "problems", "disputes", "shipped", "cancelled"];
+const VIEW_SQL = {
+  to_ship: "o.status = 'paid' AND f.order_id IS NULL",
+  review: "o.status = 'review'",
+  problems: `((o.status = 'paid' AND f.order_id IS NULL AND m.status IN ('failed', 'rejected')) OR ${REFUND_FAILED})`,
+  disputes: OPEN_DISPUTE,
+  shipped: "f.order_id IS NOT NULL",
+  cancelled: "o.status = 'cancelled'",
+};
+const LIST_FROM = `FROM orders o LEFT JOIN order_notifications n ON n.order_id = o.id
+  LEFT JOIN order_fulfillments f ON f.order_id = o.id
+  LEFT JOIN order_mcf m ON m.order_id = o.id`;
+
+export async function listOrders(db, { status, fulfillment, issue, view, q, limit = 50, before, coolingMinutes = 60, nowMs = Date.now() } = {}) {
   const clauses = [IS_ORDER];
   const args = [];
   if (status && ORDER_STATUSES.includes(status)) {
@@ -306,13 +362,17 @@ export async function listOrders(db, { status, fulfillment, issue, q, limit = 50
   // "unfulfilled" = paid and not yet shipped (the to-ship queue); "shipped" = has a shipment row.
   if (fulfillment === "unfulfilled") clauses.push("o.status = 'paid' AND f.order_id IS NULL AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED')");
   else if (fulfillment === "shipped") clauses.push("f.order_id IS NOT NULL");
+  if (view && VIEW_SQL[view]) clauses.push(VIEW_SQL[view]);
   // The disputes list is short and sorted by deadline, so it is one page.
-  const disputes = issue === "disputes";
-  if (disputes) clauses.push(OPEN_DISPUTE);
+  const disputes = issue === "disputes" || view === "disputes";
+  if (issue === "disputes") clauses.push(OPEN_DISPUTE);
   if (q) {
-    clauses.push("(instr(lower(o.id), ?) > 0 OR instr(lower(o.email), ?) > 0 OR instr(lower(o.shipping_json), ?) > 0)");
     const needle = String(q).trim().toLowerCase().slice(0, 100);
-    args.push(needle, needle, needle);
+    const digits = needle.replace(/\D/g, "");
+    // A phone number however it is typed: stored as +1 and ten digits.
+    const phone = digits.length >= 7 ? digits.slice(-10) : null;
+    clauses.push(`(instr(lower(o.id), ?) > 0 OR instr(lower(o.email), ?) > 0 OR instr(lower(o.shipping_json), ?) > 0${phone ? " OR instr(o.shipping_json, ?) > 0" : ""})`);
+    args.push(needle, needle, needle, ...(phone ? [phone] : []));
   }
   if (before && !disputes) {
     clauses.push("o.created_at < ?");
@@ -326,19 +386,34 @@ export async function listOrders(db, { status, fulfillment, issue, q, limit = 50
       `SELECT o.*, n.status AS notification_status,
               COALESCE(f.fulfillment_status, 'unfulfilled') AS fulfillment_status, f.shipped_at AS shipped_at,
               EXISTS(SELECT 1 FROM order_refunds r WHERE r.order_id=o.id AND r.status!='FAILED') AS refund_hold,
+              (SELECT COALESCE(SUM(r.amount_cents), 0) FROM order_refunds r WHERE r.order_id = o.id AND r.status != 'FAILED') AS refunded_cents,
+              ${REFUND_FAILED} AS refund_failed,
+              m.status AS mcf_state, m.mcf_status AS mcf_status, m.stockout_at AS stockout_at,
+              COALESCE((SELECT p.provider FROM checkout_payments p WHERE p.checkout_id = o.id AND p.ref = o.payment_intent_id),
+                       (SELECT op.provider FROM order_payments op WHERE op.order_id = o.id)) AS provider,
               ${OPEN_DISPUTE} AS disputed,
               (SELECT MIN(d.due_at) FROM order_disputes d WHERE d.order_id = o.id AND d.status = 'open') AS dispute_due_at
-         FROM orders o LEFT JOIN order_notifications n ON n.order_id = o.id
-         LEFT JOIN order_fulfillments f ON f.order_id = o.id
+         ${LIST_FROM}
          ${where} ORDER BY ${order} LIMIT ?`,
     )
     .bind(...args, pageSize + 1)
     .all();
   const page = results.slice(0, pageSize);
   return {
-    orders: page.map(adminSummary),
+    orders: page.map((row) => adminSummary(row, { coolingMinutes, nowMs })),
     nextBefore: !disputes && results.length > pageSize ? page.at(-1).created_at : null,
   };
+}
+
+// How many orders each view has (the order list's view chips).
+export async function viewCounts(db) {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS "all", ${Object.entries(VIEW_SQL).map(([view, sql]) => `SUM(CASE WHEN ${sql} THEN 1 ELSE 0 END) AS ${view}`).join(", ")}
+         ${LIST_FROM} WHERE ${IS_ORDER}`,
+    )
+    .first();
+  return Object.fromEntries(ORDER_VIEWS.map((view) => [view, row?.[view] ?? 0]));
 }
 
 export async function issueCounts(db) {
