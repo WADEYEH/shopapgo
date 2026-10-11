@@ -5,7 +5,7 @@ import { api } from "@/lib/shop/api";
 import { MAX_QTY, addToCart, removeFromCart, setCartQty, useCartItems } from "@/lib/shop/cart";
 import { fetchStoreConfig, isEstimate, money, onSale } from "@/lib/shop/store-config";
 import { PRODUCTS } from "@/lib/shop/catalog";
-import { track } from "@/lib/us/analytics";
+import { quoteItems, track } from "@/lib/us/analytics";
 import { Estimate, Notice, PriceRows, ProductName, RoutineWord, productImage } from "@/components/shop/ui";
 
 // /cart (M3 §2): the lines and quantities come from the browser's cart, every price from the Worker's quote
@@ -82,7 +82,7 @@ export default function CartPage() {
         setQuote(next);
         if (!viewTracked.current) {
           viewTracked.current = true;
-          track("view_cart", { value: next.subtotalCents / 100, currency: next.currency, items: items.length });
+          track("view_cart", { value: next.subtotalCents / 100, currency: next.currency, items: quoteItems(next.lines) });
         }
       },
       (failure) => {

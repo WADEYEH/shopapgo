@@ -105,5 +105,10 @@ npx wrangler deploy --env production
 
 ## Privacy
 
+Global Privacy Control (D46, PR 3-9, `worker/privacy.js`): a checkout whose request carries `Sec-GPC: 1` or whose body
+says `privacy.gpc` keeps no attribution, and the order is recorded in `order_privacy`; `sendMetaEvent` then skips both
+InitiateCheckout and Purchase for it (nothing is claimed, so the cron has nothing to re-send). `HONOR_GPC = "false"`
+(plain var) stops honouring it. GA4 is not affected.
+
 No cookie-consent banner (owner decision). The Worker stores `client_ip` and `client_user_agent` in `order_attribution` and sends them to Meta unhashed (as the API requires for matching); all
 other personal fields are hashed first. Update the privacy policy page accordingly (counsel).

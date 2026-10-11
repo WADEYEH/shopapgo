@@ -89,7 +89,6 @@ test("test-site builds force GA4, GTM and the Meta Pixel off and turn on the sin
   assert.deepEqual(TEST_SITE_ENV, {
     NEXT_PUBLIC_APGO_US_ANALYTICS_READY: "false",
     NEXT_PUBLIC_APGO_US_GTM_ID: "",
-    NEXT_PUBLIC_APGO_US_META_PIXEL_ID: "",
     NEXT_PUBLIC_APGO_US_SINGLE_SITE: "true",
   });
 });

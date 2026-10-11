@@ -2,8 +2,9 @@ import "./(us)/us.css";
 import { barlow, barlowCondensed } from "./(us)/fonts";
 import SiteChrome from "@/components/us/SiteChrome";
 import SiteFooter from "@/components/us/SiteFooter";
+import Script from "next/script";
 import GtmScripts from "@/components/us/GtmScripts";
-import MetaPixel from "@/components/us/MetaPixel";
+import { config } from "@/lib/us/config";
 import { routes } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { SITE_URL } from "@/lib/site";
@@ -28,7 +29,7 @@ export default function GlobalNotFound() {
     { href: routes.home, label: "Home" },
   ].filter(Boolean);
   return (
-    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
+    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`} data-honor-gpc={config.honorGpc ? "true" : "false"}>
       <body className="us-site">
         <SiteChrome footer={<SiteFooter />}>
           <main id="main" style={{ background: color.bg }}>
@@ -55,7 +56,7 @@ export default function GlobalNotFound() {
           </main>
         </SiteChrome>
         <GtmScripts />
-        <MetaPixel />
+        <Script src="/js/meta-pixel.js" strategy="afterInteractive" />
       </body>
     </html>
   );

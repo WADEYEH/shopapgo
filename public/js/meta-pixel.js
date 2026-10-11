@@ -1,10 +1,10 @@
 /*
- * APGO US store: Meta Pixel (browser side).
+ * APGO US site: the one Meta Pixel (browser side), M10-07.
  *
- * Loaded by app/(us)/(shop)/layout.js on the store pages only (products, cart, checkout, policy
- * and contact pages; never on /admin). It does nothing unless the page is served from an allowed store host
- * (store.shopapgo.com, shopapgo.com, www.shopapgo.com), so staging, localhost, admin and
- * preview hosts never talk to Meta.
+ * Loaded by app/(us)/layout.js on every page of the site, brand and store (never on /admin). It does nothing unless
+ * the page is served from an allowed store host (store.shopapgo.com, shopapgo.com, www.shopapgo.com), so staging,
+ * localhost, admin and preview hosts never talk to Meta; and nothing when the browser sends Global Privacy Control
+ * while the site honours it (<html data-honor-gpc>, D46).
  *
  * It does NOT touch the cart code: the store already announces what happens through
  * window "apgo:analytics" CustomEvents (lib/us/analytics.js track()). This file only
@@ -28,6 +28,12 @@
   var PURCHASE_KEY_PREFIX = "apgo_meta_purchase_";
 
   if (STORE_HOSTNAMES.indexOf(window.location.hostname) === -1) return;
+
+  // Global Privacy Control (D46, M10-08): a browser asking not to share gets no Meta at all, not even the _fbc cookie,
+  // unless the build switched honouring it off (data-honor-gpc="false", NEXT_PUBLIC_APGO_US_HONOR_GPC).
+  var root = document.documentElement;
+  var honorGpc = !(root && root.getAttribute && root.getAttribute("data-honor-gpc") === "false");
+  if (honorGpc && window.navigator && window.navigator.globalPrivacyControl === true) return;
 
   // ---------- cookies: _fbc backup from ?fbclid= ----------
 

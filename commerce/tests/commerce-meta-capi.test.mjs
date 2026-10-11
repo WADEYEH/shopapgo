@@ -666,3 +666,46 @@ test("sendMetaEvent directly: duplicate claim, unknown event and missing order a
     assert.equal((await sendMetaEvent({ ...env, DB: { prepare() { throw new Error("db down"); } } }, order, "Purchase")).outcome, "error", "a database problem is contained");
   });
 });
+
+// ---------- Global Privacy Control (D46, M10-08; worker/privacy.js) ----------
+
+test("GPC: a checkout with Sec-GPC keeps no attribution and Meta hears nothing about the order, before or after payment", { skip }, async () => {
+  const db = await createD1();
+  const env = prodEnv(db);
+  await withWorld({}, async ({ meta, intents }) => {
+    const orderId = await startCheckout(env, checkoutBody({ attribution: { fbp: FBP, fbc: FBC, fbclid: "AbCdEf", sourceUrl: SOURCE_URL } }), { "Sec-GPC": "1", "CF-Connecting-IP": "203.0.113.9" });
+    assert.equal(attributionRow(db, orderId), null, "nothing kept for Meta");
+    assert.deepEqual({ ...db.raw.prepare("SELECT order_id, gpc FROM order_privacy").get() }, { order_id: orderId, gpc: 1 });
+    assert.deepEqual(intents[0].metadata, { source: "apgo-us-store", order_id: orderId }, "no ad ids in the Airwallex metadata either");
+    assert.equal((await payViaWebhook(env, orderId)).status, 200, "the payment itself is untouched");
+    assert.equal(orderRow(db, orderId).status, "paid");
+    assert.equal(meta.calls.length, 0, "no InitiateCheckout, no Purchase");
+    assert.deepEqual(eventRows(db, orderId), [], "nothing claimed, so the cron has nothing to re-send");
+  });
+});
+
+test("GPC: the page's privacy.gpc counts too, and a later attempt of the same checkout drops what an earlier one kept", { skip }, async () => {
+  const db = await createD1();
+  const env = prodEnv(db);
+  await withWorld({}, async ({ meta }) => {
+    const first = await startCheckout(env, checkoutBody({ attribution: { fbp: FBP, fbc: FBC } }));
+    assert.ok(attributionRow(db, first), "no GPC yet: attribution kept");
+    const again = await startCheckout(env, checkoutBody({ checkoutId: first, privacy: { gpc: true } }));
+    assert.equal(again, first, "the same checkout");
+    assert.equal(attributionRow(db, first), null);
+    await payViaWebhook(env, first);
+    assert.equal(purchases(meta).length, 0, "no Purchase for an order that asked not to share");
+  });
+});
+
+test("GPC: with HONOR_GPC=\"false\" the signal is recorded nowhere and Meta works as before", { skip }, async () => {
+  const db = await createD1();
+  const env = prodEnv(db, { HONOR_GPC: "false" });
+  await withWorld({}, async ({ meta }) => {
+    const orderId = await startCheckout(env, checkoutBody({ attribution: { fbp: FBP }, privacy: { gpc: true } }), { "Sec-GPC": "1" });
+    assert.ok(attributionRow(db, orderId));
+    assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM order_privacy").get().n, 0);
+    await payViaWebhook(env, orderId);
+    assert.deepEqual(meta.events().map((e) => e.event_name), ["InitiateCheckout", "Purchase"]);
+  });
+});

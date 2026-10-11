@@ -35,6 +35,7 @@ const ADDED = [
   "order_notes",
   "order_notice_jobs",
   "order_payment_failures",
+  "order_privacy",
   "order_refund_requests",
   "order_refunds",
   "product_settings",

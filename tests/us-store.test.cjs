@@ -124,7 +124,7 @@ test("the cart page's changes: quantity kept between 1 and 10, remove reports re
   assert.deepEqual(JSON.parse(storage.get("apgo_us_cart_v1")), [{ sku: "d204", qty: 10 }, { sku: "d215", qty: 1 }]);
   cart.removeFromCart("d204");
   assert.deepEqual(JSON.parse(storage.get("apgo_us_cart_v1")), [{ sku: "d215", qty: 1 }]);
-  assert.deepEqual(tracked.at(-1), { event: "remove_from_cart", sku: "d204" });
+  assert.deepEqual(tracked.at(-1), { event: "remove_from_cart", sku: "d204", quantity: 10 }, "with how many were removed (GA4 items)");
   cart.clearCart();
   assert.equal(storage.get("apgo_us_cart_v1"), "[]");
   assert.equal(dispatched.length, 6, "every change tells the page (the header count follows it)");

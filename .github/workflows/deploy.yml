@@ -127,9 +127,10 @@ jobs:
           npm run test:static
       - name: Build the production site
         env:
-          NEXT_PUBLIC_APGO_US_ANALYTICS_READY: ${{ vars.APGO_US_ANALYTICS_READY }}
-          NEXT_PUBLIC_APGO_US_GTM_ID: ${{ vars.APGO_US_GTM_ID }}
-          NEXT_PUBLIC_APGO_US_META_PIXEL_ID: ${{ vars.APGO_US_META_PIXEL_ID }}
+          # GTM-TD5NTFH9 → GA4 G-YM10YMKE30 (D40) unless a repository variable says otherwise.
+          NEXT_PUBLIC_APGO_US_ANALYTICS_READY: ${{ vars.APGO_US_ANALYTICS_READY || 'true' }}
+          NEXT_PUBLIC_APGO_US_GTM_ID: ${{ vars.APGO_US_GTM_ID || 'GTM-TD5NTFH9' }}
+          NEXT_PUBLIC_APGO_US_HONOR_GPC: ${{ vars.APGO_US_HONOR_GPC || 'true' }}
         run: node scripts/build-site.mjs --production
       - run: npm run verify:bundle
       - name: Record the database restore point
