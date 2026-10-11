@@ -22,7 +22,7 @@
 | 项目 | 设定 |
 |---|---|
 | 寄件服务 | Resend |
-| 寄件人 | 改用 `APGO <orders@shopapgo.com>`（O8，10/9 决定）。要先在 Resend 验证 shopapgo.com、在 Cloudflare 加 DNS 纪录（营运手册第 16 节）；验证前 staging 维持 `orders@apgo.tw`，正式环境在切换时一起改 |
+| 寄件人 | 改用 `APGO <orders@shopapgo.com>`（O8，10/9 决定）。10/11 已在 Resend 验证 shopapgo.com（DKIM、SPF、DMARC 纪录加在 Cloudflare，营运手册第 16 节），staging 已改用；正式环境在切换时一起改 |
 | 回复地址 | services@apgo.com.tw |
 | 团队信收件人 | 每个后台成员自己选要不要收（D34，PR 3-7：后台右上角「Team emails」）；拥有者预设收、一般成员预设不收；最后一个收的人不能关。成员变动的通知照样寄给所有拥有者 |
 | 语言 | 顾客信用英文 |

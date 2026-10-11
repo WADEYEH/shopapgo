@@ -362,11 +362,12 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 **每日摘要**（新）：每天台湾时间早上 8 点后的第一次排程，寄一封「Daily summary」，列出还没处理的：需人工确认、没送到 Amazon、Amazon 缺货（第几天）、送出 2 个工作日没追踪号、进行中的拒付和期限、没成功的退款、前一天没送达的顾客信、前一天地址没检查到的订单。都没有就不寄。
 
-**寄件网域改成 shopapgo.com**（你要做，切换前；我可以在你的 Chrome 一步步带）
+**寄件网域改成 shopapgo.com**（10/11 已在 Resend 加入 shopapgo.com、区域 us-east-1，并在 Cloudflare 加好下面的纪录；以下是当时的步骤，换网域或重做时照做）
 1. 登录 Resend → Domains → **Add domain**，输入 `shopapgo.com`。
-2. Resend 会列出几笔 DNS 纪录（DKIM 的 TXT，和 `send` 开头的 MX、SPF TXT）。到 Cloudflare → shopapgo.com → DNS → Records 照抄加入，Proxy 选关闭（灰色云）。
-3. 加一笔 DMARC（Gmail、Yahoo 要求寄件网域要有）：Type `TXT`，Name `_dmarc`，Content `v=DMARC1; p=none; rua=mailto:services@apgo.com.tw`。先设成只回报，确认都没问题再收紧。如果已经有 `_dmarc` 纪录就不要重复加，告诉我。
-4. 回 Resend 按 **Verify**，显示 Verified 后告诉我。我会把 staging 的寄件人改成 `APGO <orders@shopapgo.com>` 并寄测试信确认通过 SPF、DKIM；正式环境在切换时一起改。回信地址维持 services@apgo.com.tw。
+2. 选「Manual setup」（不要用 Auto configure，那会让 Resend 取得 Cloudflare 的权限）。Resend 会列出 DNS 纪录：TXT `resend._domainkey`（DKIM）、CNAME `rsend` → `rsend.forge.rmta.net`、CNAME `send` → `send.forge.rmta.net`。到 Cloudflare → shopapgo.com → DNS → Records 照抄加入，CNAME 的 Proxy 要关闭（DNS only，灰色云）。
+3. 加一笔 DMARC（Gmail、Yahoo 要求寄件网域要有）：Type `TXT`，Name `_dmarc`，Content `v=DMARC1; p=none;`（Resend 建议的值：先只观察、不拦信，确认都没问题再收紧）。如果已经有 `_dmarc` 纪录就不要重复加，告诉我。
+4. 回 Resend 按 **Verify DNS Records**，几分钟内显示 Verified。之后把寄件人（`CUSTOMER_EMAIL_FROM`）改成 `APGO <orders@shopapgo.com>`：staging 已在 10/11 改好；正式环境在切换时改。回信地址维持 services@apgo.com.tw。
+5. 确认：收到 shopapgo.com 寄出的信后，在 Gmail 打开「显示原始邮件」，SPF、DKIM、DMARC 都应显示 PASS（M8-09）。
 
 ---
 
