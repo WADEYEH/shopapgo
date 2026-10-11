@@ -26,43 +26,57 @@ const ids = (rows, describe = (row) => row.order_id) => {
 const day = (ms) => new Date(ms).toUTCString().slice(0, 16);
 const all = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results;
 
-// The sections with something in them: [{ title, count, detail }].
-export async function digestSections(env, { nowMs = Date.now() } = {}) {
+// What is waiting, as data: [{ key, rows }] in this order, every key always present (rows may be empty). The daily
+// summary words it below; the back office's dashboard shows the same lists (worker/dashboard.js).
+export async function waitingLists(env, { nowMs = Date.now() } = {}) {
   const db = env.DB;
   const since = iso(nowMs - DAY_MS);
-  const sections = [];
-  const add = (title, rows, describe) => rows.length && sections.push({ title, count: rows.length, detail: ids(rows, describe) });
-
-  add("Needs review (the amount paid did not match): confirm or cancel", await all(db, "SELECT id AS order_id FROM orders WHERE status = 'review' ORDER BY created_at"));
-  add("Not with Amazon (sending failed or Amazon closed it): retry or cancel", await all(db,
-    `SELECT m.order_id, m.mcf_status FROM order_mcf m JOIN orders o ON o.id = m.order_id
-      WHERE o.status = 'paid' AND (m.status = 'failed' OR (m.status = 'rejected' AND m.mcf_status != 'UNFULFILLABLE')) ORDER BY m.updated_at`),
-  (row) => `${row.order_id}${row.mcf_status ? ` (${row.mcf_status})` : ""}`);
-  add("Out of stock at Amazon: cancel and refund after 3 days", await all(db,
-    `SELECT m.order_id, m.stockout_at FROM order_mcf m JOIN orders o ON o.id = m.order_id
-      WHERE o.status = 'paid' AND m.status = 'rejected' AND m.mcf_status = 'UNFULFILLABLE' AND m.stockout_at IS NOT NULL ORDER BY m.stockout_at`),
-  (row) => `${row.order_id} (${Math.floor((nowMs - Date.parse(row.stockout_at)) / DAY_MS)} days)`);
   const submitted = await all(db, "SELECT order_id, submitted_at FROM order_mcf WHERE status = 'submitted' AND submitted_at IS NOT NULL AND submitted_at <= ? ORDER BY submitted_at", iso(nowMs - 2 * DAY_MS));
-  add("With Amazon for 2 working days or more without tracking", submitted.filter((row) => addWorkingDays(Date.parse(row.submitted_at), 2) <= nowMs),
-    (row) => `${row.order_id} (sent ${day(Date.parse(row.submitted_at))})`);
-  add("Open disputes: respond in the provider's dashboard", await all(db, "SELECT order_id, provider, due_at FROM order_disputes WHERE status = 'open' ORDER BY CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at"),
-    (row) => `${row.order_id} (${row.provider === "paypal" ? "PayPal" : "Airwallex"}${row.due_at ? `, respond by ${day(Date.parse(row.due_at))}` : ""})`);
-  add("Refunds that did not go through", await all(db,
-    `SELECT order_id FROM order_refunds WHERE status = 'FAILED' AND provider_updated_at >= ?
-     UNION SELECT order_id FROM order_refund_requests WHERE status = 'failed'`, iso(nowMs - 30 * DAY_MS)));
-  add("Customer emails not delivered in the last day", await all(db,
-    "SELECT order_id, kind, status FROM order_email_delivery WHERE status IN ('bounced', 'complained', 'suppressed', 'failed', 'review') AND updated_at >= ? ORDER BY updated_at", since),
-  (row) => `${row.order_id} ${row.kind} (${row.status})`);
-  const paid = await all(db, "SELECT id AS order_id, shipping_json FROM orders WHERE status = 'paid' AND paid_at >= ?", since);
-  add("Paid in the last day with the address unchecked (the check service was down)", paid.filter((row) => {
-    try {
-      const check = JSON.parse(row.shipping_json).addressCheck;
-      return check?.status === "unverified" && check.reason === "unavailable";
-    } catch {
-      return false;
-    }
-  }));
-  return sections;
+  const paid = await all(db, "SELECT id AS order_id, paid_at, shipping_json FROM orders WHERE status = 'paid' AND paid_at >= ?", since);
+  return [
+    { key: "review", rows: await all(db, "SELECT id AS order_id FROM orders WHERE status = 'review' ORDER BY created_at") },
+    { key: "not_sent", rows: await all(db,
+      `SELECT m.order_id, m.mcf_status FROM order_mcf m JOIN orders o ON o.id = m.order_id
+        WHERE o.status = 'paid' AND (m.status = 'failed' OR (m.status = 'rejected' AND m.mcf_status != 'UNFULFILLABLE')) ORDER BY m.updated_at`) },
+    { key: "stockout", rows: (await all(db,
+      `SELECT m.order_id, m.stockout_at FROM order_mcf m JOIN orders o ON o.id = m.order_id
+        WHERE o.status = 'paid' AND m.status = 'rejected' AND m.mcf_status = 'UNFULFILLABLE' AND m.stockout_at IS NOT NULL ORDER BY m.stockout_at`))
+      .map((row) => ({ ...row, days: Math.floor((nowMs - Date.parse(row.stockout_at)) / DAY_MS) })) },
+    { key: "no_tracking", rows: submitted.filter((row) => addWorkingDays(Date.parse(row.submitted_at), 2) <= nowMs) },
+    { key: "disputes", rows: await all(db, "SELECT order_id, provider, due_at FROM order_disputes WHERE status = 'open' ORDER BY CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at") },
+    { key: "refunds", rows: await all(db,
+      `SELECT order_id FROM order_refunds WHERE status = 'FAILED' AND provider_updated_at >= ?
+       UNION SELECT order_id FROM order_refund_requests WHERE status = 'failed'`, iso(nowMs - 30 * DAY_MS)) },
+    { key: "emails", rows: await all(db,
+      "SELECT order_id, kind, status FROM order_email_delivery WHERE status IN ('bounced', 'complained', 'suppressed', 'failed', 'review') AND updated_at >= ? ORDER BY updated_at", since) },
+    { key: "addresses", rows: paid.filter((row) => {
+      try {
+        const check = JSON.parse(row.shipping_json).addressCheck;
+        return check?.status === "unverified" && check.reason === "unavailable";
+      } catch {
+        return false;
+      }
+    }).map(({ order_id, paid_at }) => ({ order_id, paid_at })) },
+  ];
+}
+
+const SECTIONS = {
+  review: ["Needs review (the amount paid did not match): confirm or cancel"],
+  not_sent: ["Not with Amazon (sending failed or Amazon closed it): retry or cancel", (row) => `${row.order_id}${row.mcf_status ? ` (${row.mcf_status})` : ""}`],
+  stockout: ["Out of stock at Amazon: cancel and refund after 3 days", (row) => `${row.order_id} (${row.days} days)`],
+  no_tracking: ["With Amazon for 2 working days or more without tracking", (row) => `${row.order_id} (sent ${day(Date.parse(row.submitted_at))})`],
+  disputes: ["Open disputes: respond in the provider's dashboard",
+    (row) => `${row.order_id} (${row.provider === "paypal" ? "PayPal" : "Airwallex"}${row.due_at ? `, respond by ${day(Date.parse(row.due_at))}` : ""})`],
+  refunds: ["Refunds that did not go through"],
+  emails: ["Customer emails not delivered in the last day", (row) => `${row.order_id} ${row.kind} (${row.status})`],
+  addresses: ["Paid in the last day with the address unchecked (the check service was down)"],
+};
+
+// The sections with something in them: [{ title, count, detail }].
+export async function digestSections(env, { nowMs = Date.now() } = {}) {
+  return (await waitingLists(env, { nowMs }))
+    .filter((list) => list.rows.length)
+    .map(({ key, rows }) => ({ title: SECTIONS[key][0], count: rows.length, detail: ids(rows, SECTIONS[key][1]) }));
 }
 
 // Cron job: the first run of each UTC day sends the summary (or nothing when nothing waits). Never throws.

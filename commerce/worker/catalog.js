@@ -44,6 +44,8 @@ export function normalizeItems(items, pricing = DEFAULT_PRICING) {
     const key = String(item?.sku ?? "").toLowerCase();
     const qty = Number(item?.qty);
     if (!products[key]) throw new QuoteError("unknown_sku", "An item in your cart is no longer available.");
+    // Stopped by an owner (worker/products.js): carts that already have it cannot check out.
+    if (products[key].onSale === false) throw new QuoteError("product_unavailable", `${products[key].name} is not available right now. Remove it from your cart to check out.`);
     if (!Number.isInteger(qty) || qty < 1) throw new QuoteError("invalid_qty", "Quantity must be at least 1.");
     quantities.set(key, (quantities.get(key) ?? 0) + qty);
   }
@@ -114,7 +116,7 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
       amountCents: m.amountCents,
     })),
     products: Object.fromEntries(
-      Object.entries(pricing.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents }]),
+      Object.entries(pricing.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents, onSale: p.onSale !== false }]),
     ),
     tax: { status: taxStatus(pricing) },
     storeReady: storeReadiness(env).ready,

@@ -26,7 +26,8 @@
 // Starting a payment, the address check and quotes are limited per client address (worker/rate-limit.js): 429 when over.
 
 import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
-import { PricingConfigError, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
+import { PricingConfigError, storeReadiness, taxStatus } from "./pricing.js";
+import { livePricing } from "./products.js";
 import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociation } from "./wallets.js";
 import { ORDER_ID_PATTERN, newOrderId, validateCheckout, validatePaypalCheckout } from "./checkout.js";
 import { ADDRESS_MESSAGES, checkAddress, enforceAddress } from "./address-check.js";
@@ -97,7 +98,7 @@ async function readBody(request) {
 
 async function handleQuote(request, env) {
   const body = await readBody(request);
-  return json(quote(body.items, { state: body.state || undefined, method: body.method || undefined }, resolvePricing(env)));
+  return json(quote(body.items, { state: body.state || undefined, method: body.method || undefined }, await livePricing(env)));
 }
 
 // The checkout page asks before showing the payment step: { status, suggestion?, message? }. status is valid,
@@ -160,7 +161,7 @@ async function handleCheckoutSession(request, env, services) {
   }
   const body = await readBody(request);
   const checkout = validateCheckout(body);
-  const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, resolvePricing(env));
+  const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, await livePricing(env));
   // Checked again here, whatever the page did: an undeliverable address never reaches a payment.
   checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
   const origin = new URL(request.url).origin;
@@ -243,7 +244,7 @@ async function handlePaypalCreate(request, env, services) {
     return fail(503, "store_not_ready", "Checkout isn't open yet. Please check back soon.");
   }
   const body = await readBody(request);
-  const pricing = resolvePricing(env);
+  const pricing = await livePricing(env);
   const checkout = validatePaypalCheckout(body, { requireShipping: taxStatus(pricing) === "configured" });
   const priced = quote(body.items, { state: checkout.shipping.state || undefined, method: checkout.method }, pricing);
   // Our address is checked like a card checkout. An address PayPal supplies later meets the same rules before capture.
@@ -539,7 +540,7 @@ async function route(request, env, services) {
     const health = await cronHealth(env);
     return json(health, health.ok ? 200 : 503);
   }
-  if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env));
+  if (pathname === "/api/store/config" && method === "GET") return json(publicConfig(env, await livePricing(env)));
   if (pathname === "/api/cart/quote" && method === "POST") return handleQuote(request, env);
   if (pathname === "/api/checkout/address" && method === "POST") return handleAddressCheck(request, env);
   if (pathname === "/api/contact" && method === "POST") return handleContact(request, env);

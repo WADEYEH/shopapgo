@@ -17,6 +17,10 @@
 //   POST /admin/api/orders/:id/cancel        { reason: customer_request | out_of_stock | ... | other, note } (T6, T8, T10)
 //   POST /admin/api/orders/:id/address       in the cooling-off period: { shipping, reason, noUnit }
 //   GET  /admin/api/checkouts                unpaid checkouts (?status=open|expired|all&q=&before=; D36, M9-22)
+//   GET  /admin/api/dashboard                the first page: numbers, what is waiting, shipping, connections (worker/dashboard.js)
+//   POST /admin/api/orders/:id/notes         an internal note { body } (worker/order-notes.js, I10)
+//   GET  /admin/api/products[/:id]           products with sales, stock and the on-sale switch (worker/products.js)
+//   POST /admin/api/products/:id/sale        owners only: stop or resume selling { onSale, reason } (A4, M9-07)
 //
 // Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync, members) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
@@ -26,7 +30,7 @@
 
 import { fail, json } from "./http.js";
 import { ORDER_ID_PATTERN } from "./checkout.js";
-import { FULFILLMENT_FILTERS, ISSUE_FILTERS, ORDER_STATUSES, adminOrder, fulfillmentCounts, getOrder, getOrderPayment, issueCounts, listOrders, orderCounts } from "./orders.js";
+import { FULFILLMENT_FILTERS, ISSUE_FILTERS, ORDER_STATUSES, ORDER_VIEWS, adminOrder, fulfillmentCounts, getOrder, getOrderPayment, issueCounts, listOrders, orderCounts, viewCounts } from "./orders.js";
 import { disputesForOrder } from "./disputes.js";
 import { FulfillmentError, markShipped, validateShipment, recordAudit } from "./fulfillment.js";
 import { processMessageJob, retryCustomerEmail } from "./customer-email.js";
@@ -36,7 +40,7 @@ import { accessMode, resolveAdmin } from "./admin-identity.js";
 import { MemberError, addMember, changeRole, ensureOwner, listMembers, removeMember, setTeamAlerts, teamAlertsOf } from "./members.js";
 import { accessListStatus, syncAccessList } from "./access-list.js";
 import { activityActors, listActivity } from "./activity.js";
-import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, orderCoreView, orderHolds } from "./order-core.js";
+import { OrderError, applyRefundsToOrder, cancelOrder, changeAddress, confirmOrder, coolingOffMinutes, orderCoreView, orderHolds } from "./order-core.js";
 import { runAfterPaid } from "./after-payment.js";
 import { listCheckouts } from "./checkouts.js";
 import { cancelMcfOrder, checkMcfConnection, getMcfRecord, isStockout, mcfView, submitOrderToMcf, syncAllMcf, syncMcfOrder } from "./mcf.js";
@@ -46,6 +50,9 @@ import { refundHold, syncOrderRefunds } from './refunds.js';
 import { sandboxRefundChecksEnabled, runSandboxRefundCheck } from './sandbox-refund-checks.js';
 import { AIRWALLEX_INTENT_LOOKUP, PAYPAL_ORDER_LOOKUP, lookupAirwallexIntent, lookupPaypalOrder } from "./payment-lookup.js";
 import { listContactMessages } from "./contact.js";
+import { dashboard, salesNumbers } from "./dashboard.js";
+import { NoteError, addNote, listNotes } from "./order-notes.js";
+import { ProductError, getProduct, listProducts, setOnSale } from "./products.js";
 
 export { MIN_ADMIN_TOKEN_LENGTH };
 
@@ -98,7 +105,7 @@ async function adminOrderView(env, orderId) {
   return {
     ...order, paymentProvider, disputes: await disputesForOrder(env.DB, orderId), refundRequest: await refundRequestOf(env.DB, orderId),
     sandboxRefundChecks: sandboxRefundChecksEnabled(env) && paymentProvider !== "paypal",
-    mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId),
+    mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId), notes: await listNotes(env.DB, orderId),
   };
 }
 
@@ -316,6 +323,38 @@ export async function handleAdminApi(request, env, pathname) {
     await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: actor.id, detail: { kind, result: email.status } });
     return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
+  const notes = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/notes$/);
+  if (notes) {
+    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+    const blocked = csrfProblem(request);
+    if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+    const body = await readJsonObject(request);
+    if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+    const id = decodeURIComponent(notes[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    try {
+      const note = await addNote(env, actor, id, body);
+      return json({ note, notes: await listNotes(env.DB, id) }, 200, NO_INDEX);
+    } catch (error) {
+      if (error instanceof NoteError) return fail(error.status, error.code, error.message, NO_INDEX);
+      throw error;
+    }
+  }
+  const productSale = pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)\/sale$/);
+  if (productSale) {
+    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+    const blocked = csrfProblem(request);
+    if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+    const body = await readJsonObject(request);
+    if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+    try {
+      const result = await setOnSale(env, actor, productSale[1], body);
+      return json({ changed: result.changed, product: await getProduct(env, productSale[1]) }, 200, NO_INDEX);
+    } catch (error) {
+      if (error instanceof ProductError) return fail(error.status, error.code, error.message, NO_INDEX);
+      throw error;
+    }
+  }
   const orderAction = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address|cancel-refund)$/);
   if (orderAction) {
     const id = decodeURIComponent(orderAction[1]);
@@ -384,6 +423,14 @@ export async function handleAdminApi(request, env, pathname) {
     return json(await listCheckouts(env.DB, { status, q: url.searchParams.get("q") || "", before: url.searchParams.get("before") || null }), 200, NO_INDEX);
   }
 
+  if (pathname === "/admin/api/dashboard") return json(await dashboard(env), 200, NO_INDEX);
+  if (pathname === "/admin/api/products") return json({ products: await listProducts(env) }, 200, NO_INDEX);
+  const product = pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)$/);
+  if (product) {
+    const found = await getProduct(env, product[1]);
+    return found ? json(found, 200, NO_INDEX) : fail(404, "not_found", "Product not found.", NO_INDEX);
+  }
+
   // Messages from the Contact us form (worker/contact.js), newest first.
   if (pathname === "/admin/api/contact-messages") {
     return json(await listContactMessages(env.DB, { before: url.searchParams.get("before") || undefined }), 200, NO_INDEX);
@@ -396,15 +443,27 @@ export async function handleAdminApi(request, env, pathname) {
     if (fulfillment && !FULFILLMENT_FILTERS.includes(fulfillment)) return fail(400, "invalid_fulfillment", "Unknown fulfilment status.", NO_INDEX);
     const issue = url.searchParams.get("issue") || undefined;
     if (issue && !ISSUE_FILTERS.includes(issue)) return fail(400, "invalid_issue", "Unknown issue filter.", NO_INDEX);
+    const view = url.searchParams.get("view") || undefined;
+    if (view && !ORDER_VIEWS.includes(view)) return fail(400, "invalid_view", "Unknown view.", NO_INDEX);
     const page = await listOrders(env.DB, {
       status,
       fulfillment,
       issue,
+      view,
+      coolingMinutes: coolingOffMinutes(env),
       q: url.searchParams.get("q") || undefined,
       limit: url.searchParams.get("limit") || undefined,
       before: url.searchParams.get("before") || undefined,
     });
-    return json({ ...page, counts: await orderCounts(env.DB), fulfillmentCounts: await fulfillmentCounts(env.DB), issueCounts: await issueCounts(env.DB) }, 200, NO_INDEX);
+    return json({
+      ...page,
+      counts: await orderCounts(env.DB),
+      fulfillmentCounts: await fulfillmentCounts(env.DB),
+      issueCounts: await issueCounts(env.DB),
+      viewCounts: await viewCounts(env.DB),
+      // The numbers above the list (D50); not for the next pages.
+      numbers: url.searchParams.get("before") ? undefined : await salesNumbers(env),
+    }, 200, NO_INDEX);
   }
 
   const match = pathname.match(/^\/admin\/api\/orders\/([^/]+)$/);

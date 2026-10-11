@@ -32,10 +32,12 @@ const ADDED = [
   "order_email_delivery",
   "order_email_jobs",
   "order_message_jobs",
+  "order_notes",
   "order_notice_jobs",
   "order_payment_failures",
   "order_refund_requests",
   "order_refunds",
+  "product_settings",
   "staging_fake_mcf_orders",
   "team_alerts",
 ];
