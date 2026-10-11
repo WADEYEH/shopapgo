@@ -32,7 +32,7 @@ test("the last person getting team emails cannot turn them off", async ({ page }
 
 test("a sign-in that is not on the member list has no switch; the Members list shows who gets team emails", async ({ page }) => {
   await mockAdminApi(page, { team: { teamAlerts: null, members: [member(TEAM_OWNER, "owner", false), member(COLLEAGUE, "member", true)] } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/members");
   await expect(page.locator("[data-admin-whoami]")).toBeVisible();
   await expect(page.locator("[data-admin-team-alerts]")).toBeHidden();
   const members = page.locator("[data-admin-members-section]");

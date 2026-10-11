@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");
@@ -39,19 +39,27 @@ test("wrangler serves /admin through the Worker first and commits no secret valu
 
 test("the admin page is noindex, writes only through the known back-office endpoints and keeps no credentials in page code", async () => {
   const html = await read("../public/admin/index.html");
-  const script = await read("../public/admin/admin.js");
+  const files = (await readdir(new URL("../../public/admin/", import.meta.url))).filter((file) => file.endsWith(".js")).sort();
+  const sources = Object.fromEntries(await Promise.all(files.map(async (file) => [file, await read(`../public/admin/${file}`)])));
+  const script = Object.values(sources).join("\n");
   assert.ok(html.includes('content="noindex,nofollow"'));
   // Its own files are under /admin/ (behind the admin login); the logo is the only other file (worker/hosts.js).
-  const local = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((match) => match[1]).filter((url) => !url.startsWith("https://"));
-  assert.deepEqual(local, ["./commerce.css", "./admin.css", "./admin.js", "./", "/us/assets/brand/apgo-logo.png"]);
-  assert.ok(script.includes('from "./ui.js"'));
-  assert.ok(!/localStorage|sessionStorage|ADMIN_TOKEN|Authorization/.test(script), "no credentials stored or sent by page code");
+  const local = [...new Set([...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((match) => match[1]).filter((url) => !url.startsWith("https://")))];
+  assert.deepEqual(local, ["./admin.css", "./admin.js", "#main", "./#/", "/us/assets/brand/apgo-logo.png"]);
+  assert.ok(sources["admin.js"].includes('from "./api.js"') && sources["admin.js"].includes('from "./ui.js"'));
+  assert.ok(!/sessionStorage|ADMIN_TOKEN|Authorization/.test(script), "no credentials stored or sent by page code");
+  // The browser keeps one thing: the language choice (D49), in i18n.js.
+  for (const [file, source] of Object.entries(sources)) if (file !== "i18n.js") assert.ok(!/localStorage/.test(source), `${file} uses localStorage`);
+  assert.deepEqual([...sources["i18n.js"].matchAll(/localStorage\.(\w+)\((\w+)/g)].map((m) => `${m[1]}:${m[2]}`), ["getItem:LANG_KEY", "setItem:LANG_KEY"]);
   assert.ok(!/method:\s*["'](PUT|PATCH|DELETE)/.test(script));
   const posts = script.match(/method:\s*["']POST["']/g) ?? [];
-  assert.equal(posts.length, 8, "writes: mark-as-shipped, MCF submit/sync/cancel, email retry, refund sync, sandbox refund check, MCF sync-all, cancel and refund, Hold test order");
-  assert.ok(/\/ship`/.test(script));
-  assert.ok(/\/mcf\/\$\{action\}`/.test(script) && script.includes('"/admin/api/mcf/sync"'));
-  assert.ok(/\/emails\/\$\{encodeURIComponent\(mail\.kind\)\}\/retry`/.test(script));
-  assert.ok(script.includes("/refunds/sync`") && script.includes("/refunds/sandbox-check`"));
-  assert.ok(script.includes("/cancel-refund`") && script.includes('"/admin/api/mcf/hold-test"'));
+  assert.equal(posts.length, 13, "writes: team emails, MCF sync-all, Hold test order, refund sync, sandbox refund check, MCF submit/sync/cancel, cancel and refund, mark-as-shipped, email retry, notes, confirm/cancel/address, stop selling, members");
+  assert.ok(/\/ship`/.test(sources["order.js"]));
+  assert.ok(/\/mcf\/\$\{action\}`/.test(sources["order.js"]) && sources["orders.js"].includes('"/admin/api/mcf/sync"'));
+  assert.ok(/\/emails\/\$\{encodeURIComponent\(mail\.kind\)\}\/retry`/.test(sources["order.js"]));
+  assert.ok(sources["order.js"].includes("/refunds/sync`") && sources["order.js"].includes("/refunds/sandbox-check`"));
+  assert.ok(sources["order.js"].includes("/cancel-refund`") && sources["orders.js"].includes('"/admin/api/mcf/hold-test"'));
+  assert.ok(sources["order.js"].includes("/notes`") && sources["products.js"].includes("/sale`"));
+  // Text is set as text: no HTML parsing of data anywhere in the page code.
+  assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(script), "no HTML parsing");
 });

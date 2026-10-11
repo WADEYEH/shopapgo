@@ -1,741 +1,113 @@
-// Order back office. The Worker gates this page and /admin/api/* (Cloudflare Access, or until then HTTP Basic, which
-// the browser re-sends on every fetch); nothing secret is stored by this page. The writes are "Mark as shipped"
-// (POST .../ship) and the Amazon MCF buttons (POST .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync), all JSON.
-// Who is signed in, Activity and Members: ./team.js.
-import { el, money, notice, priceRows } from "./ui.js";
-import { initTeam } from "./team.js";
-import { renderOrderActions, renderStage } from "./order-actions.js";
-import { initCheckouts } from "./checkouts.js";
+// The order back office (M9, D50): one page with a view per address, so each page can be bookmarked and shared:
+//   #/                 dashboard (./dashboard.js)
+//   #/orders           orders, ?view=&q= (./orders.js)       #/orders/<id>    one order (./order.js)
+//   #/checkouts        unfinished checkouts (./checkouts.js)
+//   #/products         products (./products.js)              #/products/<id>  one product, stop selling
+//   #/messages         Contact us messages (./messages.js)
+//   #/activity         activity log, #/members  members (./team.js)
+// The Worker gates this page and /admin/api/* (Cloudflare Access, or until then HTTP Basic, which the browser re-sends
+// on every fetch); nothing secret is stored by this page. Words come from ./strings.js in Chinese or English (D49).
+import { adminApi } from "./api.js";
+import { applyStatic, onLangChange, t } from "./i18n.js";
+import { el, notice } from "./ui.js";
+import { initShell, renderNav, setOrdersBadge } from "./shell.js";
+import { renderDashboard } from "./dashboard.js";
+import { renderOrders } from "./orders.js";
+import { renderOrder } from "./order.js";
+import { renderProduct, renderProducts } from "./products.js";
+import { renderCheckouts } from "./checkouts.js";
+import { renderMessages } from "./messages.js";
+import { renderActivity, renderMembers } from "./team.js";
 
 // The back office only works on its own host (commerce/worker/hosts.js). Until the cutover the brand host (Cloudflare
 // Pages) builds the same site files, this page among them, so leave for the home page there.
 if (["www.shopapgo.com", "shopapgo.com"].includes(location.hostname)) location.replace("/");
 
 const $ = (selector, root = document) => root.querySelector(selector);
-// Orders only: unpaid checkouts are in their own section (checkouts.js, D36).
-const STATUSES = ["all", "paid", "review", "cancelled"];
-const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
-const formatDate = (iso) => (iso ? dateTime.format(new Date(iso)) : "—");
+const ORDER_ID = /^APGO-US-[0-9A-Z]{12}$/;
 
-const FULFILLMENT_TABS = [["all", "Any shipping"], ["unfulfilled", "To ship"], ["shipped", "Shipped"]];
-
-const state = { status: "all", fulfillment: "all", issue: null, q: "", fulfillmentCounts: {}, issueCounts: {}, orders: [], nextBefore: null, counts: {}, selected: null, loading: false };
-const providerName = (provider) => (provider === "paypal" ? "PayPal" : "Airwallex");
-const CHECK_LABEL = { ok: "matches what was sent", mismatch: "does not match", unreadable: "not read yet (checked at the next sync)" };
-const HOLD_STEP = { config: "Settings", create: "Create on hold", check: "Read back", cancel: "Cancel" };
-
-async function adminApi(path, { method = "GET", body } = {}) {
-  let response;
-  try {
-    response = await fetch(path, {
-      method,
-      headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error("Could not reach the server.");
-  }
-  let data = null;
-  try {
-    data = await response.json();
-  } catch {
-    // non-JSON (e.g. static server without the Worker)
-  }
-  if (!response.ok || !data) {
-    const reason =
-      response.status === 503 ? "The back office is not configured (its access secret is not set)."
-      : response.status === 401 ? "You are signed out. Reload the page and sign in again."
-      : response.status === 403 && data?.error?.code === "not_a_member" ? data.error.message
-      : data?.error?.message || "The back office is unavailable.";
-    const error = new Error(reason);
-    error.status = response.status;
-    error.code = data?.error?.code;
-    throw error;
-  }
-  return data;
-}
-
-function statusBadge(status) {
-  return el("span", { class: `status status--${status}` }, status);
-}
-
-function shipBadge(order) {
-  if (!order.fulfillment && order.fulfillmentStatus !== 'shipped' && (order.refundHold || order.refunds?.hold)) return el('span', {class:'status status--review'}, 'refund hold');
-  const value = order.fulfillmentStatus;
-  if (value === "shipped") return el("span", { class: "status status--shipped" }, "shipped");
-  return order.status === "paid" ? el("span", { class: "status status--to-ship" }, "to ship") : null;
-}
-
-function renderTabs() {
-  $("[data-admin-tabs]").replaceChildren(
-    ...STATUSES.map((status) => {
-      const n = status === "all" ? Object.values(state.counts).reduce((a, b) => a + b, 0) : state.counts[status] ?? 0;
-      return el(
-        "button",
-        {
-          type: "button",
-          class: "admin-tab",
-          "aria-pressed": String(state.status === status),
-          onclick: () => {
-            state.status = status;
-            load({ reset: true });
-          },
-        },
-        status === "all" ? "All" : status,
-        el("span", { class: "admin-tab__n" }, String(n)),
-      );
-    }),
-  );
-}
-
-function renderFulfillmentTabs() {
-  $("[data-admin-fulfillment-tabs]").replaceChildren(
-    ...FULFILLMENT_TABS.map(([value, label]) =>
-      el(
-        "button",
-        {
-          type: "button",
-          class: "admin-tab",
-          "data-fulfillment": value,
-          "aria-pressed": String(state.fulfillment === value),
-          onclick: () => {
-            state.fulfillment = value;
-            load({ reset: true });
-          },
-        },
-        label,
-        value !== "all" && el("span", { class: "admin-tab__n" }, String(state.fulfillmentCounts[value] ?? 0)),
-      ),
-    ),
-  );
-}
-
-// Orders with an open dispute, earliest response deadline first (worker/disputes.js).
-function renderIssueTabs() {
-  $("[data-admin-issue-tabs]").replaceChildren(
-    el(
-      "button",
-      {
-        type: "button",
-        class: "admin-tab",
-        "data-issue": "disputes",
-        "aria-pressed": String(state.issue === "disputes"),
-        onclick: () => {
-          state.issue = state.issue === "disputes" ? null : "disputes";
-          load({ reset: true });
-        },
-      },
-      "Disputes",
-      el("span", { class: "admin-tab__n" }, String(state.issueCounts.disputes ?? 0)),
-    ),
-  );
-}
-
-function renderList() {
-  const list = $("[data-admin-list]");
-  if (state.orders.length === 0) {
-    list.replaceChildren(el("li", { class: "admin-empty" }, state.loading ? "Loading…" : "No orders match."));
-  } else {
-    list.replaceChildren(
-      ...state.orders.map((order) =>
-        el(
-          "li",
-          {},
-          el(
-            "button",
-            {
-              type: "button",
-              class: "admin-row",
-              "data-order": order.id,
-              "aria-current": String(state.selected === order.id),
-              onclick: () => select(order.id),
-            },
-            el("span", { class: "admin-row__id" }, statusBadge(order.status), order.disputed && el("span", { class: "status status--review" }, "dispute"), shipBadge(order), order.id),
-            el("span", { class: "admin-row__total" }, money(order.totalCents)),
-            el("span", { class: "admin-row__meta" }, `${order.name} · ${order.email} · ${order.itemCount} item${order.itemCount === 1 ? "" : "s"} · ${order.state}${order.disputed && order.disputeDueAt ? ` · respond by ${formatDate(order.disputeDueAt)}` : ""}`),
-            el("span", { class: "admin-row__when" }, formatDate(order.paidAt || order.createdAt)),
-          ),
-        ),
-      ),
-    );
-  }
-  $("[data-admin-more]").hidden = !state.nextBefore;
-}
-
-async function load({ reset = false } = {}) {
-  if (reset) {
-    state.orders = [];
-    state.nextBefore = null;
-  }
-  state.loading = true;
-  renderTabs();
-  renderFulfillmentTabs();
-  renderIssueTabs();
-  renderList();
-  const params = new URLSearchParams();
-  if (state.status !== "all") params.set("status", state.status);
-  if (state.fulfillment !== "all") params.set("fulfillment", state.fulfillment);
-  if (state.issue) params.set("issue", state.issue);
-  if (state.q) params.set("q", state.q);
-  if (!reset && state.nextBefore) params.set("before", state.nextBefore);
-  try {
-    const page = await adminApi(`/admin/api/orders?${params}`);
-    state.orders = reset ? page.orders : [...state.orders, ...page.orders];
-    state.nextBefore = page.nextBefore;
-    state.counts = page.counts;
-    state.fulfillmentCounts = page.fulfillmentCounts ?? {};
-    state.issueCounts = page.issueCounts ?? {};
-    $("[data-admin-message]").replaceChildren();
-  } catch (error) {
-    $("[data-admin-message]").replaceChildren(notice("warning", "Orders unavailable", error.message));
-  }
-  state.loading = false;
-  renderTabs();
-  renderFulfillmentTabs();
-  renderIssueTabs();
-  renderList();
-}
-
-function renderFulfillment(order) {
-  const shipped = order.fulfillment;
-  if (shipped) {
-    return el(
-      "section",
-      { class: "admin-ship", "data-admin-fulfillment": "shipped", "aria-label": "Fulfilment" },
-      el("h4", {}, "Fulfilment"),
-      el(
-        "dl",
-        { class: "admin-facts" },
-        el("dt", {}, "Status"), el("dd", {}, "Shipped"),
-        el("dt", {}, "Shipped"), el("dd", {}, formatDate(shipped.shippedAt)),
-        el("dt", {}, "Carrier"), el("dd", {}, shipped.carrier),
-        el("dt", {}, "Tracking"), el("dd", {}, shipped.trackingNumber),
-        shipped.trackingUrl && el("dt", {}, "Link"),
-        shipped.trackingUrl && el("dd", {}, el("a", { href: shipped.trackingUrl, rel: "noopener noreferrer", target: "_blank" }, "Open tracking page")),
-        el("dt", {}, "By"), el("dd", {}, shipped.shippedBy),
-      ),
-    );
-  }
-  if (order.disputes?.some((dispute) => dispute.status === "open")) {
-    return el("section", { class: "admin-ship", "data-admin-fulfillment": "locked", "aria-label": "Fulfilment" },
-      el("h4", {}, "Fulfilment"), el("p", { class: "body body--sm" }, "A dispute is open. The order cannot be shipped until the dispute is won."));
-  }
-  if (order.refunds?.hold) {
-    return el('section', {class:'admin-ship', 'data-admin-fulfillment':'locked', 'aria-label':'Fulfilment'},
-      el('h4', {}, 'Fulfilment'), el('p', {class:'body body--sm'}, 'Refund registered. Review fulfillment in Airwallex and Amazon before shipping. Existing shipments are not cancelled automatically.'));
-  }
-  if (order.status !== "paid") {
-    return el(
-      "section",
-      { class: "admin-ship", "data-admin-fulfillment": "locked", "aria-label": "Fulfilment" },
-      el("h4", {}, "Fulfilment"),
-      el("p", { class: "body body--sm" }, "Only paid orders can be marked shipped."),
-    );
-  }
-  const field = (name, label, attrs = {}, hint) =>
-    el(
-      "div",
-      { class: "field" },
-      el("label", { class: "field__label", for: `ship-${name}` }, label, attrs.required && [" ", el("span", { class: "req", "aria-hidden": "true" }, "*")]),
-      el("input", { id: `ship-${name}`, name, autocomplete: "off", ...attrs }),
-      hint && el("span", { class: "field__hint" }, hint),
-    );
-  const message = el("div", { "data-ship-message": true, "aria-live": "polite" });
-  const submit = el("button", { class: "btn btn--md", type: "submit" }, "Mark as shipped");
-  const form = el(
-    "form",
-    { class: "admin-ship__form", "data-ship-form": true, novalidate: true },
-    field("carrier", "Carrier", { required: true, maxlength: "60", placeholder: "e.g. UPS, USPS, FedEx" }),
-    field("trackingNumber", "Tracking number", { required: true, maxlength: "80" }),
-    field("trackingUrl", "Tracking link (optional)", { type: "url", inputmode: "url", maxlength: "500", placeholder: "https://" }, "https only."),
-    message,
-    submit,
-    el("p", { class: "field__hint" }, "The customer is emailed the tracking details when email is configured."),
-  );
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(form));
-    if (!data.carrier.trim() || !data.trackingNumber.trim()) {
-      message.replaceChildren(notice("warning", "Missing details", "Enter the carrier and tracking number."));
-      return;
-    }
-    submit.disabled = true;
-    try {
-      const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/ship`, { method: "POST", body: data });
-      renderDetail(result.order);
-      $("[data-admin-detail-body]").prepend(
-        notice("success", "Marked as shipped", result.email.status === "sent" ? "Email accepted by the email service; delivery is tracked separately." : `Saved. Customer email: ${result.email.status}.`),
-      );
-      const row = state.orders.find((o) => o.id === order.id);
-      if (row) Object.assign(row, { fulfillmentStatus: "shipped", shippedAt: result.order.fulfillment?.shippedAt ?? null });
-      load({ reset: true });
-    } catch (error) {
-      submit.disabled = false;
-      message.replaceChildren(notice("warning", "Not marked as shipped", error.message));
-      // Someone else shipped it first: reload the record, keeping the explanation visible.
-      if (error.code === "already_shipped") {
-        await select(order.id, { focus: false });
-        $("[data-admin-detail-body]").prepend(notice("warning", "Not marked as shipped", error.message));
-        load({ reset: true });
-      }
-    }
-  });
-  return el("section", { class: "admin-ship", "data-admin-fulfillment": "open", "aria-label": "Fulfilment" }, el("h4", {}, "Fulfilment"), form);
-}
-
-// ---------- Amazon MCF ----------
-
-const MCF_STATUS_LABEL = { submitting: "Sending…", submitted: "Sent to Amazon", shipped: "Shipped by Amazon", failed: "Failed", rejected: "Closed by Amazon" };
-
-async function mcfAction(order, action, button, message) {
-  button.disabled = true;
-  message.replaceChildren();
-  try {
-    const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/mcf/${action}`, { method: "POST", body: {} });
-    renderDetail(result.order);
-    const outcome = result.result ?? {};
-    const text =
-      action === "cancel"
-        ? { requested: "Amazon cancelled it. Check the order, then Retry send to send it again.", skipped: outcome.reason || "Nothing to cancel.", failed: `Amazon did not cancel it: ${outcome.reason ?? "try again"}` }[outcome.outcome]
-      : action === "submit"
-        ? { submitted: "Sent to Amazon MCF.", failed: "Amazon did not accept the order; see the error below.", duplicate: "Already being sent.", skipped: outcome.reason || "Nothing was sent." }[outcome.outcome]
-        : outcome.shipped ? `Amazon shipped it. Order marked shipped${outcome.email === "sent" ? "; email accepted by the email service." : `; customer email: ${outcome.email ?? "none"}.`}`
-        : outcome.outcome === "failed" ? `Sync failed: ${outcome.reason ?? "try again"}`
-        : "Synced. Amazon has not shipped it yet.";
-    $("[data-admin-detail-body]").prepend(notice(outcome.outcome === "failed" ? "warning" : "success", action === "sync" ? "MCF status" : "Amazon MCF", text ?? "Done."));
-    load({ reset: true });
-  } catch (error) {
-    button.disabled = false;
-    message.replaceChildren(notice("warning", "MCF request failed", error.message));
-  }
-}
-
-function renderMcf(order) {
-  const mcf = order.mcf;
-  if (!mcf || (order.status !== "paid" && !mcf.record)) return null;
-  const message = el("div", { "data-mcf-message": true, "aria-live": "polite" });
-  const record = mcf.record;
-  const facts = [];
-  const fact = (label, value) => value && facts.push(el("dt", {}, label), el("dd", {}, value));
-  if (record) {
-    fact("Status", MCF_STATUS_LABEL[record.status] ?? record.status);
-    fact("Amazon status", record.mcfStatus);
-    fact("Amazon order id", record.sellerOrderId);
-    fact("Service", record.serviceTier);
-    fact("Attempts", String(record.attempts));
-    fact("Sent", record.submittedAt && formatDate(record.submittedAt));
-    fact("Last sync", record.lastSyncedAt && formatDate(record.lastSyncedAt));
-    fact("Carrier", record.carrier);
-    fact("Tracking", record.trackingNumber);
-    fact("Error", record.errorMessage && `${record.errorKind ? `${record.errorKind}: ` : ""}${record.errorMessage}`);
-    fact("Note", record.note);
-    fact("Amazon's copy", record.check && (CHECK_LABEL[record.check.status] ?? record.check.status) + (record.check.status === "mismatch" ? `: ${record.check.detail}` : ""));
-  }
-  const children = [el("h4", {}, "Amazon MCF")];
-  if (!record) {
-    children.push(
-      el(
-        "p",
-        { class: "body body--sm", "data-mcf-mode": mcf.mode },
-        order.refunds?.hold ? "Refund registered — new Amazon and manual fulfillment are on hold."
-        : mcf.mode === "off" ? "MCF not enabled — ship this order manually (the Fulfilment form below)."
-        : mcf.mode === "not_configured" ? `MCF is on but not ready: ${mcf.reason}`
-        : "Not sent to Amazon MCF yet.",
-      ),
-    );
-  } else {
-    children.push(el("dl", { class: "admin-facts", "data-mcf-record": record.status }, ...facts));
-    if (mcf.mode !== "ready" && mcf.reason) children.push(el("p", { class: "field__hint", "data-mcf-mode": mcf.mode }, mcf.mode === "off" ? "MCF_AUTO_SUBMIT is off now; the record above is from earlier." : `MCF is not ready: ${mcf.reason}`));
-  }
-  if (mcf.stockout) children.push(renderStockout(order, mcf.stockout, message));
-  else if (record?.check?.status === "mismatch") children.push(notice("warning", "Amazon's copy does not match", `${record.check.detail}. If Amazon has not started picking it, cancel it at Amazon, check the order, then send it again.`));
-  const actions = [];
-  if (mcf.canCancelAtAmazon) {
-    const button = el("button", { class: "btn btn--md btn--text", type: "button", "data-mcf-cancel": true }, "Cancel at Amazon");
-    button.addEventListener("click", () => {
-      if (confirm(`Ask Amazon to cancel its order ${record.sellerOrderId}? The order stays paid; you can send it again afterwards.`)) mcfAction(order, "cancel", button, message);
-    });
-    actions.push(button);
-  }
-  if (mcf.canSubmit && !order.refunds?.hold) {
-    const button = el("button", { class: "btn btn--md", type: "button", "data-mcf-submit": true }, record ? "Retry send to Amazon" : "Send to Amazon MCF");
-    button.addEventListener("click", () => mcfAction(order, "submit", button, message));
-    actions.push(button);
-  }
-  if (mcf.canSync) {
-    const button = el("button", { class: "btn btn--md btn--text", type: "button", "data-mcf-sync": true }, "Sync MCF status");
-    button.addEventListener("click", () => mcfAction(order, "sync", button, message));
-    actions.push(button);
-  }
-  if (actions.length) children.push(el("div", { class: "admin-mcf__actions" }, ...actions));
-  children.push(message);
-  return el("section", { class: "admin-ship admin-mcf", "data-admin-mcf": mcf.mode, "aria-label": "Amazon MCF" }, ...children);
-}
-
-// Out of stock at Amazon (M6-06): how long, and the one-step Cancel and refund (the team decides after 3 days).
-function renderStockout(order, stockout, message) {
-  const button = el("button", { class: "btn btn--md", type: "button", "data-cancel-refund": true }, "Cancel and refund");
-  button.addEventListener("click", () => cancelAndRefund(order, button, message));
-  return el("div", { class: "admin-stockout", "data-stockout": stockout.days },
-    notice("warning", `Out of stock at Amazon for ${stockout.days} day${stockout.days === 1 ? "" : "s"}`,
-      `Since ${formatDate(stockout.since)}. Amazon could not fill it; it is sent again once a day and the customer was told it is delayed. After 3 days, cancel and refund it (or keep waiting if the customer agreed).`),
-    button);
-}
-
-async function cancelAndRefund(order, button, message) {
-  if (!confirm(`Cancel order ${order.id} and refund ${money(order.totalCents)} to the customer through ${providerName(order.paymentProvider)}? This cannot be undone.`)) return;
-  button.disabled = true;
-  message.replaceChildren();
-  try {
-    const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/cancel-refund`, { method: "POST", body: {} });
-    const refund = result.result?.refund ?? {};
-    orderChanged(result.order, refund.refund === "failed"
-      ? notice("warning", "Cancelled; the refund did not go through", `${refund.error ?? ""} Try the refund again, or refund it in ${providerName(result.order.paymentProvider)}.`)
-      : notice("success", "Cancelled and refunded", refund.refund === "already_requested" ? "The refund was already asked for." : "The full refund was asked for; the customer gets the refund notice."));
-  } catch (error) {
-    button.disabled = false;
-    message.replaceChildren(notice("warning", "Cancel and refund failed", error.message));
-  }
-}
-
-function renderHistory(order) {
-  const emailLabel = { confirmation: "Order confirmation", shipment: "Shipment notice", "delay:stockout": "Delay notice (out of stock)", cancelled: "Cancellation notice" };
-  const emails = order.emails ?? [];
-  const audit = order.audit ?? [];
-  if (!emails.length && !audit.length) return null;
-  return el(
-    "section",
-    { class: "admin-history", "aria-label": "History" },
-    el("h4", {}, "Emails and history"),
-    el(
-      "ul",
-      { class: "admin-lines" },
-      ...emails.map((mail) => {
-        const label = emailLabel[mail.kind] ?? (mail.kind.startsWith('refund:team-failed:') ? `Team refund failure alert (${mail.kind.slice(19)})`
-          : mail.kind.startsWith('refund:failed:') ? `Refund failure notice (${mail.kind.slice(14)})`
-          : mail.kind.startsWith('refund:') ? `Refund notice (${mail.kind.slice(7)})`
-          : mail.kind.startsWith('address:') ? 'Address change notice'
-          : mail.kind.startsWith('duplicate:') ? `Second payment refunded notice (${mail.kind.slice(10)})` : mail.kind);
-        const status = mail.deliveryStatus === "accepted" ? "Accepted by email service (delivery not confirmed)" : mail.deliveryStatus || (mail.status === "sent" ? "sent (legacy record; delivery not confirmed)" : mail.status);
-        const retry = mail.canRetry ? el("button", { type: "button", class: "btn btn--sm" }, `Retry ${label}`) : null;
-        if (retry) retry.addEventListener("click", async () => {
-          retry.disabled = true;
-          try {
-            const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/emails/${encodeURIComponent(mail.kind)}/retry`, { method: "POST", body: {} });
-            renderDetail(result.order);
-          } catch (error) {
-            retry.parentElement.append(notice("warning", "Email retry failed", error.message));
-            retry.disabled = false;
-          }
-        });
-        return el("li", {}, el("span", {}, `${label}: ${status}`), el("span", {}, formatDate(mail.updatedAt)), mail.providerId && el("small", {}, `Message ID: ${mail.providerId} · Attempts: ${mail.attempts}`), mail.nextAttemptAt && el("small", {}, `Next attempt: ${formatDate(mail.nextAttemptAt)}`), mail.detail && el("small", {}, mail.detail), retry);
-      }),
-      ...audit.map((entry) => el("li", {}, el("span", {}, `${entry.action} by ${entry.actor}`), el("span", {}, formatDate(entry.at)))),
-    ),
-  );
-}
-
-function renderPaymentFailures(order) {
-  const failures = order.paymentFailures ?? [];
-  return el("section", { class: "admin-history", "data-payment-failures": true },
-    el("h4", {}, "Failed payment attempts"),
-    el("p", { class: "body body--sm" }, failures.length
-      ? "A failed attempt does not cancel the order. The customer can try another payment method."
-      : "No failed payment attempts recorded."),
-    ...failures.map((failure) => el("dl", { class: "admin-facts" },
-      el("dt", {}, "Time"), el("dd", {}, formatDate(failure.occurredAt)),
-      el("dt", {}, "Attempt"), el("dd", {}, failure.attemptId),
-      el("dt", {}, "Event"), el("dd", {}, failure.event),
-      el("dt", {}, "Failure code"), el("dd", {}, failure.code || "—"),
-      el("dt", {}, "Provider code"), el("dd", {}, failure.providerCode || "—"),
-      el("dt", {}, "Reason"), el("dd", {}, failure.message || "No detailed reason supplied by the payment provider."),
-      el("dt", {}, "Trace ID"), el("dd", {}, failure.traceId || "—"))),
-  );
-}
-
-// How the checkout checked the address (worker/address-check.js). Orders from before the check have none.
-const ADDRESS_CHECK = {
-  verified: "Verified",
-  corrected: "Verified · shopper chose the corrected spelling",
-  kept_original: "Deliverable · shopper kept their own spelling",
-  no_unit_confirmed: "Verified · shopper confirmed there is no unit number",
-  unverified: "Not verified · check the address before it ships",
-};
-const usPhone = (value) => (/^\+1\d{10}$/.test(value ?? "") ? `(${value.slice(2, 5)}) ${value.slice(5, 8)}-${value.slice(8)}` : value || "—");
-
-function renderDetail(order) {
-  const { shipping } = order;
-  const address = el(
-    "address",
-    { class: "admin-address" },
-    `${shipping.firstName} ${shipping.lastName}`,
-    el("br"),
-    shipping.street,
-    shipping.street2 && [el("br"), shipping.street2],
-    el("br"),
-    `${shipping.city}, ${shipping.state} ${shipping.zip}`,
-    el("br"),
-    "United States",
-  );
-  const notification = order.notification
-    ? `${order.notification.status}${order.notification.channels.length ? ` (${order.notification.channels.map((c) => `${c.channel}: ${c.status}`).join(", ")})` : ""}`
-    : order.status === "paid" ? "not recorded" : "—";
-  const body = $("[data-admin-detail-body]");
-  body.replaceChildren(
-    el("h3", {}, order.id),
-    el("p", {}, statusBadge(order.status), shipBadge(order)),
-    ...[renderStage(order)].filter(Boolean),
-    el(
-      "dl",
-      { class: "admin-facts" },
-      el("dt", {}, "Payment"), el("dd", {}, order.status === "paid" ? `Paid ${formatDate(order.paidAt)}` : order.status === "review" ? "Succeeded, amount mismatch — verify in Airwallex" : order.status === "cancelled" ? "Cancelled / not paid" : "Awaiting payment"),
-      el("dt", {}, "Intent"), el("dd", {}, order.paymentIntentId || "—"),
-      el("dt", {}, "Created"), el("dd", {}, formatDate(order.createdAt)),
-      el("dt", {}, "Email"), el("dd", {}, el("a", { href: `mailto:${order.email}` }, order.email)),
-      el("dt", {}, "Phone"), el("dd", {}, shipping.phone ? el("a", { href: `tel:${shipping.phone}` }, usPhone(shipping.phone)) : "—"),
-      el("dt", {}, "Address check"), el("dd", {}, ADDRESS_CHECK[shipping.addressCheck?.status] ?? "—"),
-      el("dt", {}, "Marketing"), el("dd", {}, order.marketingOptIn ? "Opted in" : "No"),
-      el("dt", {}, "Notification"), el("dd", {}, notification),
-    ),
-    el("h4", {}, "Ship to"),
-    address,
-    el("h4", {}, `Items · ${order.shippingMethod} shipping`),
-    el(
-      "ul",
-      { class: "admin-lines" },
-      ...order.lines.map((line) =>
-        el(
-          "li",
-          {},
-          el("span", {}, `${line.qty} × ${line.name}`),
-          el("span", {}, money(line.lineCents)),
-          el("small", {}, `${line.sku} · ${line.size} · ${money(line.unitCents)} each`),
-        ),
-      ),
-    ),
-    priceRows(
-      [
-        { label: "Subtotal", value: money(order.subtotalCents) },
-        { label: "Shipping", value: order.shippingCents ? money(order.shippingCents) : "Free" },
-        { label: "Tax", value: money(order.taxCents) },
-      ],
-      money(order.totalCents),
-    ),
-    renderPaymentFailures(order),
-    ...[renderDisputes(order)].filter(Boolean),
-    renderRefunds(order),
-    ...[renderOrderActions(order, { adminApi, onChange: orderChanged })].filter(Boolean),
-    ...[renderMcf(order)].filter(Boolean),
-    renderFulfillment(order),
-    ...[renderHistory(order)].filter(Boolean),
-  );
-  $("[data-admin-detail-empty]").hidden = true;
-  body.hidden = false;
-}
-
-// Disputes and chargebacks (worker/disputes.js): answered in the provider's dashboard; shown here with the deadline.
-function renderDisputes(order) {
-  if (!order.disputes?.length) return null;
-  return el("section", { class: "admin-history", "aria-label": "Disputes", "data-order-disputes": true },
-    el("h4", {}, "Disputes"),
-    el("p", { class: "body body--sm" }, `Respond in the ${providerName(order.disputes[0].provider)} dashboard with the order, payment and tracking details. An open dispute holds the order; a lost one cancels it if it has not shipped.`),
-    ...order.disputes.map((dispute) => el("dl", { class: "admin-facts" },
-      el("dt", {}, "Dispute"), el("dd", {}, `${providerName(dispute.provider)} ${dispute.id}`),
-      el("dt", {}, "Status"), el("dd", {}, dispute.status === "open" ? `Open (${dispute.providerStatus || "needs a response"})` : dispute.status === "won" ? "Won" : "Lost"),
-      el("dt", {}, "Amount"), el("dd", {}, money(dispute.amountCents)),
-      dispute.reason && el("dt", {}, "Reason"), dispute.reason && el("dd", {}, dispute.reason),
-      dispute.status === "open" && el("dt", {}, "Respond by"), dispute.status === "open" && el("dd", {}, formatDate(dispute.dueAt)),
-      el("dt", {}, "Updated"), el("dd", {}, formatDate(dispute.updatedAt)))));
-}
-
-function renderRefunds(order) {
-  const refunds = order.refunds;
-  const asked = order.refundRequest;
-  const where = providerName(order.paymentProvider);
-  const paypal = order.paymentProvider === "paypal";
-  const button = paypal ? null : el('button', {type:'button', class:'btn btn--md btn--text', disabled:!order.paymentIntentId}, 'Sync refunds');
-  const feedback = el('p', {class:'body body--sm', role:'status'});
-  button?.addEventListener('click', async () => {
-    button.disabled = true;
-    feedback.textContent = 'Checking Airwallex…';
-    try {
-      const result = await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/refunds/sync`, {method:'POST', body:{}});
-      renderDetail(result.order);
-      await load({reset:true});
-    } catch(error) { feedback.textContent = error.message; button.disabled = false; }
-  });
-  const checks = order.sandboxRefundChecks && order.status === 'paid' ? el('div',{},
-    el('p',{class:'body body--sm'},'Sandbox checks: fixed invalid requests only; no automatic refund retries.'),
-    ...[['above_limit','Test refund above captured amount'],['fully_refunded','Test already refunded payment']].map(([scenario,label])=>{
-      const check=el('button',{type:'button',class:'btn btn--sm btn--text'},label);
-      check.addEventListener('click',async()=>{
-        check.disabled=true;feedback.textContent='Checking sandbox rejection…';
-        try {
-          const {result}=await adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/refunds/sandbox-check`,{method:'POST',body:{scenario}});
-          feedback.textContent=`${result.outcome}: ${result.detail}${result.httpStatus ? ` HTTP ${result.httpStatus} · ${result.code}` : ''}`;
-        } catch(error){feedback.textContent=error.message;} finally{check.disabled=false;}
-      });return check;
-    })) : null;
-  return el('section', {class:'admin-history', 'aria-label':'Refunds', 'data-order-refunds':true},
-    el('h4', {}, 'Refunds'),
-    refunds?.records?.some(item=>item.status==='FAILED') && notice('warning','Refund failed — review required',`A refund was rejected. Review its failure code and the payment in ${where}. An earlier acceptance notice may already have been delivered. Check the customer failure notice and team alert in the email history; sending or delivery problems require manual follow-up. No financial refund is retried automatically.`),
-    el('p', {class:'body body--sm'}, paypal
-      ? 'Paid with PayPal. Initiate refunds in PayPal; refunds and reversals appear here automatically.'
-      : 'Initiate refunds in Airwallex. This button only checks their status.'),
-    el('p', {class:'body body--sm'}, refunds?.records?.length
-      ? `Refunded: ${money(refunds.refundedCents)} · Pending: ${money(refunds.pendingCents)}${refunds.hold ? ' · Fulfillment on hold' : ''}`
-      : paypal ? 'No refunds recorded.' : 'No refunds recorded. Sync to check the provider.'),
-    ...(refunds?.records ?? []).map(item => el('dl', {class:'admin-facts'},
-      el('dt', {}, 'Refund'), el('dd', {}, item.id), el('dt', {}, 'Status'), el('dd', {}, item.status),
-      el('dt', {}, 'Amount'), el('dd', {}, money(item.amountCents)),
-      el('dt', {}, 'Updated'), el('dd', {}, formatDate(item.updatedAt)),
-      item.failureCode && el('dt', {}, 'Failure code'), item.failureCode && el('dd', {}, item.failureCode))),
-    asked && renderRefundRequest(order, asked, feedback),button,checks,feedback);
-}
-
-// The refund the store asked for itself when cancelling (out of stock); a failed one can be asked again.
-function renderRefundRequest(order, asked, feedback) {
-  const state = asked.status === "requested" ? "accepted by the provider" : asked.status === "failed" ? `failed: ${asked.error ?? ""}` : "in progress";
-  const again = asked.status === "failed" && order.core?.cancellation?.reason === "out_of_stock"
-    ? el("button", { class: "btn btn--sm", type: "button", "data-cancel-refund": true }, "Try the refund again") : null;
-  again?.addEventListener("click", () => cancelAndRefund(order, again, feedback));
-  return el("div", { "data-refund-request": asked.status },
-    el("p", { class: "body body--sm" }, `Refund asked by the store when cancelling: ${money(asked.amountCents)} through ${providerName(asked.provider)} · ${state} · ${formatDate(asked.at)}`),
-    again);
-}
-
-// After a confirm / cancel / address change: show the new state with what happened, and refresh the list.
-function orderChanged(order, outcome) {
-  renderDetail(order);
-  if (outcome) $("[data-admin-detail-body]").prepend(outcome);
-  load({ reset: true });
-}
-
-async function select(orderId, { focus = true } = {}) {
-  state.selected = orderId;
-  history.replaceState(null, "", `#${encodeURIComponent(orderId)}`);
-  renderList();
-  try {
-    renderDetail(await adminApi(`/admin/api/orders/${encodeURIComponent(orderId)}`));
-    if (focus) $("[data-admin-detail]").focus({ preventScroll: false });
-  } catch (error) {
-    $("[data-admin-detail-body]").replaceChildren(notice("warning", "Order unavailable", error.message));
-    $("[data-admin-detail-body]").hidden = false;
-    $("[data-admin-detail-empty]").hidden = true;
-  }
-}
-
-$("[data-admin-search]").addEventListener("submit", (event) => {
-  event.preventDefault();
-  state.q = new FormData(event.currentTarget).get("q").toString().trim();
-  load({ reset: true });
-});
-$("[data-admin-load-more]").addEventListener("click", () => load());
-$("[data-admin-mcf-check]").addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  const result = $("[data-admin-mcf-check-result]");
-  button.disabled = true;
-  result.replaceChildren(notice("info", "Checking MCF connection", "Checking access and a sample delivery preview. No shipment will be created."));
-  try {
-    const check = await adminApi("/admin/api/mcf/check");
-    if (!check.ok) {
-      result.replaceChildren(notice("warning", "MCF connection check failed", check.error || "The fulfillment service could not be verified."));
-    } else {
-      const previews = check.previews || (check.preview ? [check.preview] : []);
-      const available = previews.length > 0 && previews.every((preview) => preview.fulfillable === true);
-      const details = [
-        ...previews.map((preview) => `${preview.sku}: ${preview.fulfillable ? "available for the sample delivery address" : "unavailable for the sample delivery address"}.${preview.deliveryStart && preview.deliveryEnd ? ` Estimated delivery: ${formatDate(preview.deliveryStart)} – ${formatDate(preview.deliveryEnd)}.` : ""}`),
-        previews.length ? "" : "Connection verified; no product preview was returned.",
-        check.autoSubmit ? "Automatic fulfillment is enabled." : "Automatic fulfillment is off.",
-        "No shipment was created. This preview does not confirm delivery to every customer address.",
-      ].filter(Boolean).join(" ");
-      result.replaceChildren(notice(available ? "success" : "warning", "MCF connection verified", details));
-    }
-  } catch (error) {
-    result.replaceChildren(notice("warning", "MCF connection check failed", error.message));
-  } finally {
-    button.disabled = false;
-  }
-});
-// Owners only (the button is shown by team.js): the Hold test order (D26), before automatic sending is turned on.
-$("[data-admin-hold-test]").addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  const result = $("[data-admin-mcf-check-result]");
-  if (!confirm("Create a real Amazon order ON HOLD (nothing ships), read it back, and cancel it right away?")) return;
-  button.disabled = true;
-  result.replaceChildren(notice("info", "Hold test order", "Creating it at Amazon on hold…"));
-  try {
-    const { result: test } = await adminApi("/admin/api/mcf/hold-test", { method: "POST", body: {} });
-    result.replaceChildren(notice(test.outcome === "passed" ? "success" : "warning", test.outcome === "passed" ? `Hold test passed (${test.id})` : `Hold test failed (${test.id})`,
-      test.steps.map((step) => `${HOLD_STEP[step.step] ?? step.step}: ${step.ok ? "OK" : "FAILED"}. ${step.detail}`).join(" ")));
-  } catch (error) {
-    result.replaceChildren(notice("warning", "Hold test order failed", error.message));
-  } finally {
-    button.disabled = false;
-  }
-});
-$("[data-admin-mcf-sync-all]").addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  button.disabled = true;
-  try {
-    const { summary } = await adminApi("/admin/api/mcf/sync", { method: "POST", body: {} });
-    await load({ reset: true });
-    if (state.selected) await select(state.selected, { focus: false });
-    // After the reload, which clears the message area.
-    $("[data-admin-message]").replaceChildren(
-      notice("success", "MCF status synced", `Checked ${summary.checked} order${summary.checked === 1 ? "" : "s"}; ${summary.shipped} newly shipped${summary.failed ? `, ${summary.failed} could not be checked` : ""}.`),
-    );
-  } catch (error) {
-    $("[data-admin-message]").replaceChildren(notice("warning", "MCF sync failed", error.message));
-  }
-  button.disabled = false;
-});
-
-// ---------- Customer messages (Contact us form) ----------
-
-const EMAIL_STATUS = { sent: "emailed", skipped: "not emailed", failed: "email failed", pending: "sending" };
-const messages = { list: [], nextBefore: null };
-
-function renderMessages() {
-  const host = $("[data-admin-messages]");
-  if (!messages.list.length) return host.replaceChildren(el("p", { class: "body body--sm" }, "No messages yet."));
+const soon = (key) => (host) => {
   host.replaceChildren(
-    el("ul", { class: "admin-message-list" }, ...messages.list.map((m) =>
-      el("li", { class: "admin-message", "data-message-id": m.id },
-        el("div", { class: "admin-message__head" },
-          el("strong", {}, m.name),
-          el("a", { href: `mailto:${m.email}` }, m.email),
-          el("span", { class: `status status--${m.emailStatus === "sent" ? "paid" : "review"}`, title: m.emailDetail || "" }, EMAIL_STATUS[m.emailStatus] ?? m.emailStatus),
-          el("small", {}, formatDate(m.createdAt)),
-        ),
-        el("p", { class: "admin-message__text" }, m.message),
-      ))),
-    ...[messages.nextBefore && el("button", { class: "btn btn--sm btn--text", type: "button", onclick: () => loadMessages() }, "Load older messages")].filter(Boolean),
+    el("header", { class: "page-head" }, el("h1", { class: "page-title" }, t(`nav.${key}`))),
+    el("section", { class: "card" }, el("p", { class: "muted" }, t(`soon.${key}`))),
   );
+};
+
+const VIEWS = {
+  dashboard: { title: "nav.dashboard", render: renderDashboard },
+  orders: { title: "nav.orders", render: renderOrders },
+  order: { title: "nav.orders", render: renderOrder },
+  checkouts: { title: "nav.checkouts", render: renderCheckouts },
+  products: { title: "nav.products", render: renderProducts },
+  product: { title: "nav.products", render: renderProduct },
+  customers: { title: "nav.customers", render: soon("customers") },
+  messages: { title: "nav.messages", render: renderMessages },
+  reports: { title: "nav.reports", render: soon("reports") },
+  activity: { title: "nav.activity", render: renderActivity },
+  members: { title: "nav.members", render: renderMembers },
+};
+
+// "#/orders/APGO-US-…?x=y" → { name: "order", id, params }. Links from before the views (#APGO-US-…) still open the order.
+function parseRoute() {
+  const raw = decodeURIComponent(location.hash.slice(1));
+  if (ORDER_ID.test(raw)) return { redirect: `#/orders/${raw}` };
+  const [path, query = ""] = raw.split("?");
+  const [section = "dashboard", id = null] = path.replace(/^\/+/, "").split("/").filter(Boolean);
+  const name = id && section === "orders" ? "order" : id && section === "products" ? "product" : section;
+  return { name: VIEWS[name] ? name : "dashboard", id, params: new URLSearchParams(query) };
 }
 
-async function loadMessages({ reset = false } = {}) {
-  const button = $("[data-admin-messages-load]");
-  button.disabled = true;
+let whoami = null;
+let renders = 0;
+
+async function render({ focus = false } = {}) {
+  const route = parseRoute();
+  if (route.redirect) return location.replace(route.redirect);
+  const mine = ++renders;
+  const view = VIEWS[route.name];
+  if (route.name === "members" && whoami?.actor?.role !== "owner") return location.replace("#/");
+  document.title = `${t(view.title)} · ${t("nav.appTitle")}`;
+  renderNav(route.name);
+  $("[data-admin-message]").replaceChildren();
+  const host = $("[data-admin-view]");
+  host.dataset.view = route.name;
+  host.replaceChildren(el("p", { class: "muted view-loading" }, t("common.loading")));
+  if (focus) $("#main").focus({ preventScroll: true });
+  window.scrollTo(0, 0);
   try {
-    const params = new URLSearchParams();
-    if (!reset && messages.nextBefore) params.set("before", messages.nextBefore);
-    const page = await adminApi(`/admin/api/contact-messages?${params}`);
-    messages.list = reset ? page.messages : [...messages.list, ...page.messages];
-    messages.nextBefore = page.nextBefore;
-    renderMessages();
-    button.textContent = "Refresh messages";
+    await view.render(host, {
+      route,
+      adminApi,
+      me: whoami?.actor ?? null,
+      isCurrent: () => mine === renders,
+      navigate: (hash) => {
+        if (location.hash === hash) render();
+        else location.hash = hash;
+      },
+      message: (node) => $("[data-admin-message]").replaceChildren(...[node].filter(Boolean)),
+      setOrdersBadge,
+    });
   } catch (error) {
-    $("[data-admin-messages]").replaceChildren(notice("warning", "Messages unavailable", error.message));
-  } finally {
-    button.disabled = false;
+    // The page's data did not load: say why at the top (not set up, signed out, offline…).
+    if (mine !== renders) return;
+    host.replaceChildren();
+    $("[data-admin-message]").replaceChildren(notice("warning", t("common.unavailable"), error.message));
   }
 }
 
-$("[data-admin-messages-load]").addEventListener("click", () => loadMessages({ reset: true }));
-
-initCheckouts({ adminApi });
-initTeam({ adminApi, openOrder: (id) => { history.replaceState(null, "", `#${id}`); select(id); } });
-await load({ reset: true });
-const initial = decodeURIComponent(window.location.hash.slice(1));
-if (initial) select(initial, { focus: false });
+applyStatic();
+try {
+  whoami = await adminApi("/admin/api/me");
+} catch {
+  // An older Worker without /me, or the back office is not set up: the page says so when its data does not load.
+  whoami = null;
+}
+initShell({ adminApi, whoami });
+onLangChange(() => {
+  applyStatic();
+  render();
+});
+window.addEventListener("hashchange", () => render({ focus: true }));
+// The count next to Orders: orders that need someone.
+adminApi("/admin/api/orders?limit=1").then((page) => setOrdersBadge((page.viewCounts?.review ?? 0) + (page.viewCounts?.problems ?? 0) + (page.viewCounts?.disputes ?? 0)), () => {});
+await render();

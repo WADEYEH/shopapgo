@@ -13,8 +13,9 @@ const ACTIVITY = [
 
 test("an owner sees who is signed in, adds a member with a reason, and gets the outcome", async ({ page }) => {
   const requests = await mockAdminApi(page);
-  await page.goto("/admin/index.html");
-  await expect(page.locator("[data-admin-whoami]")).toHaveText(`${TEAM_OWNER} · Owner`);
+  await page.goto("/admin/index.html#/members");
+  await expect(page.locator("[data-admin-whoami]")).toContainText(TEAM_OWNER);
+  await expect(page.locator("[data-admin-whoami]")).toContainText("Owner");
   const members = page.locator("[data-admin-members-section]");
   await expect(members).toBeVisible();
   await expect(members).toContainText("still uses the shared login");
@@ -34,7 +35,7 @@ test("an owner sees who is signed in, adds a member with a reason, and gets the 
 
 test("the last owner cannot be removed: the reason is shown and nothing changes", async ({ page }) => {
   await mockAdminApi(page);
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/members");
   const owner = page.locator(`[data-member="${TEAM_OWNER}"]`);
   await owner.getByText("Change", { exact: true }).click();
   page.once("dialog", (dialog) => dialog.accept());
@@ -48,7 +49,7 @@ test("an owner changes a role and removes a member; removed people move to Forme
     { email: TEAM_OWNER, role: "owner", status: "active", addedBy: "system", addedAt: "2026-10-09T00:00:00.000Z", updatedBy: "system", updatedAt: "2026-10-09T00:00:00.000Z" },
     { email: COLLEAGUE, role: "member", status: "active", addedBy: TEAM_OWNER, addedAt: "2026-10-09T00:00:00.000Z", updatedBy: TEAM_OWNER, updatedAt: "2026-10-09T00:00:00.000Z" },
   ] } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/members");
   const row = page.locator(`[data-member="${COLLEAGUE}"]`);
   await row.getByText("Change", { exact: true }).click();
   await row.getByLabel(`Role for ${COLLEAGUE}`).selectOption("owner");
@@ -62,7 +63,7 @@ test("an owner changes a role and removes a member; removed people move to Forme
   page.once("dialog", (dialog) => dialog.accept());
   await again.getByRole("button", { name: "Remove" }).click();
   await expect(page.locator(`[data-member="${COLLEAGUE}"]`)).toHaveCount(0);
-  await expect(page.locator(".admin-member-former")).toContainText("Former members (1)");
+  await expect(page.getByText("Former members (1)")).toBeVisible();
   expect(requests.team.map((w) => [w.path, w.body.email, w.body.role ?? null])).toEqual([
     ["/admin/api/members/role", COLLEAGUE, "owner"],
     ["/admin/api/members/remove", COLLEAGUE, null],
@@ -71,16 +72,19 @@ test("an owner changes a role and removes a member; removed people move to Forme
 
 test("a member sees Activity but not Members", async ({ page }) => {
   const requests = await mockAdminApi(page, { team: { role: "member", activity: ACTIVITY } });
-  await page.goto("/admin/index.html");
-  await expect(page.locator("[data-admin-whoami]")).toHaveText(`${TEAM_OWNER} · Member`);
+  await page.goto("/admin/index.html#/activity");
+  await expect(page.locator("[data-admin-whoami]")).toContainText("Member");
   await expect(page.locator("[data-admin-activity-section]")).toBeVisible();
-  await expect(page.locator("[data-admin-members-section]")).toBeHidden();
+  await expect(page.locator('[data-nav="members"]')).toHaveCount(0);
+  await page.goto("/admin/index.html#/members");
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator("[data-admin-members-section]")).toHaveCount(0);
   expect(requests.some((path) => path.startsWith("/admin/api/members"))).toBe(false);
 });
 
 test("Activity: everything newest first, as text; filter by person and dates; order links open the order", async ({ page }) => {
   const requests = await mockAdminApi(page, { team: { activity: ACTIVITY } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/activity");
   const section = page.locator("[data-admin-activity-section]");
   await section.getByRole("button", { name: "Show activity" }).click();
   const items = section.locator("[data-activity-action]");
@@ -108,7 +112,7 @@ test("Activity: everything newest first, as text; filter by person and dates; or
 
 test("with Access sign-in on, a failed Cloudflare list update is shown and can be retried", async ({ page }) => {
   const requests = await mockAdminApi(page, { team: { accessSignIn: true, accessList: { configured: true, last: { status: "failed", at: "2026-10-09T01:00:00.000Z", detail: "Cloudflare answered HTTP 403 (error 10000)." } } } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/members");
   const members = page.locator("[data-admin-members-section]");
   await expect(members).toContainText("Cloudflare list not updated");
   await expect(members).toContainText("HTTP 403 (error 10000)");
@@ -117,39 +121,41 @@ test("with Access sign-in on, a failed Cloudflare list update is shown and can b
   expect(requests.team.map((w) => w.path)).toEqual(["/admin/api/members/sync"]);
 });
 
-test("an older Worker without these endpoints: the order pages work and the new sections stay hidden", async ({ page }) => {
+test("an older Worker without these endpoints: the order pages work; no name, no Members", async ({ page }) => {
   await mockAdminApi(page, { team: null });
-  await page.goto("/admin/index.html");
-  await expect(page.locator(".admin-row")).toHaveCount(3);
+  await page.goto("/admin/index.html#/orders");
+  await expect(page.locator("[data-order]")).toHaveCount(3);
   await expect(page.locator("[data-admin-whoami]")).toBeHidden();
-  await expect(page.locator("[data-admin-activity-section]")).toBeHidden();
-  await expect(page.locator("[data-admin-members-section]")).toBeHidden();
+  await expect(page.locator('[data-nav="members"]')).toHaveCount(0);
 });
 
 for (const width of [360, 1440]) {
   test(`Members and Activity have no serious accessibility problems and fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await mockAdminApi(page, { team: { activity: ACTIVITY } });
-    await page.goto("/admin/index.html");
-    await page.locator("[data-admin-activity-section]").getByRole("button", { name: "Show activity" }).click();
+    await page.goto("/admin/index.html#/activity");
     await expect(page.locator("[data-activity-action]")).toHaveCount(3);
+    let results = await new AxeBuilder({ page }).include("[data-admin-activity-section]").analyze();
+    expect(results.violations.filter((v) => ["serious", "critical"].includes(v.impact))).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await page.goto("/admin/index.html#/members");
     await page.locator(`[data-member="${TEAM_OWNER}"]`).getByText("Change", { exact: true }).click();
-    const results = await new AxeBuilder({ page }).include("[data-admin-activity-section]").include("[data-admin-members-section]").analyze();
+    results = await new AxeBuilder({ page }).include("[data-admin-members-section]").analyze();
     expect(results.violations.filter((v) => ["serious", "critical"].includes(v.impact))).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
 }
 
 test("lists end cleanly: no stray text after Activity, Members or Customer messages", async ({ page }) => {
-  await mockAdminApi(page, { team: { activity: ACTIVITY } });
-  await page.route("**/admin/api/contact-messages**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ messages: [{ id: "CM-1", name: "Ada", email: "ada@example.com", message: "Hi", emailStatus: "sent", createdAt: "2026-10-09T00:00:00.000Z" }], nextBefore: null }) }));
-  await page.goto("/admin/index.html");
-  await page.locator("[data-admin-activity-section]").getByRole("button", { name: "Show activity" }).click();
-  await page.getByRole("button", { name: "Show messages" }).click();
+  await mockAdminApi(page, { team: { activity: ACTIVITY }, messages: [{ id: "CM-1", name: "Ada", email: "ada@example.com", message: "Hi", emailStatus: "sent", createdAt: "2026-10-09T00:00:00.000Z" }] });
+  const strays = (selector) => page.locator(selector).evaluate((node) => [...node.childNodes].filter((child) => child.nodeType === Node.TEXT_NODE).map((child) => child.textContent));
+  await page.goto("/admin/index.html#/activity");
   await expect(page.locator("[data-activity-action]")).toHaveCount(3);
+  expect(await strays("[data-admin-activity]")).toEqual([]);
+  await page.goto("/admin/index.html#/members");
+  await expect(page.locator("[data-member]")).toHaveCount(1);
+  expect(await strays("[data-admin-members]")).toEqual([]);
+  await page.goto("/admin/index.html#/messages");
   await expect(page.locator("[data-message-id]")).toHaveCount(1);
-  for (const selector of ["[data-admin-activity]", "[data-admin-members]", "[data-admin-messages]"]) {
-    const strays = await page.locator(selector).evaluate((node) => [...node.childNodes].filter((child) => child.nodeType === Node.TEXT_NODE).map((child) => child.textContent));
-    expect(strays, selector).toEqual([]);
-  }
+  expect(await strays("[data-admin-messages]")).toEqual([]);
 });

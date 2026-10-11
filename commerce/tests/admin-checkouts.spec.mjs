@@ -12,8 +12,7 @@ const CHECKOUTS = [
 
 test("unfinished checkouts are listed apart from orders, with why a payment failed, as text; filters and email search", async ({ page }) => {
   const requests = await mockAdminApi(page, { checkouts: CHECKOUTS });
-  await page.goto("/admin/index.html");
-  await expect(page.locator(".admin-tab", { hasText: "pending" })).toHaveCount(0, { timeout: 2000 });
+  await page.goto("/admin/index.html#/checkouts");
   const section = page.locator("[data-admin-checkouts-section]");
   await section.getByRole("button", { name: "Show checkouts" }).click();
   await expect(section.locator("[data-checkout-id]")).toHaveCount(3);
@@ -37,8 +36,7 @@ test("unfinished checkouts are listed apart from orders, with why a payment fail
 test("the Unfinished checkouts section has no serious accessibility problems and fits a phone", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 900 });
   await mockAdminApi(page, { checkouts: CHECKOUTS });
-  await page.goto("/admin/index.html");
-  await page.locator("[data-admin-checkouts-section]").getByRole("button", { name: "Show checkouts" }).click();
+  await page.goto("/admin/index.html#/checkouts");
   await expect(page.locator("[data-checkout-id]")).toHaveCount(3);
   const results = await new AxeBuilder({ page }).include("[data-admin-checkouts-section]").analyze();
   expect(results.violations.filter((v) => ["serious", "critical"].includes(v.impact))).toEqual([]);

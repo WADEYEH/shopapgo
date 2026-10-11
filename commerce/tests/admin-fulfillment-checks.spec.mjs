@@ -47,7 +47,8 @@ test("Amazon's copy does not match: the difference is shown and Cancel at Amazon
 
 test("the Hold test order is for owners: it asks first and shows each step", async ({ page }) => {
   const requests = await mockAdminApi(page, { team: { role: "owner" } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/orders");
+  await page.locator("[data-amazon-tools] summary").click();
   const button = page.getByRole("button", { name: "Hold test order", exact: true });
   await expect(button).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
@@ -59,7 +60,8 @@ test("the Hold test order is for owners: it asks first and shows each step", asy
 
 test("members do not see the Hold test order button", async ({ page }) => {
   await mockAdminApi(page, { team: { role: "member" } });
-  await page.goto("/admin/index.html");
+  await page.goto("/admin/index.html#/orders");
+  await page.locator("[data-amazon-tools] summary").click();
   await expect(page.locator("[data-admin-whoami]")).toContainText("Member");
   await expect(page.getByRole("button", { name: "Hold test order", exact: true })).toHaveCount(0);
 });

@@ -66,7 +66,7 @@ test("admin host: only the back office (its own files behind the login) and the 
   const logo = await call(ADMIN, "/us/assets/brand/apgo-logo.png");
   assert.equal(logo.status, 200);
   assert.ok(logo.headers.get("x-robots-tag").includes("noindex"));
-  for (const path of ["/admin/commerce.css", "/admin/admin.css", "/admin/admin.js", "/admin/ui.js"]) {
+  for (const path of ["/admin/admin.css", "/admin/admin.js", "/admin/ui.js", "/admin/strings.js"]) {
     assert.equal((await call(ADMIN, path)).status, 401, path);
     const res = await call(ADMIN, path, { headers: bearer });
     assert.equal(res.status, 200, path);

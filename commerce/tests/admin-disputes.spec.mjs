@@ -9,21 +9,21 @@ const open = { provider: "airwallex", id: "dsp_demo_1", status: "open", provider
 const lost = { ...open, provider: "paypal", id: "PP-D-DEMO", status: "lost", providerStatus: "RESOLVED:RESOLVED_BUYER_FAVOUR", amountCents: 5999 };
 const hold = { code: "dispute", message: "A dispute is open with Airwallex (respond by Mon, 12 Oct 2026 12:00:00 GMT). The order waits until it is won." };
 
-test("the Disputes filter lists orders with an open dispute and their deadline", async ({ page }) => {
+test("the Disputes view lists orders with an open dispute and their deadline", async ({ page }) => {
   const requests = await mockAdminApi(page, { disputes: { [PAID]: [open], [CANCELLED]: [lost] } });
-  await page.goto("/admin/index.html");
-  const tab = page.locator('[data-issue="disputes"]');
+  await page.goto("/admin/index.html#/orders");
+  const tab = page.locator('[data-view="disputes"]');
   await expect(tab).toContainText("Disputes1");
   await expect(tab).toHaveAttribute("aria-pressed", "false");
   await tab.click();
-  await expect(tab).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-view="disputes"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("[data-order]")).toHaveCount(1);
   const row = page.locator(`[data-order="${PAID}"]`);
-  await expect(row).toContainText("dispute");
-  await expect(row).toContainText("respond by Oct 12, 2026");
-  expect(requests.some((path) => path.startsWith("/admin/api/orders?") && path.includes("issue=disputes"))).toBe(true);
-  await tab.click();
-  await expect(tab).toHaveAttribute("aria-pressed", "false");
+  await expect(row.locator('[data-payment="disputed"]')).toHaveText("Disputed");
+  await expect(row.locator('[data-shipping="on_hold"]')).toHaveText("On hold");
+  await expect(row).toContainText("Reply to the dispute by Oct 12, 2026");
+  expect(requests.some((path) => path.startsWith("/admin/api/orders?") && path.includes("view=disputes"))).toBe(true);
+  await page.locator('[data-view="all"]').click();
   await expect(page.locator("[data-order]")).toHaveCount(SAMPLE_ORDERS.length);
 });
 
@@ -37,7 +37,7 @@ test("an open dispute is shown on the order with its deadline; shipping is locke
   await expect(disputes).toContainText("$128.97");
   await expect(disputes).toContainText("Fraudulent transaction");
   await expect(disputes).toContainText("Respond by");
-  await expect(page.getByText("A dispute is open with Airwallex", { exact: false })).toBeVisible();
+  await expect(page.getByText("A dispute is open with Airwallex", { exact: false }).first()).toBeVisible();
   await expect(page.getByRole("region", { name: "Fulfilment", exact: true })).toContainText("cannot be shipped until the dispute is won");
   await expect(page.getByRole("button", { name: "Mark as shipped", exact: true })).toHaveCount(0);
 });

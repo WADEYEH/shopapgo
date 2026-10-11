@@ -34,13 +34,38 @@ export const SAMPLE_ORDERS = [
   },
 ];
 
-const summary = (o) => ({
-  id: o.id, status: o.status, email: o.email, name: `${o.shipping.firstName} ${o.shipping.lastName}`, state: o.shipping.state,
-  itemCount: o.lines.reduce((n, l) => n + l.qty, 0), currency: o.currency, totalCents: o.totalCents,
-  createdAt: o.createdAt, paidAt: o.paidAt, notification: o.notification?.status ?? null,
-  fulfillmentStatus: o.fulfillment ? "shipped" : "unfulfilled", shippedAt: o.fulfillment?.shippedAt ?? null,
-  disputed: openDisputes(o).length > 0, disputeDueAt: openDisputes(o).map((d) => d.dueAt).sort()[0] ?? null,
-});
+const summary = (o) => {
+  const disputed = openDisputes(o).length > 0;
+  const stockout = o.mcfRecord?.status === "rejected" && o.mcfRecord?.mcfStatus === "UNFULFILLABLE";
+  const shipping = o.status === "cancelled" ? "cancelled" : o.status === "review" ? "review" : o.fulfillment ? "shipped"
+    : o.status !== "paid" ? null : disputed ? "on_hold" : o.mcfRecord?.status === "submitted" ? "with_amazon" : stockout ? "out_of_stock"
+    : ["failed", "rejected"].includes(o.mcfRecord?.status) ? "not_sent" : o.core?.coolingOffEndsAt ? "cooling_off" : "waiting";
+  return {
+    id: o.id, status: o.status, email: o.email, name: `${o.shipping.firstName} ${o.shipping.lastName}`, city: o.shipping.city, state: o.shipping.state,
+    itemCount: o.lines.reduce((n, l) => n + l.qty, 0), items: o.lines.map((l) => ({ sku: l.sku, qty: l.qty })), currency: o.currency, totalCents: o.totalCents,
+    refundedCents: 0, paymentProvider: o.paymentIntentId ? o.paymentProvider ?? "airwallex" : null,
+    createdAt: o.createdAt, paidAt: o.paidAt, notification: o.notification?.status ?? null,
+    fulfillmentStatus: o.fulfillment ? "shipped" : "unfulfilled", shippedAt: o.fulfillment?.shippedAt ?? null,
+    disputed, disputeDueAt: openDisputes(o).map((d) => d.dueAt).sort()[0] ?? null,
+    payment: o.status === "review" ? "review" : disputed ? "disputed" : o.status === "pending" ? "awaiting" : o.status === "cancelled" && !o.paidAt ? "cancelled" : "paid",
+    shipping,
+    todo: o.status === "review" ? { code: "review" } : disputed ? { code: "dispute", dueAt: openDisputes(o).map((d) => d.dueAt).sort()[0] ?? null } : null,
+  };
+};
+// The order list's views (worker/orders.js ORDER_VIEWS).
+const inView = (o, view) => ({
+  all: true,
+  to_ship: o.status === "paid" && !o.fulfillment,
+  review: o.status === "review",
+  problems: o.status === "paid" && !o.fulfillment && ["failed", "rejected"].includes(o.mcfRecord?.status),
+  disputes: openDisputes(o).length > 0,
+  shipped: Boolean(o.fulfillment),
+  cancelled: o.status === "cancelled",
+}[view] ?? true);
+export const PRODUCTS = [
+  { id: "d204", sku: "D204", name: "Atomic Colored Glaze", routine: "dry", size: "300 mL", oz: "10.1 fl oz", priceCents: 5999 },
+  { id: "d215", sku: "D215", name: "Atomic Glaze Coating", routine: "wet", size: "200 mL", oz: "6.8 fl oz", priceCents: 2999 },
+];
 // Disputes as worker/disputes.js disputesForOrder() returns them.
 const openDisputes = (o) => (o.disputes ?? []).filter((d) => d.status === "open");
 
@@ -92,6 +117,7 @@ const view = (o, mcf = { mode: "off" }) => ({
   audit: o.audit ?? [],
   mcf: mcfBlock(o, mcf),
   ...(o.core ? { core: coreBlock(o, o.core) } : {}),
+  notes: o.notes ?? [],
 });
 
 // Returns the list of requested URLs so tests can assert on query strings.
@@ -114,7 +140,7 @@ function teamMock(team, writes) {
   // whether anyone else still gets them (else turning off is refused).
   let teamAlerts = team.teamAlerts === undefined ? true : team.teamAlerts;
   return (url, request, reply) => {
-    if (url.pathname === "/admin/api/me") return reply(200, { actor: me, accessSignIn: Boolean(team.accessSignIn), teamAlerts });
+    if (url.pathname === "/admin/api/me") return reply(200, { actor: me, accessSignIn: Boolean(team.accessSignIn), teamAlerts, site: team.site ?? "production" });
     if (url.pathname === "/admin/api/me/alerts") {
       const body = request.postDataJSON();
       writes.push({ path: url.pathname, contentType: request.headers()["content-type"], body });
@@ -165,7 +191,10 @@ function teamMock(team, writes) {
 // orderCore: { [orderId]: { stage, coolingOffEndsAt, holds, payment } } adds the order core block to those orders;
 // orderActionError: { status, code, message } makes the next confirm / cancel / address fail like the Worker would.
 // checkouts: the Unfinished checkouts list (worker/checkouts.js listCheckouts shape).
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {} } = {}) {
+// lang: the back office's language for the test (D49), "en" unless asked; null leaves the page's own choice.
+// messages: the Contact us messages. stopped: product ids an owner stopped selling. notes: { [orderId]: notes }.
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {} } = {}) {
+  if (lang) await page.addInitScript((value) => { try { localStorage.setItem("apgo_admin_lang", value); } catch { /* none */ } }, lang);
   const requests = [];
   requests.writes = [];
   requests.mcf = [];
@@ -178,6 +207,10 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
   for (const [id, core] of Object.entries(orderCore)) orders.find((o) => o.id === id).core = structuredClone(core);
   for (const [id, list] of Object.entries(disputes)) orders.find((o) => o.id === id).disputes = structuredClone(list);
   for (const [id, provider] of Object.entries(providers)) orders.find((o) => o.id === id).paymentProvider = provider;
+  for (const [id, list] of Object.entries(notes)) orders.find((o) => o.id === id).notes = structuredClone(list);
+  const products = PRODUCTS.map((p) => ({ ...p, onSale: !stopped.includes(p.id), history: [] }));
+  requests.sales = [];
+  requests.notes = [];
   requests.orderActions = [];
   requests.holdTests = [];
   let actionError = orderActionError;
@@ -198,6 +231,61 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     }
     const teamReply = teamRoute?.(url, route.request(), reply);
     if (teamReply) return teamReply;
+    const productView = (p) => ({
+      ...p, changedBy: null, changedAt: null, page: `/products/${p.id === "d204" ? "atomic-colored-glaze" : "atomic-glaze-coating"}`, amazonSku: null,
+      details: { promise: "A finishing step.", when: p.id === "d204" ? "After washing & fully drying" : "While paint is still wet", lasts: "6 months", scope: "Paint, clear coat." },
+      stock: { connected: false, available: null, inbound: null, reserved: null, threshold: 5 },
+      sales: { soldMonth: 3, revenueMonthCents: p.priceCents * 3, refunds30: 0, monthOrderShare: 50, days: Array.from({ length: 14 }, (_, i) => ({ day: `2026-10-${String(i + 1).padStart(2, "0")}`, qty: i % 3 })) },
+    });
+    if (url.pathname === "/admin/api/dashboard") {
+      const list = orders.filter((o) => o.status !== "pending");
+      const waiting = orders.filter((o) => o.status === "review" || openDisputes(o).length);
+      return reply(200, {
+        generatedAt: stamp,
+        numbers: { timeZone: "Asia/Taipei", today: { revenueCents: 12897, orders: 1 }, month: { revenueCents: 18896, orders: 2, averageCents: 9448 }, refunds: { monthCents: 0, monthOrders: 0 }, toShip: 1, averageDaysToShip: null },
+        pipeline: { coolingOff: 0, waiting: 1, withAmazon: 0, outOfStock: 0, shippedThisWeek: 0, coolingOffMinutes: 60 },
+        attention: {
+          items: waiting.map((o) => ({ kind: o.status === "review" ? "review" : "disputes", orderId: o.id, name: `${o.shipping.firstName} ${o.shipping.lastName}`, totalCents: o.totalCents, detail: o.status === "review" ? {} : { provider: "airwallex", due_at: openDisputes(o)[0].dueAt } })),
+          total: waiting.length,
+          clear: ["not_sent", "stockout", "no_tracking", "refunds", "emails", "addresses"],
+        },
+        health: [
+          { key: "airwallex", status: "ok", detail: { env: "demo" } }, { key: "paypal", status: "warn", detail: { env: "sandbox", webhook: false } },
+          { key: "email", status: "ok", detail: { from: "APGO <orders@shopapgo.com>" } }, { key: "amazon", status: mcf.mode === "ready" ? "ok" : "off", detail: { mode: mcf.mode, lastSyncAt: null } },
+          { key: "address", status: "off", detail: { uncheckedToday: 0 } }, { key: "schedule", status: "ok", detail: { lastRunAt: stamp } }, { key: "digest", status: "ok", detail: { lastDate: "2026-10-01", at: stamp } },
+        ],
+        products: products.map(({ id, sku, name, routine, size, priceCents, onSale }) => ({ id, sku, name, routine, size, priceCents, onSale, stock: { connected: false, threshold: 5 } })),
+        latest: list.slice(0, 5).map(summary),
+      });
+    }
+    if (url.pathname === "/admin/api/products") return reply(200, { products: products.map(productView) });
+    const productMatch = url.pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)(\/sale)?$/);
+    if (productMatch) {
+      const product = products.find((p) => p.id === productMatch[1]);
+      if (!product) return reply(404, { error: { code: "not_found", message: "Product not found." } });
+      if (!productMatch[2]) return reply(200, productView(product));
+      const request = route.request();
+      const body = request.postDataJSON();
+      requests.sales.push({ method: request.method(), contentType: request.headers()["content-type"], body });
+      if ((team?.role ?? "owner") !== "owner") return reply(403, { error: { code: "owner_only", message: "Only an owner can stop or resume selling a product." } });
+      const changed = product.onSale !== body.onSale;
+      if (changed) product.history.unshift({ at: stamp, actor: TEAM_OWNER, action: body.onSale ? "product.resumed" : "product.stopped", reason: body.reason || null });
+      product.onSale = body.onSale;
+      return reply(200, { changed, product: { ...productView(product), changedBy: TEAM_OWNER, changedAt: stamp } });
+    }
+    const noteMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/notes$/);
+    if (noteMatch) {
+      const request = route.request();
+      const body = request.postDataJSON();
+      requests.notes.push({ method: request.method(), contentType: request.headers()["content-type"], body });
+      const order = orders.find((o) => o.id === decodeURIComponent(noteMatch[1]));
+      if (!order) return reply(404, { error: { code: "not_found", message: "Order not found." } });
+      if (!String(body.body ?? "").trim()) return reply(400, { error: { code: "empty_note", message: "Write the note first." } });
+      const note = { id: (order.notes?.length ?? 0) + 1, author: TEAM_OWNER, body: String(body.body).trim(), at: stamp };
+      order.notes = [...(order.notes ?? []), note];
+      return reply(200, { note, notes: order.notes });
+    }
+    if (url.pathname === "/admin/api/contact-messages") return reply(200, { messages, nextBefore: null });
     if (url.pathname === "/admin/api/mcf/hold-test") {
       const request = route.request();
       requests.holdTests.push({ method: request.method(), contentType: request.headers()["content-type"], body: request.postDataJSON() });
@@ -307,11 +395,13 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       const filter = url.searchParams.get("status");
       const fulfillment = url.searchParams.get("fulfillment");
       const issue = url.searchParams.get("issue");
+      const view = url.searchParams.get("view") || "all";
       const q = (url.searchParams.get("q") || "").toLowerCase();
       const rows = orders.filter(
         (o) =>
           (!filter || o.status === filter) &&
           (!issue || openDisputes(o).length > 0) &&
+          inView(o, view) &&
           (!fulfillment || (fulfillment === "shipped" ? Boolean(o.fulfillment) : o.status === "paid" && !o.fulfillment)) &&
           (!q || JSON.stringify(o).toLowerCase().includes(q)),
       );
@@ -323,8 +413,11 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       };
       const issueCounts = { disputes: orders.filter((o) => openDisputes(o).length > 0).length };
       const listed = rows.map(summary);
-      if (issue) listed.sort((a, b) => String(a.disputeDueAt).localeCompare(String(b.disputeDueAt)));
-      return reply(200, { orders: listed, nextBefore: null, counts, fulfillmentCounts, issueCounts });
+      if (issue || view === "disputes") listed.sort((a, b) => String(a.disputeDueAt).localeCompare(String(b.disputeDueAt)));
+      const shown = orders.filter((o) => o.status !== "pending");
+      const viewCounts = Object.fromEntries(["all", "to_ship", "review", "problems", "disputes", "shipped", "cancelled"].map((key) => [key, shown.filter((o) => inView(o, key)).length]));
+      const numbers = { timeZone: "Asia/Taipei", today: { revenueCents: 0, orders: 1 }, month: { revenueCents: 0, orders: 2, averageCents: 0 }, refunds: { monthCents: 0, monthOrders: 0 }, toShip: viewCounts.to_ship, averageDaysToShip: null };
+      return reply(200, { orders: listed, nextBefore: null, counts, fulfillmentCounts, issueCounts, viewCounts, numbers });
     }
     const match = url.pathname.match(/^\/admin\/api\/orders\/(.+)$/);
     const order = match && orders.find((o) => o.id === decodeURIComponent(match[1]));

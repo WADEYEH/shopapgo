@@ -199,7 +199,8 @@ async function handleTeamApi(request, env, pathname, actor) {
   const url = new URL(request.url);
   if (pathname === "/admin/api/me" && request.method === "GET") {
     // teamAlerts: this person's own choice (worker/members.js); null when the sign-in is not on the member list.
-    return json({ actor: { id: actor.id, email: actor.email, role: actor.role, via: actor.via }, accessSignIn: accessMode(env), teamAlerts: await teamAlertsOf(env.DB, actor.email) }, 200, NO_INDEX);
+    // site: "staging" shows the STAGING tag on every page.
+    return json({ actor: { id: actor.id, email: actor.email, role: actor.role, via: actor.via }, accessSignIn: accessMode(env), teamAlerts: await teamAlertsOf(env.DB, actor.email), site: env.SITE_ENV === "staging" ? "staging" : "production" }, 200, NO_INDEX);
   }
   if (pathname === "/admin/api/me/alerts") {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });

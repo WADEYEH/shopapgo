@@ -98,7 +98,7 @@ test("before Access: the shared login is the owner under its email, the script t
   const env = baseEnv(db);
   await withWorld(async () => {
     const shared = await read(await call(env, "/admin/api/me", { headers: basic(SHARED.email, SHARED.password) }));
-    assert.deepEqual(shared, { status: 200, body: { actor: { id: "shared@apgo.example", email: "shared@apgo.example", role: "owner", via: "password" }, accessSignIn: false, teamAlerts: null } }, "the shared login is not on the member list: no team email setting");
+    assert.deepEqual(shared, { status: 200, body: { actor: { id: "shared@apgo.example", email: "shared@apgo.example", role: "owner", via: "password" }, accessSignIn: false, teamAlerts: null, site: "production" } }, "the shared login is not on the member list: no team email setting");
     const token = await read(await call(env, "/admin/api/me", { headers: { Authorization: `Bearer ${TOKEN}` } }));
     assert.deepEqual(token.body.actor, { id: "token", email: null, role: "member", via: "token" });
     assert.equal((await call(env, "/admin/api/members", { headers: { Authorization: `Bearer ${TOKEN}` } })).status, 403, "the token cannot manage members");
@@ -122,7 +122,7 @@ test("Access: a member's token gets in with their role; the first owner comes fr
   const env = accessEnv(db);
   await withWorld(async (calls) => {
     const me = await read(await call(env, "/admin/api/me", { headers: await as("Owner@APGO.example") }));
-    assert.deepEqual(me.body, { actor: { id: OWNER, email: OWNER, role: "owner", via: "access" }, accessSignIn: true, teamAlerts: true }, "an owner gets the team emails until they turn them off");
+    assert.deepEqual(me.body, { actor: { id: OWNER, email: OWNER, role: "owner", via: "access" }, accessSignIn: true, teamAlerts: true, site: "production" }, "an owner gets the team emails until they turn them off");
     assert.deepEqual(rows(db, "SELECT email, role, status, added_by FROM admin_members"), [{ email: OWNER, role: "owner", status: "active", added_by: "system" }]);
     assert.deepEqual(rows(db, "SELECT actor, action, target FROM admin_audit"), [{ actor: "system", action: "member.bootstrap", target: OWNER }]);
     // The keys are fetched once and reused.
