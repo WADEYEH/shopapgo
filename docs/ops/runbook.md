@@ -423,7 +423,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | `begin_checkout`、`add_shipping_info`、`add_payment_info` | 结账各步骤 |
 | `purchase` | 付款成功 |
 
-**GTM 容器要设好的（在 GTM 后台做，切换上线前确认一次）**：
+**GTM 容器要设好的（在 GTM 后台做，切换上线前确认一次）**。10/12 已照下面设好并发布版本 3「APGO US ecommerce (PR 3-9)」：新增触发条件「CE - ecommerce」和代码「GA4 - ecommerce」，删除 `amazon_referral_click` 的代码和触发条件；内部流量筛选器依你的决定维持「测试」。之后如果有人改了容器，用这份清单再核对一次：
 1. 用 mkt@apgo.com.tw 登录 tagmanager.google.com，打开容器 `GTM-TD5NTFH9`。
 2. 有一个 **Google 代码**（Google tag），ID 是 `G-YM10YMKE30`，触发条件是所有网页（Initialization – All Pages）。
 3. 有一个 **GA4 事件**代码：事件名称填 `{{Event}}`；勾选「**传送电子商务资料**」，资料来源选 **Data Layer**；触发条件是「自订事件」，事件名称用规则运算式 `^(view_item|select_item|view_cart|add_to_cart|remove_from_cart|begin_checkout|add_shipping_info|add_payment_info|purchase)$`。
