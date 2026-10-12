@@ -1,22 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BEFORE_AFTER, BRAND, MIN_VERIFIED_REVIEWS, PRODUCTS, QUIZ, REVIEWS, SEO, SKUS, productPath } from "@/lib/shop/catalog";
+import { BEFORE_AFTER, MIN_VERIFIED_REVIEWS, PRODUCTS, QUIZ, REVIEWS, SKUS, productPath } from "@/lib/shop/catalog";
 import { MAX_QTY, addToCart } from "@/lib/shop/cart";
+import { contentMark, imageMark, useLiveCatalog } from "@/lib/shop/live-content";
+import { jsonLdText, productJsonLd } from "@/lib/shop/product-content.mjs";
 import { averageRating, reviewsToShow } from "@/lib/shop/reviews";
-import { onSale, priceCents, priceText, useStoreConfig } from "@/lib/shop/store-config";
+import { onSale, priceCents, priceText } from "@/lib/shop/store-config";
 import { track } from "@/lib/us/analytics";
 import { asset } from "@/lib/us/routes";
 import { SITE_URL } from "@/lib/site";
 
 // A product page (D204 DRY / D215 WET), one per product URL (D39).
 // - Prices only from /api/store/config (commerce/worker/pricing.js); nothing here knows a price.
+// - The name, words and photos an owner changed in the back office (D52): useLiveCatalog. The elements marked with
+//   contentMark / imageMark are the ones the Worker fills in the page it sends (commerce/worker/site-content.js), so
+//   the first render matches it.
 // - No unconfirmed promises: terms the brand has not confirmed (pair price, shipping, returns, guarantee) are not here.
 // - Reviews and before/after photos (lib/shop/catalog: REVIEWS, BEFORE_AFTER) stay hidden until real.
 // The other routine is its own page: the DRY / WET switch, the quiz and the comparison link to it.
 
 const word = (sku) => (PRODUCTS[sku].routine === "dry" ? "DRY" : "WET");
-const absolute = (path) => new URL(path, SITE_URL).href;
 
 function analyticsItems(lines, config) {
   return lines.map(({ sku, qty }) => {
@@ -37,47 +41,38 @@ const FAQ = [
   ["What surfaces can I use it on?", "Use each product only on surfaces identified by its current label. Contact APGO when a surface is not listed."],
 ];
 
-function ProductJsonLd({ sku, config }) {
-  const p = PRODUCTS[sku];
-  const seo = SEO[sku];
-  const data = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: `${p.name} (${word(sku)})`,
-    sku: p.sku,
-    description: seo.description,
-    brand: { "@type": "Brand", name: BRAND },
-    image: [absolute(seo.image)],
-  };
-  // A price only from the live config and only once the owner approved pricing: a placeholder price must never reach
-  // search engines.
-  const cents = priceCents(config, sku);
-  if (config?.estimate === false && cents !== null) {
-    data.offers = { "@type": "Offer", url: absolute(seo.path), priceCurrency: config.currency || "USD", price: (cents / 100).toFixed(2) };
+// The same data the Worker writes into the page it sends (lib/shop/product-content.mjs). A price only from the live
+// config and only once the owner approved pricing: a placeholder price must never reach search engines.
+function ProductJsonLd({ sku, content, config }) {
+  const data = productJsonLd(sku, content, {
+    siteUrl: SITE_URL,
+    priceCents: priceCents(config, sku),
+    currency: config?.currency || "USD",
+    approved: config?.estimate === false,
     // Stopped by an owner (commerce/worker/products.js).
-    if (!onSale(config, sku)) data.offers.availability = "https://schema.org/OutOfStock";
-  }
-  return <script type="application/ld+json" id="pdp-jsonld" dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }} />;
+    onSale: onSale(config, sku),
+  });
+  return <script type="application/ld+json" id="pdp-jsonld" dangerouslySetInnerHTML={{ __html: jsonLdText(data) }} />;
 }
 
-function Gallery({ sku }) {
-  const p = PRODUCTS[sku];
-  const images = [
-    { src: SEO[sku].image, alt: `APGO ${p.name} ${p.size}`, fit: "contain" },
-    ...p.steps.slice(0, 3).map(([file, caption]) => ({ src: asset(`application/${file}.webp`), alt: `${p.word} application, step: ${caption}`, fit: "cover" })),
-  ];
+function Gallery({ sku, content }) {
+  const { images } = content;
   const [index, setIndex] = useState(0);
-  const current = images[index];
+  // The thumbnails come after the first render: the page the Worker sends changes only the main photo, so a different
+  // number of photos never makes the page differ from it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const current = images[Math.min(index, images.length - 1)];
   return (
     <div className="pdp-gallery">
       <div className="pdp-stage">
         <span className="pdp-ghost" aria-hidden="true" data-ghost="">{word(sku)}</span>
         <span className="pdp-glow" aria-hidden="true" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="pdp-stage__img" data-gallery-main="" data-fit={current.fit} src={current.src} alt={current.alt} width="1400" height="1400" />
+        <img className="pdp-stage__img" data-gallery-main="" {...(current === images[0] ? imageMark(sku, 0) : {})} data-fit={current.fit} src={current.src} alt={current.alt} width="1400" height="1400" />
       </div>
       <ul className="pdp-thumbs" data-thumbs="" aria-label="Product images">
-        {images.map((image, i) => (
+        {mounted && images.map((image, i) => (
           <li key={image.src}>
             <button type="button" className="pdp-thumb" aria-label={`Show image ${i + 1} of ${images.length}`} aria-pressed={i === index} data-thumb={i} onClick={() => setIndex(i)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -90,8 +85,8 @@ function Gallery({ sku }) {
   );
 }
 
-function HowTo({ sku }) {
-  const p = PRODUCTS[sku];
+function HowTo({ sku, content }) {
+  const p = content;
   const [playing, setPlaying] = useState(false);
   const poster = asset(`video/${sku}-poster.webp`);
   const play = () => {
@@ -129,7 +124,7 @@ function HowTo({ sku }) {
                 </li>
               ))}
             </ol>
-            <p className="pdp-note" data-scope="">Use on: {p.scope} Use only as directed.</p>
+            <p className="pdp-note" data-scope="">Use on: <span {...contentMark(sku, "scope")}>{p.scope}</span> Use only as directed.</p>
           </div>
         </div>
       </div>
@@ -137,7 +132,7 @@ function HowTo({ sku }) {
   );
 }
 
-function Quiz({ sku, onAdd, selling = true }) {
+function Quiz({ sku, content, onAdd, selling = true }) {
   const [answers, setAnswers] = useState([]);
   const inputs = useRef([]);
   const focusNext = useRef(null);
@@ -157,11 +152,11 @@ function Quiz({ sku, onAdd, selling = true }) {
     const score = { d204: 0, d215: 0 };
     answers.forEach((yes, i) => (score[yes ? QUIZ[i].yes : QUIZ[i].no] += 1));
     const rec = score.d204 >= score.d215 ? "d204" : "d215";
-    const r = PRODUCTS[rec];
+    const r = content[rec];
     result = (
       <div className="quiz__result" data-quiz-result="" data-routine={r.routine} aria-live="polite">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={SEO[rec].image} alt="" width="72" height="72" />
+        <img src={r.image} alt="" width="72" height="72" />
         <div className="quiz__rec">
           <span className="label label--xs">Your routine</span>
           <span className="quiz__rec-name"><span className={`routine routine--md routine--${r.routine}`}>{word(rec)}</span><span className="product-name">{r.name}</span></span>
@@ -211,13 +206,14 @@ function Quiz({ sku, onAdd, selling = true }) {
   );
 }
 
-function Compare({ sku, config, onAdd, selling = true }) {
+function Compare({ sku, config, content, onAdd, selling = true }) {
+  // [label, the product field an owner can change (marked for the Worker), or how to show the row]
   const rows = [
-    ["Product", (p) => p.name],
-    ["When", (p) => p.when],
-    ["Lasts up to", (p) => p.lasts],
-    ["Contents", (p) => `${p.size} / ${p.oz}`],
-    ["Price", (p, s) => priceText(priceCents(config, s), config?.currency)],
+    ["Product", "name"],
+    ["When", "when"],
+    ["Lasts up to", "lasts"],
+    ["Contents", null, (p) => `${p.size} / ${p.oz}`],
+    ["Price", null, (p, s) => priceText(priceCents(config, s), config?.currency)],
   ];
   const cell = (s) => (s === sku ? "is-current" : undefined);
   return (
@@ -237,10 +233,12 @@ function Compare({ sku, config, onAdd, selling = true }) {
             </tr>
           </thead>
           <tbody data-compare-body="">
-            {rows.map(([label, value]) => (
+            {rows.map(([label, field, value]) => (
               <tr key={label}>
                 <th scope="row">{label}</th>
-                {SKUS.map((s) => <td key={s} data-col={s} className={cell(s)}>{value(PRODUCTS[s], s)}</td>)}
+                {SKUS.map((s) => (
+                  <td key={s} data-col={s} className={cell(s)} {...(field ? contentMark(s, field) : {})}>{field ? content[s][field] : value(content[s], s)}</td>
+                ))}
               </tr>
             ))}
             <tr>
@@ -263,11 +261,10 @@ function Compare({ sku, config, onAdd, selling = true }) {
 }
 
 export default function ProductPage({ sku }) {
-  const p = PRODUCTS[sku];
+  const { status, config, content } = useLiveCatalog();
+  const p = content[sku];
   const other = p.other;
-  const o = PRODUCTS[other];
-  const seo = SEO[sku];
-  const { status, config } = useStoreConfig();
+  const o = content[other];
   const [qty, setQty] = useState(1);
   const [pair, setPair] = useState(false);
   const [added, setAdded] = useState("");
@@ -299,6 +296,11 @@ export default function ProductPage({ sku }) {
     });
     document.documentElement.dataset.pdpReady = "true";
   }, [status, config, sku]);
+
+  // The search title an owner set (the Worker also puts it in the page and in the data Next.js loads between pages).
+  useEffect(() => {
+    if (document.title !== p.seoTitle) document.title = p.seoTitle;
+  }, [p.seoTitle]);
 
   // The sticky add-to-cart bar shows once the main buy row has scrolled above the viewport. A scroll listener (not an
   // IntersectionObserver) so a jump straight past the row (anchor, End key) is handled too.
@@ -341,34 +343,34 @@ export default function ProductPage({ sku }) {
         items: [items[i]],
       });
     });
-    setAdded(lines.map((line) => `${PRODUCTS[line.sku].word} · ${PRODUCTS[line.sku].name} × ${line.qty}`).join(" + "));
+    setAdded(lines.map((line) => `${content[line.sku].word} · ${content[line.sku].name} × ${line.qty}`).join(" + "));
     if (paired && total !== null) track("pdp_pair_added", { value: total / 100, currency });
   };
 
   return (
     <>
       <noscript><p className="pdp-noscript">Turn on JavaScript to see prices and add products to your cart.</p></noscript>
-      <ProductJsonLd sku={sku} config={config} />
+      <ProductJsonLd sku={sku} content={p} config={config} />
       <main id="main" data-routine={p.routine} data-sku={sku}>
         {/* 1. Hero: sticky gallery + buy box */}
         <section className="pdp-hero" aria-labelledby="pdp-title">
           <div className="pdp-wrap pdp-hero__wrap">
             <nav className="breadcrumb" aria-label="Breadcrumb">
-              <a href="/products">Shop</a><span aria-hidden="true">/</span><span aria-current="page" data-crumb="">{p.word} · {p.name}</span>
+              <a href="/products">Shop</a><span aria-hidden="true">/</span><span aria-current="page" data-crumb="">{p.word} · <span {...contentMark(sku, "name")}>{p.name}</span></span>
             </nav>
             <div className="pdp-hero__grid">
-              <Gallery key={sku} sku={sku} />
+              <Gallery key={sku} sku={sku} content={p} />
               <div className="pdp-buy">
                 <div className="pdp-id">
                   <span className={`routine routine--xl routine--${p.routine}`} data-routine-word="">{word(sku)}</span>
-                  <span className="label pdp-id__when" data-when="">{p.when}</span>
+                  <span className="label pdp-id__when" data-when="" {...contentMark(sku, "when")}>{p.when}</span>
                   <span className="sku-tag" data-sku-tag="">{p.sku}</span>
                 </div>
-                <h1 className="heading-guide-h1 pdp-title" id="pdp-title" data-name="">{p.name}</h1>
+                <h1 className="heading-guide-h1 pdp-title" id="pdp-title" data-name="" {...contentMark(sku, "name")}>{p.name}</h1>
                 {reviews.length > 0 && (
                   <p className="pdp-rating" data-rating="">★ {averageRating(reviews).toFixed(1)} · {reviews.length} verified reviews</p>
                 )}
-                <p className="body pdp-promise" data-promise="">{p.promise}</p>
+                <p className="body pdp-promise" data-promise="" {...contentMark(sku, "promise")}>{p.promise}</p>
 
                 <nav className="pdp-switch" aria-label="Routine" data-switch="">
                   {SKUS.map((s) => (
@@ -385,7 +387,7 @@ export default function ProductPage({ sku }) {
                     <span className="check__description">Both routines in one order</span>
                   </span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="pdp-pair__img" data-pair-img="" src={SEO[other].image} alt="" width="56" height="56" />
+                  <img className="pdp-pair__img" data-pair-img="" {...imageMark(other, 0)} src={o.image} alt="" width="56" height="56" />
                 </label>}
 
                 <div className="pdp-buyrow" data-buyrow="" ref={buyRow}>
@@ -428,12 +430,21 @@ export default function ProductPage({ sku }) {
         <section className="pdp-benefits" aria-label="Key facts">
           <div className="pdp-wrap">
             <ul className="pdp-benefits__grid" data-benefits="">
-              {p.benefits.map(([value, unit, caption]) => (
-                <li key={caption} className="pdp-benefit">
-                  <span className="pdp-benefit__value">{value}<span className="pdp-benefit__unit">{unit}</span></span>
-                  <span className="pdp-benefit__caption">{caption}</span>
-                </li>
-              ))}
+              {p.benefits.map(([value, unit, caption], i) => {
+                // The first fact is how long it lasts: the wording an owner set shows here too.
+                const lasts = i === 0 && caption.startsWith("Lasts up to");
+                return lasts ? (
+                  <li key="lasts" className="pdp-benefit">
+                    <span className="pdp-benefit__value"><span {...contentMark(sku, "lastsValue")}>{p.lastsValue}</span><span className="pdp-benefit__unit" {...contentMark(sku, "lastsUnit")}>{p.lastsUnit}</span></span>
+                    <span className="pdp-benefit__caption">Lasts up to <span {...contentMark(sku, "lasts")}>{p.lasts}</span></span>
+                  </li>
+                ) : (
+                  <li key={caption} className="pdp-benefit">
+                    <span className="pdp-benefit__value">{value}<span className="pdp-benefit__unit">{unit}</span></span>
+                    <span className="pdp-benefit__caption">{caption}</span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>
@@ -454,13 +465,13 @@ export default function ProductPage({ sku }) {
         )}
 
         {/* 4. How to apply */}
-        <HowTo key={`how-${sku}`} sku={sku} />
+        <HowTo key={`how-${sku}`} sku={sku} content={p} />
 
         {/* 5. Fit quiz */}
-        <Quiz key={`quiz-${sku}`} sku={sku} onAdd={add} selling={selling} />
+        <Quiz key={`quiz-${sku}`} sku={sku} content={content} onAdd={add} selling={selling} />
 
         {/* 6. Dry vs Wet */}
-        <Compare sku={sku} config={config} onAdd={add} selling={selling} />
+        <Compare sku={sku} config={config} content={content} onAdd={add} selling={selling} />
 
         {/* 7. Reviews: only with 3 verified reviews (FTC 16 CFR 465) */}
         {reviews.length > 0 && (
@@ -502,7 +513,7 @@ export default function ProductPage({ sku }) {
             <div className="pdp-more">
               <a className="pdp-more__card" data-more-other="" href={productPath(other)}>
                 <span className="pdp-more__cat">{o.word} routine · {o.sku}</span>
-                <span className="pdp-more__title">{o.name}</span>
+                <span className="pdp-more__title" {...contentMark(other, "name")}>{o.name}</span>
                 <span className="pdp-more__cta">See the {o.word} product page <span aria-hidden="true">→</span></span>
               </a>
               <a className="pdp-more__card" href="/#technology">
@@ -519,10 +530,10 @@ export default function ProductPage({ sku }) {
       <aside className="pdp-sticky" data-sticky="" data-visible={String(sticky && selling)} aria-label="Quick add to cart" aria-hidden={!(sticky && selling)} inert={!(sticky && selling)}>
         <div className="pdp-sticky__inner">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={seo.image} alt="" width="44" height="44" data-sticky-img="" />
+          <img src={p.image} alt="" width="44" height="44" data-sticky-img="" {...imageMark(sku, 0)} />
           <div className="pdp-sticky__text">
             <span className="pdp-sticky__line"><span className={`routine routine--sm routine--${p.routine}`} data-sticky-word="">{word(sku)}</span><span className="pdp-sticky__price" data-sticky-price="">{priceText(total, currency)}</span></span>
-            <span className="pdp-sticky__name" data-sticky-name="">{paired ? "Dry + Wet pair" : p.name}</span>
+            <span className="pdp-sticky__name" data-sticky-name="" {...(paired ? {} : contentMark(sku, "name"))}>{paired ? "Dry + Wet pair" : p.name}</span>
           </div>
           <button className="btn btn--md" type="button" data-pdp-add="" data-placement="sticky" disabled={!selling} onClick={() => add("sticky")}>Add to cart <span aria-hidden="true">→</span></button>
         </div>

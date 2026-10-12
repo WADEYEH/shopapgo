@@ -4,6 +4,7 @@ import { QuoteError, publicConfig, quote } from "../../worker/catalog.js";
 import { validateCheckout } from "../../worker/checkout.js";
 import { ADDRESS_MESSAGES } from "../../worker/address-check.js";
 import { resolvePricing } from "../../worker/pricing.js";
+import { applyContent } from "../../../lib/shop/product-content.mjs";
 import { checkShipping } from "../../../lib/shop/address-rules.mjs";
 import { CONTACT_MESSAGES, checkContactMessage } from "../../../lib/shop/contact-rules.mjs";
 
@@ -140,9 +141,10 @@ window.paypal = {
 `;
 
 // stopped: product ids an owner stopped selling (worker/products.js livePricing).
-export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [] } = {}) {
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [], content = {} } = {}) {
+  // content: what owners changed per product ({ [sku]: { name, priceCents, images, … } }; worker/product-content.js).
   const livePricing = () => {
-    const pricing = resolvePricing(env);
+    const pricing = Object.keys(content).length ? applyContent(resolvePricing(env), content) : resolvePricing(env);
     return { ...pricing, products: Object.fromEntries(Object.entries(pricing.products).map(([id, product]) => [id, stopped.includes(id) ? { ...product, onSale: false } : product])) };
   };
   const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [], contact: [] };

@@ -22,6 +22,12 @@ database_name = "apgo-us-store"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"   # numbered, additive-only migrations (D45): npm run db:migrate:local
 
+# Product photos owners upload in the back office (worker/product-content.js, D61, D62): served at /media/products/*.
+# Local dev (`wrangler dev`) keeps its own copy on disk; the bucket name only matters with --remote.
+[[r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "apgo-us-store-images-staging"
+
 # Per-address limits on the endpoints that cost money or invite abuse (worker/rate-limit.js, M12-06): starting a payment,
 # the address check (a paid Google API) and quotes. Each environment has its own namespaces.
 [[ratelimits]]
@@ -105,6 +111,12 @@ binding = "DB"
 database_name = "apgo-us-store-staging"
 database_id = "246c3158-a70e-420e-a165-cda01b4ca434"
 migrations_dir = "migrations"
+
+# Product photos owners upload in the back office (worker/product-content.js, D61, D62): served at /media/products/*.
+# Created 2026-10-12 (location ENAM); its own bucket, never the production one.
+[[env.staging.r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "apgo-us-store-images-staging"
 
 # Per-address limits on the endpoints that cost money or invite abuse (worker/rate-limit.js, M12-06): starting a payment,
 # the address check (a paid Google API) and quotes. Each environment has its own namespaces.
@@ -221,6 +233,12 @@ binding = "DB"
 database_name = "apgo-us-store"
 database_id = "b409b132-2f2d-4da8-970c-2cf5560ac830"
 migrations_dir = "migrations"   # applied only by the Deploy workflow, after it records a restore point (docs/ops/runbook.md)
+
+# Product photos owners upload in the back office (worker/product-content.js, D61, D62): served at /media/products/*.
+# Created 2026-10-12 (location ENAM). Not the older apgo-product-images bucket, which belongs to another project.
+[[env.production.r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "apgo-us-store-images"
 
 # Per-address limits on the endpoints that cost money or invite abuse (worker/rate-limit.js, M12-06): starting a payment,
 # the address check (a paid Google API) and quotes. Each environment has its own namespaces.

@@ -21,6 +21,9 @@
 //   POST /admin/api/orders/:id/notes         an internal note { body } (worker/order-notes.js, I10)
 //   GET  /admin/api/products[/:id]           products with sales, stock and the on-sale switch (worker/products.js)
 //   POST /admin/api/products/:id/sale        owners only: stop or resume selling { onSale, reason } (A4, M9-07)
+//   POST /admin/api/products/:id/content     owners only: publish the price, words and photos { content, expectedVersion } (D52, D63)
+//   POST /admin/api/products/:id/restore     owners only: put a version back (0 = the original) { version, expectedVersion }
+//   POST /admin/api/products/:id/images      owners only: upload a photo, the image itself as the body (worker/product-content.js)
 //   POST /admin/api/orders/:id/refund        owners only: { key, amountCents, reason, note, notify, cancelFirst } (D51, D55)
 //   GET  /admin/api/customers[/:ref]         customers, one customer by any of their order numbers (worker/customers.js)
 //   POST /admin/api/customers/:ref/notes     an internal note on the customer { body }
@@ -63,6 +66,8 @@ import { listContactMessages } from "./contact.js";
 import { dashboard, salesNumbers } from "./dashboard.js";
 import { NoteError, addNote, listNotes } from "./order-notes.js";
 import { ProductError, getProduct, listProducts, setOnSale } from "./products.js";
+import { ContentError, publishContent, restoreContent, uploadProductImage } from "./product-content.js";
+import { forgetLiveContent } from "./site-content.js";
 import { refundPanel, requestAdminRefund } from "./admin-refunds.js";
 import { CUSTOMER_SORTS, CustomerError, addCustomerNote, getCustomer, listCustomers } from "./customers.js";
 import { closePrivacyRequest, eraseCustomer, exportCustomer, privacyView, recordPrivacyRequest } from "./customer-privacy.js";
@@ -100,13 +105,14 @@ export async function handleAdmin(request, env) {
   return new Response(response.body, { status: response.status, headers });
 }
 
-function csrfProblem(request) {
+// contentType: what the body must be. A photo upload sends the image itself (image/*, which needs a preflight as well).
+function csrfProblem(request, { contentType = /^application\/json\b/i, expected = "application/json" } = {}) {
   const { origin } = new URL(request.url);
   const site = request.headers.get("Sec-Fetch-Site");
   if (site && !["same-origin", "none"].includes(site)) return "Cross-site requests are not allowed.";
   const requestOrigin = request.headers.get("Origin");
   if (requestOrigin && requestOrigin !== origin) return "Cross-origin requests are not allowed.";
-  if (!/^application\/json\b/i.test(request.headers.get("Content-Type") || "")) return "Content-Type must be application/json.";
+  if (!contentType.test(request.headers.get("Content-Type") || "")) return `Content-Type must be ${expected}.`;
   return null;
 }
 
@@ -137,6 +143,31 @@ async function readJsonObject(request) {
     body = null;
   }
   return body && typeof body === "object" && !Array.isArray(body) ? body : null;
+}
+
+// POST /admin/api/products/:id/content | restore | images (worker/product-content.js; owners only, checked there).
+// Publishing or restoring answers with the product as it is now; an upload answers with the new photo.
+async function handleProductContent(request, env, id, action, actor) {
+  if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+  const image = action === "images";
+  const blocked = image ? csrfProblem(request, { contentType: /^image\/(?:webp|jpeg|png)$/i, expected: "image/webp, image/jpeg or image/png" }) : csrfProblem(request);
+  if (blocked) {
+    const wrongType = image && blocked.startsWith("Content-Type");
+    return fail(wrongType ? 415 : 403, wrongType ? "invalid_image_type" : "forbidden", blocked, NO_INDEX);
+  }
+  try {
+    if (image) return json({ image: await uploadProductImage(env, actor, id, request) }, 200, NO_INDEX);
+    const body = await readJsonObject(request);
+    if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+    const result = action === "content" ? await publishContent(env, actor, id, body) : await restoreContent(env, actor, id, body);
+    // The review before publishing: what would change, nothing saved.
+    if (result.dryRun) return json({ changes: result.changes, version: result.version }, 200, NO_INDEX);
+    forgetLiveContent(env);
+    return json({ changed: result.changed, version: result.version, product: await getProduct(env, id) }, 200, NO_INDEX);
+  } catch (error) {
+    if (error instanceof ContentError) return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, error.status, NO_INDEX);
+    throw error;
+  }
 }
 
 // POST .../mcf/submit: (re)send a paid order to Amazon MCF. Needs the same admin + CSRF guards as shipping.
@@ -448,6 +479,8 @@ export async function handleAdminApi(request, env, pathname) {
       throw error;
     }
   }
+  const productWrite = pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)\/(content|restore|images)$/);
+  if (productWrite) return handleProductContent(request, env, productWrite[1], productWrite[2], actor);
   const refund = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refund$/);
   if (refund) {
     const id = decodeURIComponent(refund[1]);

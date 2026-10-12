@@ -53,7 +53,7 @@ test("the admin page is noindex, writes only through the known back-office endpo
   assert.deepEqual([...sources["i18n.js"].matchAll(/localStorage\.(\w+)\((\w+)/g)].map((m) => `${m[1]}:${m[2]}`), ["getItem:LANG_KEY", "setItem:LANG_KEY"]);
   assert.ok(!/method:\s*["'](PUT|PATCH|DELETE)/.test(script));
   const posts = script.match(/method:\s*["']POST["']/g) ?? [];
-  assert.equal(posts.length, 18, "writes: team emails, MCF sync-all, Hold test order, refund sync, sandbox refund check, MCF submit/sync/cancel, cancel and refund, mark-as-shipped, email retry, notes, confirm/cancel/address, stop selling, members; PR 3-10: refund, customer notes, privacy request record/close, delete customer data");
+  assert.equal(posts.length, 21, "writes: team emails, MCF sync-all, Hold test order, refund sync, sandbox refund check, MCF submit/sync/cancel, cancel and refund, mark-as-shipped, email retry, notes, confirm/cancel/address, stop selling, members; PR 3-10: refund, customer notes, privacy request record/close, delete customer data; PR 3-12: product content (review and publish), restore a version, upload a photo");
   assert.ok(/\/ship`/.test(sources["order.js"]));
   assert.ok(/\/mcf\/\$\{action\}`/.test(sources["order.js"]) && sources["orders.js"].includes('"/admin/api/mcf/sync"'));
   assert.ok(/\/emails\/\$\{encodeURIComponent\(mail\.kind\)\}\/retry`/.test(sources["order.js"]));

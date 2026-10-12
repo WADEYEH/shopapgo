@@ -45,7 +45,10 @@ const ADDED = [
   "order_refund_requests",
   "order_refunds",
   "privacy_requests",
+  "product_content",
+  "product_images",
   "product_settings",
+  "product_versions",
   "staging_fake_mcf_orders",
   "team_alerts",
 ];

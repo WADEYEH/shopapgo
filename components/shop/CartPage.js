@@ -5,6 +5,8 @@ import { api } from "@/lib/shop/api";
 import { MAX_QTY, addToCart, removeFromCart, setCartQty, useCartItems } from "@/lib/shop/cart";
 import { fetchStoreConfig, isEstimate, money, onSale } from "@/lib/shop/store-config";
 import { PRODUCTS } from "@/lib/shop/catalog";
+import { liveOverrides } from "@/lib/shop/live-content";
+import { productContent } from "@/lib/shop/product-content.mjs";
 import { quoteItems, track } from "@/lib/us/analytics";
 import { Estimate, Notice, PriceRows, ProductName, RoutineWord, productImage } from "@/components/shop/ui";
 
@@ -112,7 +114,7 @@ export default function CartPage() {
             {(items ?? []).filter((item) => !onSale(config, item.sku)).map((item) => (
               <li key={item.sku} className="line-item" data-line={item.sku}>
                 <div className="line-item__body">
-                  <span className="line-item__title">{PRODUCTS[item.sku]?.name ?? item.sku}</span>
+                  <span className="line-item__title">{PRODUCTS[item.sku] ? productContent(item.sku, liveOverrides(config, item.sku)).name : item.sku}</span>
                   <span className="line-item__meta">Not available right now</span>
                 </div>
                 <button type="button" className="line-item__remove" onClick={() => removeFromCart(item.sku)}>Remove</button>
