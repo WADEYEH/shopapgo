@@ -77,6 +77,8 @@
 
 **PR 3-3 新增的设定**：可选的一般设定 `ORDER_COOLING_OFF_MINUTES`（冷静期分钟数，不设就是 60）。切换后只有「付款时自动送单是打开的」订单会自动送 Amazon，切换前的订单不会。
 
+**PR 3-11 新增的设定**（切换那次部署生效）：一般设定 `CONFIG_PROFILE`（production，网站比对自己设定用）、`GA4_MEASUREMENT_ID`（G-YM10YMKE30，公开的编号）；绑定 `CF_VERSION_METADATA`（版本编号）；密钥 `GA4_API_SECRET` 切换时建（D58）。网站每天比对 `wrangler.toml` 的一般设定、必须有的密钥名称和绑定，不一致会寄团队信（营运手册第 21 节）。
+
 **PR 3-2 新增的设定**（切换那次部署生效）：一般设定 `ADMIN_OWNER_EMAIL`（第一位拥有者）。打开 Cloudflare Access 时再加：一般设定 `ADMIN_ACCESS`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`CLOUDFLARE_ACCOUNT_ID`、`ACCESS_LIST_ID`，密钥 `ACCESS_LIST_API_TOKEN`（`docs/ops/runbook.md` 第 11 节）。
 
 **之后要移除的**（企划 O10）：`META_TEST_EVENT_CODE`（先确认用途）；切换到 Cloudflare Access 后的 `ADMIN_LOGIN_EMAIL`、`ADMIN_LOGIN_PASSWORD`；`ADMIN_TOKEN` 只留给脚本或移除。

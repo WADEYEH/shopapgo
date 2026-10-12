@@ -40,6 +40,7 @@ export function validateShipment(body) {
   return { carrier, trackingNumber, trackingUrl: url };
 }
 
+// packages: every package Amazon shipped (worker/package-tracking.js), for the shipment email and the order page (F6).
 export async function getFulfillment(db, orderId) {
   const row = await db.prepare("SELECT * FROM order_fulfillments WHERE order_id = ?").bind(orderId).first();
   if (!row) return null;
@@ -50,8 +51,32 @@ export async function getFulfillment(db, orderId) {
     trackingUrl: row.tracking_url,
     shippedAt: row.shipped_at,
     shippedBy: row.shipped_by,
+    packages: await listPackages(db, orderId),
   };
 }
+
+// Packages of an order, oldest first, with what the carrier last said (worker/package-tracking.js).
+export async function listPackages(db, orderId) {
+  try {
+    const { results } = await db.prepare("SELECT * FROM order_packages WHERE order_id = ? ORDER BY created_at, tracking_number").bind(orderId).all();
+    return results.map((row) => {
+      let events = [];
+      try {
+        events = JSON.parse(row.events_json || "[]");
+      } catch {
+        // shown without events
+      }
+      return {
+        trackingNumber: row.tracking_number, carrier: row.carrier, trackingUrl: row.tracking_url || null, packageId: row.package_id || null,
+        status: row.status || null, statusAt: row.status_at ?? null, deliveredAt: row.delivered_at ?? null, returnedAt: row.returned_at ?? null,
+        events, checkedAt: row.checked_at ?? null,
+      };
+    });
+  } catch {
+    return []; // a database without order_packages (before migration 0012)
+  }
+}
+
 
 export async function listAudit(db, orderId) {
   const { results } = await db

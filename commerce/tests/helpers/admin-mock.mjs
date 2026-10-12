@@ -209,9 +209,10 @@ function teamMock(team, writes) {
 // checkouts: the Unfinished checkouts list (worker/checkouts.js listCheckouts shape).
 // lang: the back office's language for the test (D49), "en" unless asked; null leaves the page's own choice.
 // messages: the Contact us messages. stopped: product ids an owner stopped selling. notes: { [orderId]: notes }.
+// packages: { [orderId]: packages } for shipped orders. returned: the dashboard's packages going back to the sender.
 // fulfilled: order ids already shipped. refundOutcome: what the refund POST answers (requested | failed | not_cancelled).
 // privacy: the dashboard's open privacy requests. customers: see CUSTOMERS. erasureBlockers: why deleting must wait.
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {}, fulfilled = [], refundOutcome = "requested", privacy = [], erasureBlockers = [] } = {}) {
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {}, fulfilled = [], refundOutcome = "requested", privacy = [], erasureBlockers = [], packages = {}, returned = [] } = {}) {
   mockRole = team?.role ?? "owner";
   if (lang) await page.addInitScript((value) => { try { localStorage.setItem("apgo_admin_lang", value); } catch { /* none */ } }, lang);
   const requests = [];
@@ -227,7 +228,7 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
   for (const [id, list] of Object.entries(disputes)) orders.find((o) => o.id === id).disputes = structuredClone(list);
   for (const [id, provider] of Object.entries(providers)) orders.find((o) => o.id === id).paymentProvider = provider;
   for (const [id, list] of Object.entries(notes)) orders.find((o) => o.id === id).notes = structuredClone(list);
-  for (const id of fulfilled) orders.find((o) => o.id === id).fulfillment = { status: "shipped", carrier: "UPS", trackingNumber: "1Z999", trackingUrl: null, shippedAt: "2026-10-02T03:00:00.000Z", shippedBy: "mcf" };
+  for (const id of fulfilled) orders.find((o) => o.id === id).fulfillment = { status: "shipped", carrier: "UPS", trackingNumber: "1Z999", trackingUrl: null, shippedAt: "2026-10-02T03:00:00.000Z", shippedBy: "mcf", packages: structuredClone(packages[id] ?? []) };
   requests.refunds = [];
   requests.customers = [];
   requests.downloads = [];
@@ -270,8 +271,11 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
         numbers: { timeZone: "Asia/Taipei", today: { revenueCents: 12897, orders: 1 }, month: { revenueCents: 18896, orders: 2, averageCents: 9448 }, refunds: { monthCents: 0, monthOrders: 0 }, toShip: 1, averageDaysToShip: null },
         pipeline: { coolingOff: 0, waiting: 1, withAmazon: 0, outOfStock: 0, shippedThisWeek: 0, coolingOffMinutes: 60 },
         attention: {
-          items: waiting.map((o) => ({ kind: o.status === "review" ? "review" : "disputes", orderId: o.id, name: `${o.shipping.firstName} ${o.shipping.lastName}`, totalCents: o.totalCents, detail: o.status === "review" ? {} : { provider: "airwallex", due_at: openDisputes(o)[0].dueAt } })),
-          total: waiting.length,
+          items: [
+            ...waiting.map((o) => ({ kind: o.status === "review" ? "review" : "disputes", orderId: o.id, name: `${o.shipping.firstName} ${o.shipping.lastName}`, totalCents: o.totalCents, detail: o.status === "review" ? {} : { provider: "airwallex", due_at: openDisputes(o)[0].dueAt } })),
+            ...returned.map((r) => ({ kind: "returned", orderId: r.order_id, name: "Ada Lee", totalCents: 12897, detail: { tracking_number: r.tracking_number, carrier: r.carrier, status: r.status, returned_at: r.returned_at } })),
+          ],
+          total: waiting.length + returned.length,
           clear: ["not_sent", "stockout", "no_tracking", "refunds", "emails", "addresses"],
         },
         health: [
@@ -491,6 +495,11 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     if (exportMatch) {
       requests.downloads.push(url.pathname + url.search);
       return route.fulfill({ status: 200, contentType: "text/csv; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="apgo-${exportMatch[1]}-2026-10-01-to-2026-10-31.csv"` }, body: "\ufefforder,total\r\n" });
+    }
+    const evidenceMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/evidence$/);
+    if (evidenceMatch) {
+      requests.downloads.push(url.pathname);
+      return route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="apgo-evidence-${decodeURIComponent(evidenceMatch[1])}.html"` }, body: "<!doctype html><title>evidence</title>" });
     }
     const lookupMatch = url.pathname.match(/^\/admin\/api\/(airwallex\/intents|paypal\/orders)\/([^/]+)$/);
     if (lookupMatch) {

@@ -10,9 +10,11 @@
 //   refunds         failed refunds, and refunds the store asked for that did not go through
 //   emails          customer emails in the last day that bounced, were marked as spam, were blocked or failed
 //   addresses       paid in the last day with the address unchecked because the check service was down
+//   returned        packages going back to the sender in the last 14 days (worker/package-tracking.js, F9)
 //   privacy         privacy requests not answered yet, with the date to answer by (M11-05; worker/customer-privacy.js)
 import { alertTeam } from "./team-alerts.js";
 import { privacyReminders } from "./customer-privacy.js";
+import { returnedPackages } from "./package-tracking.js";
 import { addWorkingDays } from "./fulfillment-checks.js";
 import { adminHost } from "./hosts.js";
 
@@ -49,6 +51,7 @@ export async function waitingLists(env, { nowMs = Date.now() } = {}) {
     { key: "refunds", rows: await all(db,
       `SELECT order_id FROM order_refunds WHERE status = 'FAILED' AND provider_updated_at >= ?
        UNION SELECT order_id FROM order_refund_requests WHERE status = 'failed'`, iso(nowMs - 30 * DAY_MS)) },
+    { key: "returned", rows: await returnedPackages(db, { nowMs }) },
     { key: "emails", rows: await all(db,
       "SELECT order_id, kind, status FROM order_email_delivery WHERE status IN ('bounced', 'complained', 'suppressed', 'failed', 'review') AND updated_at >= ? ORDER BY updated_at", since) },
     { key: "addresses", rows: paid.filter((row) => {
@@ -70,6 +73,8 @@ const SECTIONS = {
   disputes: ["Open disputes: respond in the provider's dashboard",
     (row) => `${row.order_id} (${row.provider === "paypal" ? "PayPal" : "Airwallex"}${row.due_at ? `, respond by ${day(Date.parse(row.due_at))}` : ""})`],
   refunds: ["Refunds that did not go through"],
+  returned: ["Packages going back to the sender: contact the customer, then ship again or refund",
+    (row) => `${row.order_id} (${row.carrier || "carrier"} ${row.tracking_number}, ${row.status})`],
   emails: ["Customer emails not delivered in the last day", (row) => `${row.order_id} ${row.kind} (${row.status})`],
   addresses: ["Paid in the last day with the address unchecked (the check service was down)"],
 };

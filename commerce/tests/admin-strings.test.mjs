@@ -43,7 +43,7 @@ test("every state the Worker reports has its words", async () => {
     "orders.col": ["order", "date", "customer", "total", "method", "payment", "shipping", "items", "todo", "time"],
     "orders.stat": ["today", "month", "toShip", "shipTime", "refunds"],
     todo: ["review", "dispute", "disputeBy", "stockout", "not_sent", "refund_failed"],
-    attention: ["review", "not_sent", "stockout", "no_tracking", "disputes", "refunds", "emails", "addresses"],
+    attention: ["review", "not_sent", "stockout", "no_tracking", "disputes", "refunds", "returned", "emails", "addresses"],
     pipeline: ["coolingOff", "waiting", "withAmazon", "shippedThisWeek"],
     "dashboard.kpi": ["today", "month", "average", "refunded"],
     health: ["airwallex", "paypal", "email", "amazon", "address", "schedule", "digest"],
@@ -76,6 +76,7 @@ test("every state the Worker reports has its words", async () => {
     "reports.preset": ["today", "7d", "30d", "month", "last_month", "year", "custom"],
     "reports.kpi": ["gross", "refunds", "net", "orders", "average"],
     "reports.export": ["orders", "payments"],
+    "packages.status": ["IN_TRANSIT", "DELIVERED", "RETURNING", "RETURNED", "UNDELIVERABLE", "RETURN_RECEIVED_IN_FC"],
     action: ["customer.exported", "customer.erased", "privacy.request_recorded", "privacy.request_closed", "export.orders", "export.payments"],
   };
   const missing = Object.entries(families).flatMap(([family, values]) => values.map((value) => `${family}.${value}`)).filter((key) => !(key in STRINGS));

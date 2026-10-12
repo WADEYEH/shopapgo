@@ -51,8 +51,14 @@ export async function emailOwners(env, { subject, text, idempotencyKey }, fetchI
         signal: AbortSignal.timeout(10_000),
       });
       counts[response.ok ? "sent" : "failed"] += 1;
-    } catch {
+      // Why Resend refused it (status and its error name and message; never the key), kept on the alert row.
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        counts.error = clip(`HTTP ${response.status}${body?.name ? ` ${body.name}` : ""}${body?.message ? `: ${body.message}` : ""}`, 200);
+      }
+    } catch (error) {
       counts.failed += 1;
+      counts.error = clip(error?.name === "TimeoutError" ? "timed out" : error?.message ?? "network error", 200);
     }
   }
   return counts;

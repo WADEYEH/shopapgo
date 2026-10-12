@@ -668,7 +668,7 @@ test("client: preview returns fee and arrival window for the asked speed; list f
     assert.equal(listed.complete, true);
 
     amazon.ship("LIST1", { carrierCode: "UPS", trackingNumber: "1Z1", lateTracking: true });
-    assert.deepEqual(await getPackageTracking(env, 4242), { carrierCode: "UPS", trackingNumber: "1Z1", trackingUrl: "" });
+    assert.deepEqual(await getPackageTracking(env, 4242), { carrierCode: "UPS", trackingNumber: "1Z1", trackingUrl: "", status: "IN_TRANSIT", events: [] });
     assert.equal(await getPackageTracking(env, 999), null);
     assert.equal(await getPackageTracking(env, "12; DROP"), null, "only numeric package numbers reach the URL");
   });

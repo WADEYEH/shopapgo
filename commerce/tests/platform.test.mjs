@@ -250,7 +250,7 @@ test("fake Amazon: duplicate create is refused as alreadyExists, cancel works be
     const shipped = await getFulfillmentOrder(env2, shippedId);
     assert.equal(shipped.status, "COMPLETE");
     const pkg = shipped.shipments[0].packages[0];
-    assert.deepEqual(await getPackageTracking(env2, pkg.packageId), { carrierCode: "AMZL", trackingNumber: fakeTrackingNumber(shippedId), trackingUrl: "" });
+    assert.deepEqual(await getPackageTracking(env2, pkg.packageId), { carrierCode: "AMZL", trackingNumber: fakeTrackingNumber(shippedId), trackingUrl: "", status: "IN_TRANSIT", events: [] });
     assert.equal((await cancelMcfOrder(env2, shippedId)).outcome, "failed");
     assert.deepEqual(others, []);
   });
@@ -377,7 +377,7 @@ test("cron: no ping without an https HEALTHCHECK_PING_URL; a failing ping or mis
   } finally {
     console.error = original;
   }
-  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "digest", "email_retry", "fulfillment", "mcf_submit", "mcf_sync", "meta_retry", "payments"]);
+  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "config", "digest", "email_retry", "fulfillment", "ga4", "mcf_submit", "mcf_sync", "meta_retry", "payments", "tracking"]);
 });
 
 test("health: 503 until the cron has run, 200 after, 503 again once the last run is older than 30 minutes", { skip }, async () => {

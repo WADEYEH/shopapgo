@@ -394,6 +394,24 @@ export function shipmentFromMcfOrder(normalized) {
   };
 }
 
+// Every package with a tracking number, once each (F6): [{ packageId, carrier, trackingNumber, trackingUrl }].
+export function packagesFromMcfOrder(normalized) {
+  const seen = new Set();
+  const packages = [];
+  for (const pkg of normalized.shipments.flatMap((s) => s.packages)) {
+    if (!pkg.trackingNumber || seen.has(pkg.trackingNumber)) continue;
+    seen.add(pkg.trackingNumber);
+    const code = pkg.carrierCode ?? "";
+    packages.push({
+      packageId: /^\d{1,20}$/.test(pkg.packageId ?? "") ? pkg.packageId : "",
+      carrier: CARRIER_NAMES[code.toUpperCase()] ?? (code || "Amazon Logistics"),
+      trackingNumber: pkg.trackingNumber,
+      trackingUrl: /^https:\/\//i.test(pkg.trackingUrl ?? "") ? pkg.trackingUrl : "",
+    });
+  }
+  return packages;
+}
+
 // ---------- operations ----------
 
 // getFulfillmentPreview: is it fulfillable, what will it cost, when will it arrive. Read-only.
@@ -450,14 +468,24 @@ export async function listFulfillmentOrders(env, { queryStartDate } = {}) {
   return { orders, complete: false };
 }
 
-// Tracking details of one package (numeric packageNumber from getOrder). Returns { carrierCode, trackingNumber, trackingUrl }
-// or null when Amazon has nothing yet.
+// Tracking details of one package (numeric packageNumber from getOrder). Returns { carrierCode, trackingNumber, trackingUrl,
+// status, events } or null when Amazon has nothing yet. status is Amazon's currentStatus (IN_TRANSIT, DELIVERED, RETURNING,
+// RETURNED, UNDELIVERABLE, …); events the last few tracking events { status, at, city, state }.
 export async function getPackageTracking(env, packageNumber) {
   if (!/^\d{1,20}$/.test(String(packageNumber))) return null;
   try {
     const { body } = await outbound(env, "GET", `/internal/outbound/tracking/${packageNumber}`, { label: "package tracking" });
     const p = unwrap(body);
-    return { carrierCode: clip(p.carrierCode, 60), trackingNumber: clip(p.trackingNumber, 80), trackingUrl: clip(p.carrierURL ?? p.trackingUrl ?? "", 500) };
+    const events = asArray(p.trackingEvents).slice(-10).map((event) => ({
+      status: clip(event?.eventCode ?? event?.eventDescription ?? event?.status, 60),
+      at: event?.eventDate ?? event?.eventTime ?? null,
+      city: clip(event?.eventAddress?.city ?? event?.city, 60),
+      state: clip(event?.eventAddress?.state ?? event?.eventAddress?.stateOrRegion ?? event?.state, 40),
+    }));
+    return {
+      carrierCode: clip(p.carrierCode, 60), trackingNumber: clip(p.trackingNumber, 80), trackingUrl: clip(p.carrierURL ?? p.trackingUrl ?? "", 500),
+      status: clip(p.currentStatus ?? p.packageDeliveryStatus, 40).toUpperCase(), events,
+    };
   } catch (error) {
     if (error instanceof McfError && ["not_found", "invalid"].includes(error.kind)) return null;
     throw error;

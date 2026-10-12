@@ -30,6 +30,7 @@
 //   POST /admin/api/privacy-requests/:id/close        { outcome, note }
 //   GET  /admin/api/reports/sales            the sales report (?preset=&from=&to=; worker/reports.js)
 //   GET  /admin/api/exports/orders.csv, /admin/api/exports/payments.csv   the same period as CSV (I4, M9-06)
+//   GET  /admin/api/orders/:id/evidence      dispute evidence, a printable page (worker/evidence.js, M5-12)
 //
 // Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync, members) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
@@ -66,6 +67,7 @@ import { refundPanel, requestAdminRefund } from "./admin-refunds.js";
 import { CUSTOMER_SORTS, CustomerError, addCustomerNote, getCustomer, listCustomers } from "./customers.js";
 import { closePrivacyRequest, eraseCustomer, exportCustomer, privacyView, recordPrivacyRequest } from "./customer-privacy.js";
 import { ReportError, ordersCsv, paymentsCsv, periodOf, salesReport } from "./reports.js";
+import { disputeEvidence } from "./evidence.js";
 
 export { MIN_ADMIN_TOKEN_LENGTH };
 
@@ -561,6 +563,16 @@ export async function handleAdminApi(request, env, pathname) {
       // The numbers above the list (D50); not for the next pages.
       numbers: url.searchParams.get("before") ? undefined : await salesNumbers(env),
     }, 200, NO_INDEX);
+  }
+
+  // Dispute evidence (M5-12, D57): a printable page to save as PDF and upload in the provider's dispute.
+  const evidence = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/evidence$/);
+  if (evidence) {
+    const id = decodeURIComponent(evidence[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    const file = await disputeEvidence(env, id, actor);
+    if (!file) return fail(404, "not_found", "Only paid orders have evidence to export.", NO_INDEX);
+    return attachment(file.filename, file.html, "text/html; charset=utf-8");
   }
 
   const match = pathname.match(/^\/admin\/api\/orders\/([^/]+)$/);

@@ -73,6 +73,12 @@ export async function recordRefund(db, order, refund) {
       .bind(order.id,`refund:${refund.id}`,refund.id,cents,refund.currency,cents,order.id,
         timestamp,timestamp,refund.status,noticeStatus,refund.id,updated,order.id,cents,refund.currency),
     ...failureJobs,
+    // GA4 takes a newly accepted refund off the order's revenue (worker/ga4.js, K3); once per refund, paid orders only.
+    db.prepare(`INSERT OR IGNORE INTO order_ga_events (order_id,kind,payload_json,status,created_at,updated_at)
+      SELECT ?,?,json_object('refundId',?,'amountCents',?,'currency',?),'pending',?,?
+      WHERE ? IN ('ACCEPTED','SETTLED') AND ? IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM order_refunds WHERE id=? AND status IN ('ACCEPTED','SETTLED'))`)
+      .bind(order.id,`refund:${refund.id}`,refund.id,cents,refund.currency,timestamp,timestamp,refund.status,order.paid_at ?? null,refund.id),
     db.prepare(`INSERT INTO order_refunds
     (id,order_id,payment_intent_id,amount_cents,currency,status,failure_code,provider_created_at,provider_updated_at,received_at,provider)
     VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET

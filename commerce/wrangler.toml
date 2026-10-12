@@ -126,6 +126,7 @@ simple = { limit = 60, period = 60 }
 [env.staging.vars]
 AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
+CONFIG_PROFILE = "staging"   # worker/config-check.js: the settings this Worker must have (J6); keep its manifest equal to this file
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
@@ -163,6 +164,10 @@ enabled = true
 
 [env.staging.triggers]
 crons = ["*/2 * * * *"]
+
+# The version this Worker runs, for its own settings check after every deploy (worker/config-check.js).
+[env.staging.version_metadata]
+binding = "CF_VERSION_METADATA"
 
 # Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office: ADMIN_LOGIN_EMAIL/PASSWORD or ADMIN_TOKEN). Checkout answers 503 until PRICING_APPROVED="true".
 [env.production]
@@ -236,6 +241,10 @@ simple = { limit = 60, period = 60 }
 
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
+CONFIG_PROFILE = "production"   # worker/config-check.js: the settings this Worker must have (J6); keep its manifest equal to this file
+# GA4 refund events (worker/ga4.js, K3): the measurement id is public; the secret GA4_API_SECRET (a Measurement Protocol
+# API secret from GA4 → Data streams → shopapgo.com) is created and set at the cutover (D58). Without it nothing is sent.
+GA4_MEASUREMENT_ID = "G-YM10YMKE30"
 ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
 ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
@@ -268,6 +277,9 @@ CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
 # 2 minutes; local dev has no cron. Every job is a no-op when its switch is off.
 [env.production.triggers]
 crons = ["*/5 * * * *"]
+
+[env.production.version_metadata]
+binding = "CF_VERSION_METADATA"
 
 [env.production.observability]
 enabled = true

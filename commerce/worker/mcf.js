@@ -31,7 +31,9 @@ import {
   connectionProblem,
   mcfReadiness,
   shipmentFromMcfOrder,
+  packagesFromMcfOrder,
 } from "./amazon-mcf.js";
+import { savePackages } from "./package-tracking.js";
 import { FulfillmentError, markShipped, recordAudit, validateShipment } from "./fulfillment.js";
 import { processMessageJob, processNoticeJob, queueNotice } from "./customer-email.js";
 import { getOrder } from "./orders.js";
@@ -348,7 +350,8 @@ async function adopt(env, orderId, sellerOrderId, amazonOrder, actor, attempts, 
 // ---------- sync ----------
 
 // COMPLETE but the order lists no tracking number on its packages: ask the tracking endpoint per package (read-only).
-async function shipmentFromPackageTracking(env, amazonOrder) {
+// Returns Amazon's order with those numbers filled in, or null.
+async function withPackageTracking(env, amazonOrder) {
   const packages = amazonOrder.shipments.flatMap((s) => s.packages).filter((p) => !p.trackingNumber && /^\d+$/.test(p.packageId));
   if (!packages.length) return null;
   const filled = { ...amazonOrder, shipments: [{ status: "", shipTime: null, packages: [] }] };
@@ -356,7 +359,7 @@ async function shipmentFromPackageTracking(env, amazonOrder) {
     const tracking = await getPackageTracking(env, pkg.packageId).catch(() => null);
     if (tracking?.trackingNumber) filled.shipments[0].packages.push({ ...pkg, carrierCode: tracking.carrierCode || pkg.carrierCode, trackingNumber: tracking.trackingNumber, trackingUrl: tracking.trackingUrl });
   }
-  return shipmentFromMcfOrder(filled);
+  return filled;
 }
 
 // Applies Amazon's order state to our row and, when Amazon reports shipped with tracking, to the order's fulfilment.
@@ -380,8 +383,12 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
     return { changed: true, shipped: false, email: null };
   }
 
+  let shipped = amazonOrder;
   let shipment = shipmentFromMcfOrder(amazonOrder);
-  if (!shipment && SHIPPED_STATUSES.includes(amazonOrder.status)) shipment = await shipmentFromPackageTracking(env, amazonOrder);
+  if (!shipment && SHIPPED_STATUSES.includes(amazonOrder.status)) {
+    shipped = (await withPackageTracking(env, amazonOrder)) ?? amazonOrder;
+    shipment = shipmentFromMcfOrder(shipped);
+  }
   if (!shipment) {
     const done = SHIPPED_STATUSES.includes(amazonOrder.status);
     await saveState(env.DB, orderId, { ...base, note: done ? "Amazon shipped; waiting for a tracking number." : "" });
@@ -398,6 +405,8 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
 
   try {
     const order = await markShipped(env.DB, orderId, checked, { actor: "mcf" });
+    // Every package first, so the shipment email lists them all (F6, M8-05).
+    await savePackages(env.DB, orderId, packagesFromMcfOrder(shipped));
     await saveState(env.DB, orderId, { ...base, status: "shipped", carrier: checked.carrier, trackingNumber: checked.trackingNumber, errorKind: "", errorMessage: "", note: "" });
     await audit(env.DB, orderId, "mcf.shipped", actor, { carrier: checked.carrier, trackingNumber: checked.trackingNumber });
     // The shipment row is saved; the email is claimed once per order (order_emails), so nothing can send it twice.
@@ -406,6 +415,7 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
   } catch (error) {
     if (error instanceof FulfillmentError && error.code === "already_shipped") {
       // Shipped by hand (or by a parallel sync) first: no second record, no second email.
+      await savePackages(env.DB, orderId, packagesFromMcfOrder(shipped));
       await saveState(env.DB, orderId, { ...base, status: "shipped", carrier: checked.carrier, trackingNumber: checked.trackingNumber, note: "Order was already marked shipped." });
       return { changed: false, shipped: false, email: null };
     }
