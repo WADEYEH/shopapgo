@@ -91,8 +91,12 @@ test("customers: the list, search, and one customer's orders, addresses, message
   await expect(page.locator("[data-customer]")).toHaveCount(1);
   expect(requests.customers.some((query) => query.includes("q=chen"))).toBe(true);
   await page.getByRole("button", { name: "Clear search" }).click();
+  // The list is drawn again when the Worker answers: sort only once the full list is back.
+  await expect(page).toHaveURL(/#\/customers$/);
+  await expect(page.locator("[data-customer]")).toHaveCount(2);
   await page.locator("[data-customers-sort]").selectOption("spent");
-  await expect(page).toHaveURL(/sort=spent/);
+  await expect(page).toHaveURL(/#\/customers\?sort=spent$/);
+  await expect(page.locator("[data-customer]")).toHaveCount(2);
 
   await page.getByRole("link", { name: "Ada Lee" }).click();
   await expect(page).toHaveURL(new RegExp(`#/customers/${PAID}$`));
@@ -179,6 +183,7 @@ test("reports: a period, the numbers, per product and payment method, shipping v
 
   await page.locator('[data-preset="7d"]').click();
   await expect(page).toHaveURL(/#\/reports\?preset=7d$/);
+  await expect(page.locator('[data-preset="7d"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("[data-report-days] .bars__bar")).toHaveCount(7);
   expect(requests.some((path) => path.includes("/admin/api/reports/sales?preset=7d"))).toBe(true);
 
