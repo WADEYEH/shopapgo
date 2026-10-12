@@ -69,7 +69,7 @@
 |---|---|---|
 | Meta Pixel、CAPI、广告归因 | ✓ 全站一份 Pixel（PR 3-9） | — |
 | GA4 电商事件 | ✓ 都带 `ecommerce` 物件（PR 3-9）；GTM 容器 10/12 版本 3 加上「GA4 - ecommerce」代码（传送电子商务资料） | 切换当天用 GTM 预览实测（G9） |
-| 退款回报 GA4 | ✗ | 3-11 |
+| 退款回报 GA4 | ✓ PR 3-11：退款被接受后由后端送 GA4 refund 事件（Measurement Protocol） | 切换时建 `GA4_API_SECRET`（D58） |
 | GTM | ✓ 正式网站的建置默认 `GTM-TD5NTFH9`（PR 3-9）；切换后生效 | — |
 | 品牌站导去 Amazon 的事件 | ✓ 已移除 | — |
 | 隐私（GPC） | ✓ 预设尊重 GPC：不载入 Pixel、不送后端事件（PR 3-9，D46） | 律师意见出来后调开关 |

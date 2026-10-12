@@ -6,11 +6,12 @@ import { paymentBadge, shippingBadge } from "./orders.js";
 import { EMAIL_KIND } from "./order.js";
 
 // What each waiting kind says and what to do (worker/team-digest.js waitingLists keys).
-const ATTENTION_TONE = { review: "warn", not_sent: "bad", stockout: "bad", no_tracking: "warn", disputes: "bad", refunds: "warn", emails: "warn", addresses: "warn" };
+const ATTENTION_TONE = { review: "warn", not_sent: "bad", stockout: "bad", no_tracking: "warn", disputes: "bad", refunds: "warn", emails: "warn", addresses: "warn", returned: "bad" };
 
 function attentionDetail(item) {
   const d = item.detail ?? {};
   if (item.kind === "stockout") return t("attention.stockoutDays", { n: d.days ?? 0 });
+  if (item.kind === "returned") return `${d.carrier ?? ""} ${d.tracking_number ?? ""} · ${d.status ?? ""}`.trim();
   if (item.kind === "disputes") return d.due_at ? t("attention.replyBy", { date: formatDate(d.due_at, { time: false }) }) : t("attention.replySoon");
   if (item.kind === "no_tracking") return t("attention.sentOn", { date: formatDate(d.submitted_at, { time: false }) });
   if (item.kind === "emails") return t("attention.emailStatus", { kind: EMAIL_KIND(String(d.kind ?? "")), status: t(`email.delivery.${d.status}`) });

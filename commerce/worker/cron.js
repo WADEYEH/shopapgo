@@ -15,6 +15,9 @@ import { scheduledFulfillmentChecks } from "./fulfillment-checks.js";
 import { scheduledDigest } from "./team-digest.js";
 import { scheduledCustomerEmailRetry } from "./customer-email.js";
 import { scheduledMetaRetry } from "./meta-capi.js";
+import { scheduledPackageTracking } from "./package-tracking.js";
+import { scheduledGa4Events } from "./ga4.js";
+import { scheduledConfigCheck } from "./config-check.js";
 
 export const CRON_JOBS = {
   checkouts: scheduledCheckouts,
@@ -25,6 +28,9 @@ export const CRON_JOBS = {
   mcf_sync: scheduledMcfSync,
   email_retry: scheduledCustomerEmailRetry,
   meta_retry: scheduledMetaRetry,
+  tracking: scheduledPackageTracking,
+  ga4: scheduledGa4Events,
+  config: scheduledConfigCheck,
 };
 export const TICK = "_tick";
 const DEFAULT_STALE_MINUTES = 30;

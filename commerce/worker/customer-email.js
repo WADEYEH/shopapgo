@@ -138,6 +138,18 @@ export function buildConfirmationEmail(order, { policyNote } = {}) {
 
 export function buildShipmentEmail(order, shipment, { policyNote } = {}) {
   const subject = `Your APGO order ${order.id} has shipped`;
+  // Amazon sent it in more than one box (F6, M8-05): every package with its own tracking number and link.
+  const packages = (shipment.packages ?? []).filter((pkg) => pkg?.trackingNumber);
+  if (packages.length > 1) {
+    const extraRows = packages.map((pkg, index) => [`Package ${index + 1}`, `${escapeHtml(pkg.carrier || shipment.carrier)}: <strong>${escapeHtml(pkg.trackingNumber)}</strong>`]);
+    const extraText = packages.map((pkg, index) => `Package ${index + 1}: ${pkg.carrier || shipment.carrier} ${pkg.trackingNumber}${pkg.trackingUrl ? ` (${pkg.trackingUrl})` : ""}`);
+    const links = packages.map((pkg, index) => pkg.trackingUrl && `<a href="${escapeHtml(pkg.trackingUrl)}">Track package ${index + 1}</a>`).filter(Boolean);
+    const body = render({
+      heading: "Your order has shipped", intro: `Good news: your order has shipped in ${packages.length} packages. They may arrive on different days.`,
+      order, extraRows, extraText, extraHtml: links.length ? `<p>${links.join(" · ")}</p>` : "", policyNote,
+    });
+    return { subject, ...body };
+  }
   const extraRows = [["Carrier", escapeHtml(shipment.carrier)], ["Tracking number", `<strong>${escapeHtml(shipment.trackingNumber)}</strong>`]];
   const extraText = [`Carrier: ${shipment.carrier}`, `Tracking number: ${shipment.trackingNumber}`];
   let extraHtml = "";

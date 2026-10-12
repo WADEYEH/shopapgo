@@ -5,6 +5,7 @@
 // owners' Refund (D51, D55; POST /admin/api/orders/:id/refund, commerce/worker/admin-refunds.js).
 import { formatDate, lang, t, when } from "./i18n.js";
 import { badge, card, cardHead, el, icon, money, notice, priceRows, routineTile, usPhone } from "./ui.js";
+import { downloadFile } from "./api.js";
 import { cancelReason, holdText, renderOrderActions } from "./order-actions.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -275,12 +276,28 @@ function refundPanel(order, ctx) {
   return el("div", { class: "refund-panel", "data-refund-panel": true }, open, form);
 }
 
-// Disputes (worker/disputes.js): answered in the provider's dashboard; shown with the deadline.
+// Disputes (worker/disputes.js): answered in the provider's dashboard; shown with the deadline. The evidence page
+// (worker/evidence.js, M5-12) is saved as PDF and uploaded there.
 function disputesSection(order) {
   if (!order.disputes?.length) return null;
+  const message = el("div", { "aria-live": "polite", "data-evidence-message": true });
+  const evidence = el("button", { class: "btn btn--ghost btn--sm", type: "button", "data-evidence": true }, icon("download", 16), t("evidence.download"));
+  evidence.addEventListener("click", async () => {
+    evidence.disabled = true;
+    try {
+      const name = await downloadFile(`/admin/api/orders/${encodeURIComponent(order.id)}/evidence`);
+      message.replaceChildren(notice("success", t("evidence.downloaded"), t("evidence.downloadedText", { name })));
+    } catch (error) {
+      message.replaceChildren(notice("warning", t("evidence.failed"), error.message));
+    } finally {
+      evidence.disabled = false;
+    }
+  });
   return el("section", { class: "sub", "aria-label": t("disputes.title"), "data-order-disputes": true },
     el("h3", { class: "sub__title" }, t("disputes.title")),
     el("p", { class: "hint" }, t("disputes.hint", { where: providerName(order.disputes[0].provider) })),
+    el("div", { class: "button-row" }, evidence),
+    message,
     ...order.disputes.map((dispute) => facts([
       [t("disputes.dispute"), `${providerName(dispute.provider)} ${dispute.id}`],
       [t("disputes.status"), dispute.status === "open" ? t("disputes.open", { status: dispute.providerStatus || t("disputes.needsResponse") }) : t(`disputes.${dispute.status}`)],
@@ -394,11 +411,25 @@ function mcfCard(order, ctx) {
 
 // ---------- shipping by hand (when Amazon MCF is off) ----------
 
+// Every package Amazon shipped (F6) and what the carrier last said; a returned one is marked (F9).
+const PACKAGE_TONE = { DELIVERED: "ok", RETURNING: "bad", RETURNED: "bad", UNDELIVERABLE: "bad", RETURN_RECEIVED_IN_FC: "bad" };
+function packagesList(packages) {
+  if (!packages?.length) return null;
+  return el("ul", { class: "record-list", "data-packages": packages.length }, ...packages.map((pkg, index) => el("li", { class: "record", "data-package": pkg.trackingNumber },
+    el("div", { class: "record__head" },
+      el("strong", {}, t("packages.package", { n: index + 1 })),
+      pkg.status ? badge(PACKAGE_TONE[pkg.status] ?? "neutral", t(`packages.status.${pkg.status}`) === `packages.status.${pkg.status}` ? pkg.status : t(`packages.status.${pkg.status}`), { "data-package-status": pkg.status }) : el("span", { class: "muted" }, t("packages.noStatus")),
+      pkg.checkedAt && el("small", {}, t("packages.checked", { at: formatDate(pkg.checkedAt) }))),
+    el("p", { class: "record__text" }, `${pkg.carrier} ${pkg.trackingNumber}`, pkg.trackingUrl && [" · ", el("a", { href: pkg.trackingUrl, rel: "noopener noreferrer", target: "_blank" }, t("ship.openTracking"))]),
+    pkg.deliveredAt && el("p", { class: "hint" }, t("packages.delivered", { at: formatDate(pkg.deliveredAt) })),
+    pkg.returnedAt && el("p", { class: "record__warn" }, t("packages.returned", { at: formatDate(pkg.returnedAt) })))));
+}
+
 function fulfilmentCard(order, ctx) {
   const shipped = order.fulfillment;
   const head = cardHead(t("ship.title"));
   if (shipped) {
-    return card({ "data-admin-fulfillment": "shipped", "aria-label": t("ship.title") }, head, facts([
+    return card({ "data-admin-fulfillment": "shipped", "aria-label": t("ship.title") }, head, packagesList(shipped.packages), facts([
       [t("ship.status"), t("shipping.shipped")],
       [t("ship.shippedAt"), formatDate(shipped.shippedAt)],
       [t("ship.carrier"), shipped.carrier],

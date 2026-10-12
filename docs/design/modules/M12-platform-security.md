@@ -89,7 +89,8 @@
 | CI | ✓ 品牌站、后端、端到端测试都会跑（阶段 1） | — |
 | 正式部署 | ✓ 程式完成（PR 3-1，`.github/workflows/deploy.yml`）：staging 在 CI 通过后自动部署，正式环境手动执行并要核准 | 你建 Cloudflare 金钥和 GitHub 的 production 环境（`docs/ops/runbook.md` 第 2 节） |
 | 数据库迁移文件 | ✓ `commerce/migrations/` 编号档，只增不改（D45，PR 3-1） | — |
-| 设定比对 | ✗ | 新增 |
+| 设定比对 | ✓ PR 3-11：Worker 每天和每次新版本上线后比对自己的设定，不一致寄团队信（D59）；10/12 在 staging 演练 | — |
+| 密钥外泄步骤 | ✓ PR 3-11：营运手册第 21 节，10/12 在 staging 换过 `ADMIN_TOKEN`（D60） | — |
 | 回退、还原演练 | ✗ | 上线前演练 |
 | 限速、防机器人 | △ 结账、地址检查、报价 API 每个来源每分钟限次（PR 3-1）；联络表单（10/8）：机器人栏位、同一来源每小时 5 则（只存每天换的杂凑值，不存 IP）、全站每小时 60 则；Turnstile 程式完成，设好 `TURNSTILE_SITE_KEY` 和密钥 `TURNSTILE_SECRET_KEY` 才启用 | 你建 Turnstile 金钥 |
 | 设定清单文件 | ✗ | 阶段 0 写好 |

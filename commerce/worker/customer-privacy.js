@@ -151,6 +151,8 @@ export async function exportCustomer(env, actor, ref) {
   const attribution = await each("SELECT order_id, fbp, fbc, fbclid, source_url, client_ip, client_user_agent, created_at FROM order_attribution WHERE order_id IN (?)");
   const cancellations = await each("SELECT order_id, reason_code, note, created_at FROM order_cancellations WHERE order_id IN (?)");
   const orderNotes = await each("SELECT order_id, author, body, created_at FROM order_notes WHERE order_id IN (?)");
+  const packages = await each("SELECT order_id, carrier, tracking_number, status, delivered_at, events_json FROM order_packages WHERE order_id IN (?)");
+  const analytics = await each("SELECT order_id, ga_client_id FROM order_analytics WHERE order_id IN (?)");
   const { results: messages } = await db.prepare("SELECT created_at, name, email, message FROM contact_messages WHERE lower(trim(email)) = ? ORDER BY created_at").bind(key).all();
   const byOrder = (list, id) => list.filter((row) => row.order_id === id).map(({ order_id, ...rest }) => rest);
   await logActivity(db, { actor, action: "customer.exported", target: ref, detail: { orders: ids.length } });
@@ -165,6 +167,8 @@ export async function exportCustomer(env, actor, ref) {
       taxCents: order.tax_cents, totalCents: order.total_cents, paymentReference: order.payment_intent_id,
       refunds: byOrder(refunds, order.id), shipments: byOrder(shipments, order.id), emailsSent: byOrder(emails, order.id),
       adData: byOrder(attribution, order.id), cancellation: byOrder(cancellations, order.id)[0] ?? null, internalNotes: byOrder(orderNotes, order.id),
+      packages: byOrder(packages, order.id).map(({ events_json, ...pkg }) => ({ ...pkg, events: JSON.parse(events_json || "[]") })),
+      analyticsId: byOrder(analytics, order.id)[0]?.ga_client_id ?? null,
     })),
     contactMessages: messages,
     customerNotes: await listCustomerNotes(db, key),
@@ -194,6 +198,8 @@ export async function eraseCustomer(env, actor, ref, body, { nowMs = Date.now() 
     forOrders(`UPDATE orders SET email = '', marketing_opt_in = 0,
       shipping_json = json_object('state', json_extract(shipping_json, '$.state'), 'erased', 1), updated_at = ? WHERE id IN (?)`, at),
     forOrders("DELETE FROM order_attribution WHERE order_id IN (?)"),
+    forOrders("DELETE FROM order_analytics WHERE order_id IN (?)"),
+    forOrders("UPDATE order_packages SET events_json = '[]' WHERE order_id IN (?)"),
     forOrders("UPDATE order_email_delivery SET payload_json = '{}' WHERE order_id IN (?)"),
     forOrders("UPDATE order_notice_jobs SET payload_json = '{}' WHERE order_id IN (?)"),
     forOrders("UPDATE order_audit SET detail_json = json_remove(detail_json, '$.before', '$.after', '$.note', '$.shipping', '$.email') WHERE order_id IN (?)"),

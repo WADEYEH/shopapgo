@@ -142,7 +142,7 @@ export function createFakeAmazon(options = {}) {
       record("tracking");
       const number = trackingMatch[1];
       for (const r of orders.values()) for (const s of r.shipments) for (const p of s.fulfillmentShipmentPackage) {
-        if (String(p.packageNumber) === number) return reply(200, { payload: { packageNumber: Number(number), trackingNumber: p.lateTrackingNumber ?? p.trackingNumber, carrierCode: p.carrierCode, carrierURL: "", packageDeliveryStatus: "IN_TRANSIT", trackingEvents: [] } });
+        if (String(p.packageNumber) === number) return reply(200, { payload: { packageNumber: Number(number), trackingNumber: p.lateTrackingNumber ?? p.trackingNumber, carrierCode: p.carrierCode, carrierURL: "", packageDeliveryStatus: p.currentStatus ?? "IN_TRANSIT", trackingEvents: p.trackingEvents ?? [] } });
       }
       return reply(404, { error: "Package not found", spapiStatus: 404 });
     }
@@ -160,6 +160,12 @@ export function createFakeAmazon(options = {}) {
       const stored = orders.get(orderId);
       stored.status = status;
       stored.updatedAt = new Date().toISOString();
+    },
+    // What the carrier says about one package (the tracking endpoint): status such as DELIVERED or RETURNED, and events.
+    setPackageStatus(packageNumber, status, trackingEvents = []) {
+      for (const r of orders.values()) for (const s of r.shipments) for (const p of s.fulfillmentShipmentPackage) {
+        if (String(p.packageNumber) === String(packageNumber)) Object.assign(p, { currentStatus: status, trackingEvents });
+      }
     },
     // Amazon reports the order shipped, with one package carrying tracking. `lateTracking` hides the number from
     // getOrder (only the tracking endpoint knows it), as Amazon sometimes does right after shipping.

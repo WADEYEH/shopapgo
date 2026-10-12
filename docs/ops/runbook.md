@@ -121,7 +121,7 @@ staging 的特别设定：订单付款后会自动送到**假的 Amazon**（第 
 
 也可以在 Cloudflare 后台操作：Workers & Pages → `apgo-us-store` → Deployments → 版本右边的「⋯」→ Rollback。
 
-**演练纪录（staging）**：见第 20 节。
+**演练纪录（staging）**：见第 22 节。
 
 ---
 
@@ -148,7 +148,7 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 4. 检查：订单数、最近几张订单的状态（只读查询）；`/api/health`。
 5. 补回还原点之后发生、但应该保留的资料（例如付款服务那边成功的付款：付款服务会重送通知，或从后台付款查询补登）。
 
-**演练纪录（staging）**：见第 20 节。
+**演练纪录（staging）**：见第 22 节。
 
 ---
 
@@ -464,7 +464,52 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 ---
 
-## 20. 演练纪录
+## 20. 包裹追踪、退回包裹、拒付佐证、GA4 退款（PR 3-11，D57、D58）
+
+**多个包裹**：Amazon 分好几箱寄出时，每个追踪号都记在订单页「出货」卡片（包裹 1、包裹 2……），出货信也全部列出，并提醒客户可能不同天到。
+
+**物流状态**：每个包裹每天查一次 Amazon 的物流状态，送达后或出货 30 天后停止。订单页显示最新状态和查询时间。
+
+**包裹被退回寄件人**（退回中、已退回、无法投递、已退回 Amazon 仓库）：系统寄团队信一次，订单时间线记一笔，首页「需要处理」和每日团队邮件列出 14 天。处理方式：联络客户确认地址 → 包裹回到 Amazon 后，在订单页重新送单，或用「退款」退钱。
+
+**拒付佐证**（有争议的订单）：
+1. 订单页「付款」卡片的「争议」区块 → 按「**汇出拒付佐证**」，会下载一个网页档。
+2. 用浏览器打开 → 列印 → 「另存为 PDF」。
+3. 到 Airwallex 或 PayPal 的争议页面上传这个 PDF，再写一两句说明（例如「商品已于 10 月 4 日送达，追踪号见附件」）。
+4. 内容是英文：订单、付款、地址检查结果、商品、出货与每个包裹的追踪和送达、寄给客户的信、客户留言、政策网址。**不含内部备注和员工名字**。每次汇出都记在订单时间线。
+
+**GA4 退款事件**：退款被付款服务接受后，网站会自己通知 GA4 把这笔扣出营收（只在正式环境，而且要有 `GA4_API_SECRET`；测试站永远不送）。切换上线时建立（D58）：GA4 → 管理 → 资料串流 → shopapgo.com → Measurement Protocol API 密钥 → 建立（名称写 shopapgo-worker）→ 复制密钥值 → `wrangler secret put GA4_API_SECRET --env production`（你操作，值不要贴到任何地方）。没设之前的退款事件 7 天后放弃。
+
+---
+
+## 21. 密钥外泄与线上设定比对（J5、J6，D59、D60）
+
+**线上设定比对**：网站每天一次，以及每次新版本上线后，把自己的设定跟 repo 的 `commerce/wrangler.toml` 比对：一般设定的值、必须有的密钥（只看有没有，不看值）、数据库和限速的绑定。不一样就寄团队信「Live settings differ from the repo」，写出哪一项、应该是什么、现在是什么。处理：故意改的，就把改动写进 `wrangler.toml`、经 PR 部署；不是故意的，重新部署一次就恢复。在 Cloudflare 后台「新增」的一般设定、排程和网域路由，网站本身看不到，靠「只从 CI 部署」管住。
+
+**密钥外泄的处理步骤**。通用顺序：先建新的 → 设到 Worker → 确认能用 → 停用旧的 → 在操作纪录和付款服务后台看有没有被盗用 → 记在下面的演练纪录或事故纪录。设定一律用 `wrangler secret put <名称> --env production`（测试站用 `--env staging`），值从剪贴簿贴进去，不贴到聊天、文件或 Git。
+
+| 密钥 | 在哪里换 | 换完怎么确认 |
+|---|---|---|
+| `AIRWALLEX_CLIENT_ID`、`AIRWALLEX_API_KEY` | Airwallex 后台 → 开发者 → API 金钥：新增一组，设好后停用旧的（两个都要换） | 首页「系统状态」Airwallex 正常；付款查询查一笔 |
+| `AIRWALLEX_WEBHOOK_SECRET` | Airwallex → Webhooks → 该网址 → 重新产生 | 下一笔付款或退款事件有进来（订单页付款纪录） |
+| `PAYPAL_CLIENT_ID`、`PAYPAL_CLIENT_SECRET` | PayPal Developer → Apps & Credentials → 该 App → 重设 Secret | 付款查询查一笔 PayPal 订单 |
+| `RESEND_API_KEY` | Resend → API Keys：新增（只给寄信权限），设好后删除旧的 | 订单页重寄一封信 |
+| `RESEND_WEBHOOK_SECRET` | Resend → Webhooks → 重新产生 | 下一封信的送达状态有更新 |
+| `META_CAPI_ACCESS_TOKEN` | Meta 事件管理工具 → 资料集 → 设定 → 产生存取权杖 | Meta「测试事件」看到事件 |
+| `OUTBOUND_INTERNAL_TOKEN` | 跟 amazon-spapi-mcp 服务的同名密钥一起换（两个 Worker 都要设） | 后台「检查 Amazon 连线」 |
+| `ADMIN_TOKEN` | 自己产生一串随机字（例如 `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`，结果直接贴进 secret put，不显示在画面上更好） | 用新金钥呼叫 `/admin/api/me` 得到 200 |
+| `ADMIN_LOGIN_PASSWORD` | 自己设一个新密码 | 用新密码登入后台 |
+| `ACCESS_LIST_API_TOKEN`、Cloudflare 部署金钥 | Cloudflare → 我的个人资料 → API 权杖 → 轮换；部署金钥同时更新 GitHub 的 Secret | 成员页同步；下一次部署成功 |
+| `GOOGLE_ADDRESS_VALIDATION_KEY` | Google Cloud → API 和服务 → 凭证 → 重新产生 | 结账时地址检查有结果 |
+| `TURNSTILE_SECRET_KEY` | Cloudflare → Turnstile → 该网站 → 轮换密钥 | 联络表单送得出去 |
+| `GA4_API_SECRET` | GA4 → 资料串流 → Measurement Protocol API 密钥：新增，设好后删除旧的 | GA4 即时报表看到下一笔退款 |
+| `STAGING_BASIC_AUTH_*`（测试站） | 自己设新的帐号密码 | 用新的登入测试站 |
+
+**演练纪录**：见下面「2026-10-12 J5、J6 演练」。
+
+---
+
+## 22. 演练纪录
 
 | 日期 | 演练 | 环境 | 结果 | 花费时间 |
 |---|---|---|---|---|
