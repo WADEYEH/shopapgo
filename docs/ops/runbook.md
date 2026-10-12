@@ -505,7 +505,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | `GA4_API_SECRET` | GA4 → 资料串流 → Measurement Protocol API 密钥：新增，设好后删除旧的 | GA4 即时报表看到下一笔退款 |
 | `STAGING_BASIC_AUTH_*`（测试站） | 自己设新的帐号密码 | 用新的登入测试站 |
 
-**演练纪录**：见下面「2026-10-12 J5、J6 演练」。
+**演练纪录**：第 22 节（2026-10-12 J5、J6）。
 
 ---
 
@@ -517,3 +517,5 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-09 | 还原数据库（第 6 节） | staging | 记下还原点 → 建一张标记资料表（写 1 笔）→ 还原到还原点 → 标记资料表消失；订单 23 张、迁移纪录 2 笔都不变。还原指令同时回传「还原前」的还原点，必要时可以再还原回去 | 还原指令 5 秒；含前后检查约 1 分钟 |
 | 2026-10-09 | 回退 Worker（第 5 节） | staging | 新版 `98d0ccf5` 退回上一版 `ff98a90d`：`deployments status` 显示上一版、网站有回应；再回到新版。旧版程式在新的数据库结构上正常（只增不改） | 回退含检查 17 秒；回到新版 15 秒（目标 10 分钟内：通过） |
 | 2026-10-09 | 排程纪录（第 9 节） | staging | 部署后第一次排程（UTC 08:38）三个工作都成功；`cron_runs` 记下整次执行（`_tick`）和各工作的开始、结束、成功时间 | — |
+| 2026-10-12 | 线上设定比对（第 21 节，J6，Claude 操作，D60） | staging | PR 3-11 部署（版本 `6cee4ea6`）后第一次比对：没有差异。故意部署只改了 `CUSTOMER_EMAIL_POLICY_NOTE` 的版本（`5ab34e45`、`354cd8db`）：下一次排程就发现，产生团队通知「Live settings differ from the repo (staging)」，写出哪一项、应有和实际的值；再部署原设定（`f3c0bbdd`）恢复。**发现**：通知信没寄出，寄信服务回答「HTTP 403: This API key is not authorized to send emails from shopapgo.com」：测试站的 `RESEND_API_KEY` 只允许旧网域，10/11 改用 orders@shopapgo.com 寄信后，测试站的团队信和顾客信都寄不出去（10/12 的每日摘要也是）。要在 Resend 建一把可以用 shopapgo.com 寄信的金钥，设成测试站的 `RESEND_API_KEY`；正式环境切换时也要这样的金钥。之后团队通知失败时，纪录会写出原因 | 发现差异：部署后 2 分钟内 |
+| 2026-10-12 | 换密钥（第 21 节，J5，Claude 操作，D60） | staging | `ADMIN_TOKEN` 换成在这台电脑产生的新值（没有显示在任何地方），用 `wrangler secret put` 设定；新值只存在这台电脑的 `commerce/.dev.vars.staging`（不进 Git，给测试脚本用）。确认：新金钥呼叫 `/admin/api/me` 得到 200，错的金钥得到 401 | 约 1 分钟 |
