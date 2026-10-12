@@ -2,13 +2,15 @@
 //
 // With the plain var ADMIN_HOST set (e.g. "admin-staging.shopapgo.com"; prod plan: "admin.shopapgo.com"):
 //   * requests whose Host is ADMIN_HOST only get /admin, /admin/* (admin-auth, see admin.js; the back office's own files
-//     are there too: public/admin/), /robots.txt and the site logo, and "/" redirects to /admin/; everything else is 404. Every response there carries X-Robots-Tag noindex.
+//     are there too: public/admin/), /robots.txt, the site logo and the product photos (for editing a product), and "/" redirects to /admin/; everything else is 404. Every response there carries X-Robots-Tag noindex.
 //   * every other host (the store domain, workers.dev) answers 404 for /admin and /admin/* - the back office is not
 //     served there any more.
 // With ADMIN_HOST unset (local `npm run dev`, tests) nothing changes: one host serves both, as before.
 
 // The one file outside /admin/ the back office page loads.
 const ADMIN_HOST_ASSETS = new Set(["/us/assets/brand/apgo-logo.png"]);
+// The products' photos, shown when an owner edits a product (worker/product-content.js): the site's own and uploaded ones.
+const PRODUCT_PHOTO = /^\/(?:us\/assets\/(?:products|application)\/[a-z0-9-]+\.webp|media\/products\/[a-z0-9]+\/[a-f0-9-]+\.(?:webp|jpg|png))$/;
 
 export const ADMIN_ROBOTS_TAG = "noindex, nofollow";
 
@@ -23,7 +25,7 @@ export function isAdminHost(request, env) {
 export const isAdminPathname = (pathname) => pathname === "/admin" || pathname.startsWith("/admin/");
 
 // Paths the back-office hostname may serve at all (before admin auth is checked).
-export const adminHostAllows = (pathname) => isAdminPathname(pathname) || ADMIN_HOST_ASSETS.has(pathname) || pathname === "/robots.txt";
+export const adminHostAllows = (pathname) => isAdminPathname(pathname) || ADMIN_HOST_ASSETS.has(pathname) || PRODUCT_PHOTO.test(pathname) || pathname === "/robots.txt";
 
 export function notFound(headers = {}) {
   return new Response(JSON.stringify({ error: { code: "not_found", message: "Not found." } }), {

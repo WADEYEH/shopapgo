@@ -28,9 +28,9 @@ const SOURCES = [
   LAYOUT, OVERVIEW, PRODUCT, PAGE, CARD, CART, ...CHECKOUT, "components/shop/ReadyFlag.js", "components/shop/ui.js",
   "app/(us)/(shop)/cart/page.js", "app/(us)/(shop)/checkout/page.js",
   "lib/shop/catalog.js", "lib/shop/cart.js", "lib/shop/store-config.js", "lib/shop/reviews.js", "lib/shop/api.js",
-  "lib/shop/checkout.js", "lib/shop/payment-sdk.js", "lib/shop/attribution.js",
+  "lib/shop/checkout.js", "lib/shop/payment-sdk.js", "lib/shop/attribution.js", "lib/shop/live-content.js",
 ];
-const DATA = ["lib/shop/product-data.mjs", "lib/shop/product-reviews.mjs"];
+const DATA = ["lib/shop/product-data.mjs", "lib/shop/product-reviews.mjs", "lib/shop/product-content.mjs"];
 // What shoppers read: the code without its comments.
 const visible = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
@@ -68,9 +68,11 @@ test("each page: its own title, description, canonical and og tags, not indexabl
   // One h1 per page.
   assert.equal((read(OVERVIEW).match(/<h1\b/g) || []).length, 1);
   assert.equal((read(PAGE).match(/<h1\b/g) || []).length, 1);
-  // JSON-LD: a price only from the live config, and only once pricing is approved.
+  // JSON-LD: a price only from the live config, and only once pricing is approved (built by lib/shop/product-content.mjs,
+  // the same for the page and the Worker).
   const page = read(PAGE);
-  assert.match(page, /if \(config\?\.estimate === false && cents !== null\) \{\n\s+data\.offers = /);
+  assert.match(page, /priceCents: priceCents\(config, sku\),[\s\S]*approved: config\?\.estimate === false,/);
+  assert.match(read("lib/shop/product-content.mjs"), /if \(approved && priceCents !== null\) \{\n\s+data\.offers = /);
   assert.equal(read(OVERVIEW).includes("pdp-jsonld"), false, "no Product JSON-LD on a list page");
 });
 
@@ -81,7 +83,8 @@ test("no prices are hard-coded in the store pages, their code or the product dat
     assert.equal(/priceCents\s*[:=]\s*\d/.test(text), false, `${file} must not define a price`);
   }
   assert.match(read("lib/shop/store-config.js"), /api\("\/api\/store\/config"\)/);
-  for (const file of [PAGE, CARD]) assert.match(read(file), /useStoreConfig\(\)/, `${file} reads the Worker's prices`);
+  for (const file of [PAGE, CARD]) assert.match(read(file), /useLiveCatalog\(\)/, `${file} reads the Worker's prices`);
+  assert.match(read("lib/shop/live-content.js"), /useStoreConfig\(\)/);
   // The cart and checkout show the Worker's quote: POST /api/cart/quote, then the checkout session.
   assert.match(read(CART), /api\("\/api\/cart\/quote"/);
   assert.match(read(CHECKOUT[0]), /api\("\/api\/cart\/quote"/);

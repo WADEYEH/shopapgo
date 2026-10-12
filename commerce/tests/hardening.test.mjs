@@ -248,7 +248,7 @@ test("M12-03: a changed var, a missing secret or binding is found; the team is t
     const manifest = CONFIG_MANIFEST.production;
     const live = (extra = {}) => ({
       ...env0(db), ...manifest.vars, ...Object.fromEntries(manifest.secrets.map((name) => [name, "set"])),
-      CHECKOUT_LIMITER: {}, ADDRESS_LIMITER: {}, QUOTE_LIMITER: {}, CF_VERSION_METADATA: { id: "v1" }, ...extra,
+      CHECKOUT_LIMITER: {}, ADDRESS_LIMITER: {}, QUOTE_LIMITER: {}, PRODUCT_IMAGES: {}, CF_VERSION_METADATA: { id: "v1" }, ...extra,
     });
     assert.deepEqual(configProblems(live(), manifest), []);
     assert.deepEqual(configProblems(live({ AIRWALLEX_ENV: "demo", RESEND_API_KEY: "", QUOTE_LIMITER: undefined }), manifest), [

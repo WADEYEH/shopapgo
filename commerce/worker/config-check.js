@@ -11,7 +11,7 @@
 //     routes are not visible from inside either. Those are checked by deploying only from CI (M12).
 import { alertTeam } from "./team-alerts.js";
 
-const BINDINGS = ["DB", "ASSETS", "CHECKOUT_LIMITER", "ADDRESS_LIMITER", "QUOTE_LIMITER"];
+const BINDINGS = ["DB", "ASSETS", "CHECKOUT_LIMITER", "ADDRESS_LIMITER", "QUOTE_LIMITER", "PRODUCT_IMAGES"];
 export const CONFIG_MANIFEST = {
   staging: {
     vars: {

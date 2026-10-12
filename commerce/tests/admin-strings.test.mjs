@@ -78,6 +78,7 @@ test("every state the Worker reports has its words", async () => {
     "reports.export": ["orders", "payments"],
     "packages.status": ["IN_TRANSIT", "DELIVERED", "RETURNING", "RETURNED", "UNDELIVERABLE", "RETURN_RECEIVED_IN_FC"],
     action: ["customer.exported", "customer.erased", "privacy.request_recorded", "privacy.request_closed", "export.orders", "export.payments"],
+    "products.f": ["name", "promise", "when", "lasts", "scope", "seoTitle", "seoDescription", "price", "priceCents", "images"],
   };
   const missing = Object.entries(families).flatMap(([family, values]) => values.map((value) => `${family}.${value}`)).filter((key) => !(key in STRINGS));
   for (const kind of families.attention) for (const suffix of ["action", "clear"]) if (!(`attention.${kind}.${suffix}` in STRINGS)) missing.push(`attention.${kind}.${suffix}`);

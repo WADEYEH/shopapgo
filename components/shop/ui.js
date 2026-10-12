@@ -1,4 +1,6 @@
-import { PRODUCTS, SEO, productPath } from "@/lib/shop/catalog";
+import { PRODUCTS, productPath } from "@/lib/shop/catalog";
+import { liveOverrides } from "@/lib/shop/live-content";
+import { productContent } from "@/lib/shop/product-content.mjs";
 
 // Small pieces shared by the cart and checkout pages (styles in app/(us)/(shop)/shop.css).
 
@@ -45,7 +47,8 @@ export function Estimate({ estimate, children }) {
 
 export const RoutineWord = ({ routine }) => <span className={`routine routine--${routine}`}>{routine === "dry" ? "DRY" : "WET"}</span>;
 
-export const productImage = (id) => SEO[id]?.image ?? "";
+// The product photo the shop shows now (an owner may have changed it in the back office: lib/shop/live-content.js).
+export const productImage = (id, config = null) => (PRODUCTS[id] ? productContent(id, liveOverrides(config, id)).image : "");
 
 // The product name links to its page. newTab keeps a shopper who is in the middle of checking out on the form.
 export function ProductName({ line, newTab = false }) {

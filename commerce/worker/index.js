@@ -81,6 +81,8 @@ import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
 import { siteRedirect } from "./redirects.js";
+import { serveProductImage } from "./product-content.js";
+import { serveSite } from "./site-content.js";
 import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 import { rateLimited } from "./rate-limit.js";
@@ -575,7 +577,11 @@ async function dispatch(request, env, ctx) {
   const { pathname, origin } = new URL(request.url);
   if (isAdminPath(pathname)) return handleAdmin(request, env);
   if (pathname === APPLE_PAY_DOMAIN_PATH) return serveAppleDomainAssociation(request, env);
-  if (!pathname.startsWith("/api/")) return siteRedirect(request) || env.ASSETS.fetch(request);
+  if (!pathname.startsWith("/api/")) {
+    // Product photos owners uploaded (worker/product-content.js), then the site's pages with the products' live words.
+    if (pathname.startsWith("/media/")) return (await serveProductImage(request, env)) ?? fail(404, "not_found", "Not found.");
+    return siteRedirect(request) || serveSite(request, env);
+  }
   try {
     // "New paid order" notifications link to the back-office hostname when one is configured.
     const adminOrigin = adminHost(env) ? `https://${adminHost(env)}` : origin;

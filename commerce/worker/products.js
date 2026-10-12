@@ -7,11 +7,14 @@
 //   GET  /admin/api/products              every product with its sales, stock and switch
 //   GET  /admin/api/products/:id          one product, with its changes
 //   POST /admin/api/products/:id/sale     owners only: { onSale, reason }
+//   Price, words and photos: worker/product-content.js (PR 3-12).
 import { recordAdminAudit } from "./activity.js";
 import { mcfConfig } from "./amazon-mcf.js";
 import { calendar, DAY } from "./business-time.js";
 import { resolvePricing } from "./pricing.js";
 import { PRODUCTS as CONTENT, productPath } from "../../lib/shop/product-data.mjs";
+import { applyContent, productContent } from "../../lib/shop/product-content.mjs";
+import { contentView, readOverrides } from "./product-content.js";
 
 // Below this many available at Amazon a product shows Out of stock (D25). Live stock waits for the Amazon connection
 // to report it (docs/design/amazon-mcp-inventory.md), so stock reads "not connected" for now.
@@ -37,10 +40,11 @@ export async function productSettings(db) {
   }
 }
 
-// The pricing the storefront and checkout use: worker/pricing.js plus each product's on-sale switch.
+// The pricing the storefront and checkout use: worker/pricing.js, what owners changed (price and name, with the words and
+// photos for the pages: worker/product-content.js) and each product's on-sale switch.
 export async function livePricing(env) {
-  const pricing = resolvePricing(env);
-  const settings = await productSettings(env.DB);
+  const [settings, overrides] = await Promise.all([productSettings(env.DB), readOverrides(env.DB)]);
+  const pricing = Object.keys(overrides).length ? applyContent(resolvePricing(env), overrides) : resolvePricing(env);
   if (!Object.values(settings).some((s) => !s.onSale)) return pricing;
   const products = Object.fromEntries(
     Object.entries(pricing.products).map(([id, product]) => [id, settings[id]?.onSale === false ? { ...product, onSale: false } : product]),
@@ -148,10 +152,12 @@ async function history(db, sku) {
 export async function listProducts(env, { nowMs = Date.now() } = {}) {
   const pricing = resolvePricing(env);
   const ids = Object.keys(pricing.products);
-  const [settings, sales] = await Promise.all([productSettings(env.DB), salesByProduct(env, ids, nowMs)]);
+  const [settings, sales, overrides] = await Promise.all([productSettings(env.DB), salesByProduct(env, ids, nowMs), readOverrides(env.DB)]);
   return ids.map((id) => {
     const product = pricing.products[id];
-    const content = CONTENT[id] ?? {};
+    const changed = overrides[id] ?? {};
+    // What the shop shows now: an owner's changes on top of the site's own words.
+    const content = CONTENT[id] ? { ...CONTENT[id], ...productContent(id, changed) } : {};
     const setting = settings[id];
     return {
       id,
@@ -160,7 +166,9 @@ export async function listProducts(env, { nowMs = Date.now() } = {}) {
       routine: product.routine,
       size: content.size ?? product.size,
       oz: content.oz ?? null,
-      priceCents: product.priceCents,
+      priceCents: Number.isSafeInteger(changed.priceCents) ? changed.priceCents : product.priceCents,
+      image: content.image ?? null,
+      edited: Object.keys(changed).length > 0,
       onSale: setting?.onSale ?? true,
       changedBy: setting?.by ?? null,
       changedAt: setting?.at ?? null,
@@ -176,5 +184,5 @@ export async function listProducts(env, { nowMs = Date.now() } = {}) {
 export async function getProduct(env, id, { nowMs = Date.now() } = {}) {
   const product = (await listProducts(env, { nowMs })).find((p) => p.id === id);
   if (!product) return null;
-  return { ...product, history: await history(env.DB, product.sku) };
+  return { ...product, history: await history(env.DB, product.sku), content: CONTENT[id] ? await contentView(env, id) : null };
 }

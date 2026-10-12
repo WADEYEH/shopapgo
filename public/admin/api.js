@@ -3,14 +3,17 @@
 // POSTs, which the Worker also requires (its CSRF guard).
 import { lang, t } from "./i18n.js";
 
-export async function adminApi(path, { method = "GET", body } = {}) {
+// image: a product photo to upload ({ blob, width, height }), sent as itself instead of JSON (worker/product-content.js).
+export async function adminApi(path, { method = "GET", body, image } = {}) {
   let response;
   try {
-    response = await fetch(path, {
-      method,
-      headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    response = await fetch(path, image
+      ? { method, headers: { Accept: "application/json", "Content-Type": image.blob.type, "X-Image-Width": String(image.width), "X-Image-Height": String(image.height) }, body: image.blob }
+      : {
+        method,
+        headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
   } catch {
     throw Object.assign(new Error(t("error.network")), { status: 0, code: "network_error" });
   }

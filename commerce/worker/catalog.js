@@ -116,7 +116,8 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
       amountCents: m.amountCents,
     })),
     products: Object.fromEntries(
-      Object.entries(pricing.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents, onSale: p.onSale !== false }]),
+      // content: what an owner changed in the product's words and photos (worker/product-content.js; {} = the site's own).
+      Object.entries(pricing.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents, onSale: p.onSale !== false, content: p.content ?? {} }]),
     ),
     tax: { status: taxStatus(pricing) },
     storeReady: storeReadiness(env).ready,
