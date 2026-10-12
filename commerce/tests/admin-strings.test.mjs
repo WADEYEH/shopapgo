@@ -64,7 +64,19 @@ test("every state the Worker reports has its words", async () => {
     "email.delivery": ["accepted", "delivered", "bounced", "complained", "suppressed", "failed", "review", "retry"],
     "email.kind": ["confirmation", "shipment", "cancelled"],
     nav: ["dashboard", "orders", "checkouts", "products", "customers", "messages", "reports", "activity", "members"],
-    soon: ["customers", "reports"],
+    "customers.sort": ["last", "orders", "spent", "name"],
+    "customers.col": ["customer", "phone", "place", "orders", "spent", "last", "marketing"],
+    "privacy.kind": ["access", "delete"],
+    "privacy.outcome": ["exported", "deleted", "other"],
+    "privacy.blocker": ["open_order", "dispute", "refund", "email"],
+    "attention.privacy": ["access", "delete", "action"],
+    "refund.reason": ["customer_request", "returned", "damaged", "not_received", "out_of_stock", "goodwill", "other"],
+    "refund.status": ["requesting", "requested", "failed", "not_cancelled"],
+    "refund.why": ["not_paid", "dispute_open", "nothing_left"],
+    "reports.preset": ["today", "7d", "30d", "month", "last_month", "year", "custom"],
+    "reports.kpi": ["gross", "refunds", "net", "orders", "average"],
+    "reports.export": ["orders", "payments"],
+    action: ["customer.exported", "customer.erased", "privacy.request_recorded", "privacy.request_closed", "export.orders", "export.payments"],
   };
   const missing = Object.entries(families).flatMap(([family, values]) => values.map((value) => `${family}.${value}`)).filter((key) => !(key in STRINGS));
   for (const kind of families.attention) for (const suffix of ["action", "clear"]) if (!(`attention.${kind}.${suffix}` in STRINGS)) missing.push(`attention.${kind}.${suffix}`);

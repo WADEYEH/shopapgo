@@ -21,6 +21,15 @@
 //   POST /admin/api/orders/:id/notes         an internal note { body } (worker/order-notes.js, I10)
 //   GET  /admin/api/products[/:id]           products with sales, stock and the on-sale switch (worker/products.js)
 //   POST /admin/api/products/:id/sale        owners only: stop or resume selling { onSale, reason } (A4, M9-07)
+//   POST /admin/api/orders/:id/refund        owners only: { key, amountCents, reason, note, notify, cancelFirst } (D51, D55)
+//   GET  /admin/api/customers[/:ref]         customers, one customer by any of their order numbers (worker/customers.js)
+//   POST /admin/api/customers/:ref/notes     an internal note on the customer { body }
+//   GET  /admin/api/customers/:ref/export    privacy: everything about the customer, as a JSON file (worker/customer-privacy.js)
+//   POST /admin/api/customers/:ref/erase     privacy: delete the customer's data, amounts kept { confirm: their email } (D53)
+//   POST /admin/api/customers/:ref/privacy-requests  record a request { kind, receivedAt, handler, note }
+//   POST /admin/api/privacy-requests/:id/close        { outcome, note }
+//   GET  /admin/api/reports/sales            the sales report (?preset=&from=&to=; worker/reports.js)
+//   GET  /admin/api/exports/orders.csv, /admin/api/exports/payments.csv   the same period as CSV (I4, M9-06)
 //
 // Writes (POST /admin/api/orders/:id/ship, .../mcf/submit, .../mcf/sync, /admin/api/mcf/sync, members) need the same credentials plus browser-CSRF
 // guards, because a browser re-sends Basic credentials on its own: the body must be
@@ -53,6 +62,10 @@ import { listContactMessages } from "./contact.js";
 import { dashboard, salesNumbers } from "./dashboard.js";
 import { NoteError, addNote, listNotes } from "./order-notes.js";
 import { ProductError, getProduct, listProducts, setOnSale } from "./products.js";
+import { refundPanel, requestAdminRefund } from "./admin-refunds.js";
+import { CUSTOMER_SORTS, CustomerError, addCustomerNote, getCustomer, listCustomers } from "./customers.js";
+import { closePrivacyRequest, eraseCustomer, exportCustomer, privacyView, recordPrivacyRequest } from "./customer-privacy.js";
+import { ReportError, ordersCsv, paymentsCsv, periodOf, salesReport } from "./reports.js";
 
 export { MIN_ADMIN_TOKEN_LENGTH };
 
@@ -97,7 +110,8 @@ function csrfProblem(request) {
 
 // The order detail plus the Amazon MCF block (mode, reason, record, which buttons apply), how it was paid and its
 // disputes (worker/disputes.js).
-async function adminOrderView(env, orderId) {
+// actor: the signed-in person, for what they may do here (the refund panel is for owners, D51).
+async function adminOrderView(env, orderId, actor = null) {
   const order = await adminOrder(env.DB, orderId);
   if (!order) return null;
   const row = await getOrder(env.DB, orderId);
@@ -106,6 +120,7 @@ async function adminOrderView(env, orderId) {
     ...order, paymentProvider, disputes: await disputesForOrder(env.DB, orderId), refundRequest: await refundRequestOf(env.DB, orderId),
     sandboxRefundChecks: sandboxRefundChecksEnabled(env) && paymentProvider !== "paypal",
     mcf: await mcfView(env, row, order.fulfillment), core: await orderCoreView(env, orderId), notes: await listNotes(env.DB, orderId),
+    refund: await refundPanel(env, row, actor),
   };
 }
 
@@ -131,7 +146,7 @@ async function handleMcfSubmit(request, env, orderId, actor) {
   if (!row) return fail(404, "not_found", "Order not found.", NO_INDEX);
   if (row.status !== "paid") return fail(409, "not_paid", "Only paid orders can be sent to MCF.", NO_INDEX);
   const result = await submitOrderToMcf(env, row, { actor: actor.id });
-  return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
+  return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId, actor) }, 200, NO_INDEX);
 }
 
 // POST .../mcf/cancel: stop the Amazon order only (the order stays paid and can be sent again).
@@ -141,7 +156,7 @@ async function handleMcfCancel(request, env, orderId, actor) {
   if (!(await readJsonObject(request))) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
   if (!(await getOrder(env.DB, orderId))) return fail(404, "not_found", "Order not found.", NO_INDEX);
   const result = await cancelMcfOrder(env, orderId, { actor: actor.id });
-  return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) }, result.outcome === "failed" ? 502 : 200, NO_INDEX);
+  return json({ result: { outcome: result.outcome, reason: result.reason ?? null }, order: await adminOrderView(env, orderId, actor) }, result.outcome === "failed" ? 502 : 200, NO_INDEX);
 }
 
 // POST /admin/api/mcf/hold-test (owners): the Hold test order (worker/mcf-hold-test.js).
@@ -163,7 +178,7 @@ async function handleMcfSync(request, env, orderId, actor) {
   if (!(await getOrder(env.DB, orderId))) return fail(404, "not_found", "Order not found.", NO_INDEX);
   const result = await syncMcfOrder(env, orderId, { actor: actor.id });
   return json(
-    { result: { outcome: result.outcome, shipped: Boolean(result.shipped), email: result.email ?? null, reason: result.reason ?? null }, order: await adminOrderView(env, orderId) },
+    { result: { outcome: result.outcome, shipped: Boolean(result.shipped), email: result.email ?? null, reason: result.reason ?? null }, order: await adminOrderView(env, orderId, actor) },
     200,
     NO_INDEX,
   );
@@ -187,7 +202,7 @@ async function handleShip(request, env, orderId, actor) {
     const order = await markShipped(env.DB, orderId, shipment, { actor: actor.id });
     // Emailed after the shipment is saved; a failure is recorded and never undoes it.
     const email = await processMessageJob(env, (await getOrder(env.DB, orderId)) ?? order, 'shipment');
-    return json({ order: await adminOrderView(env, orderId), email: { status: email.status } }, 200, NO_INDEX);
+    return json({ order: await adminOrderView(env, orderId, actor), email: { status: email.status } }, 200, NO_INDEX);
   } catch (error) {
     if (error instanceof FulfillmentError) return fail(error.status, error.code, error.message, NO_INDEX);
     throw error;
@@ -274,11 +289,84 @@ async function handleOrderAction(request, env, orderId, action, actor) {
     } else {
       result = await changeAddress(env, orderId, { actor, shipping: body.shipping, reason: body.reason, noUnit: body.noUnit === true });
     }
-    return json({ result: { changed: result.changed, payment: result.payment ?? null, refund: result.refund ?? null }, order: await adminOrderView(env, orderId) }, 200, NO_INDEX);
+    return json({ result: { changed: result.changed, payment: result.payment ?? null, refund: result.refund ?? null }, order: await adminOrderView(env, orderId, actor) }, 200, NO_INDEX);
   } catch (error) {
     if (error instanceof OrderError) {
       return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, error.status, NO_INDEX);
     }
+    throw error;
+  }
+}
+
+// POST .../refund (owners; worker/admin-refunds.js): the refund panel on the order page.
+async function handleRefund(request, env, orderId, actor) {
+  if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+  const blocked = csrfProblem(request);
+  if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+  const body = await readJsonObject(request);
+  if (!body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+  try {
+    const result = await requestAdminRefund(env, orderId, body, { actor, adminUrl: `${new URL(request.url).origin}/admin/` });
+    return json({ result, order: await adminOrderView(env, orderId, actor) }, 200, NO_INDEX);
+  } catch (error) {
+    if (error instanceof OrderError) return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, error.status, NO_INDEX);
+    throw error;
+  }
+}
+
+const attachment = (filename, body, type) => new Response(body, {
+  status: 200,
+  headers: { "Content-Type": type, "Content-Disposition": `attachment; filename="${filename}"`, ...NO_INDEX },
+});
+
+// Customers, privacy requests, reports and exports. Returns null when the path is not one of theirs.
+async function handleCustomerApi(request, env, pathname, actor) {
+  const url = new URL(request.url);
+  const params = Object.fromEntries(url.searchParams);
+  try {
+    if (pathname === "/admin/api/customers" && request.method === "GET") {
+      if (params.sort && !CUSTOMER_SORTS.includes(params.sort)) return fail(400, "invalid_sort", "Unknown sort.", NO_INDEX);
+      return json(await listCustomers(env.DB, { q: params.q, sort: params.sort, page: params.page }), 200, NO_INDEX);
+    }
+    if (pathname === "/admin/api/reports/sales" && request.method === "GET") return json(await salesReport(env, periodOf(env, params)), 200, NO_INDEX);
+    if (pathname === "/admin/api/exports/orders.csv" || pathname === "/admin/api/exports/payments.csv") {
+      if (request.method !== "GET") return fail(405, "method_not_allowed", "Use GET.", { ...NO_INDEX, Allow: "GET" });
+      const file = await (pathname.endsWith("orders.csv") ? ordersCsv : paymentsCsv)(env, actor, periodOf(env, params));
+      return attachment(file.filename, file.body, "text/csv; charset=utf-8");
+    }
+    const close = pathname.match(/^\/admin\/api\/privacy-requests\/(PR-[0-9a-f-]{36})\/close$/);
+    const customer = pathname.match(/^\/admin\/api\/customers\/([^/]+)(?:\/(notes|export|erase|privacy-requests))?$/);
+    if (!close && !customer) return null;
+    const write = Boolean(close) || ["notes", "erase", "privacy-requests"].includes(customer?.[2]);
+    if (write) {
+      if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+      const blocked = csrfProblem(request);
+      if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+    } else if (request.method !== "GET") return fail(405, "method_not_allowed", "Use GET.", { ...NO_INDEX, Allow: "GET" });
+    const body = write ? await readJsonObject(request) : null;
+    if (write && !body) return fail(400, "invalid_json", "Request body must be a JSON object.", NO_INDEX);
+    if (close) return json({ request: await closePrivacyRequest(env, actor, close[1], body) }, 200, NO_INDEX);
+    const ref = decodeURIComponent(customer[1]);
+    if (!ORDER_ID_PATTERN.test(ref)) return fail(404, "not_found", "Customer not found.", NO_INDEX);
+    const view = async () => getCustomer(env, ref, { privacy: privacyView });
+    switch (customer[2]) {
+      case "notes":
+        return json({ notes: await addCustomerNote(env, actor, ref, body) }, 200, NO_INDEX);
+      case "export":
+        return attachment(`apgo-customer-${ref}.json`, JSON.stringify(await exportCustomer(env, actor, ref), null, 2), "application/json; charset=utf-8");
+      case "erase":
+        return json({ result: await eraseCustomer(env, actor, ref, body), customer: await view() }, 200, NO_INDEX);
+      case "privacy-requests":
+        await recordPrivacyRequest(env, actor, ref, body);
+        return json({ customer: await view() }, 200, NO_INDEX);
+      default: {
+        const found = await view();
+        return found ? json(found, 200, NO_INDEX) : fail(404, "not_found", "Customer not found.", NO_INDEX);
+      }
+    }
+  } catch (error) {
+    if (error instanceof CustomerError) return json({ error: { code: error.code, message: error.message, ...(error.blockers ? { blockers: error.blockers } : {}) } }, error.status, NO_INDEX);
+    if (error instanceof ReportError) return fail(error.status, error.code, error.message, NO_INDEX);
     throw error;
   }
 }
@@ -290,6 +378,8 @@ export async function handleAdminApi(request, env, pathname) {
 
   const team = await handleTeamApi(request, env, pathname, actor);
   if (team) return team;
+  const customers = await handleCustomerApi(request, env, pathname, actor);
+  if (customers) return customers;
 
   const url = new URL(request.url);
   const sandboxCheck = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refunds\/sandbox-check$/);
@@ -306,7 +396,7 @@ export async function handleAdminApi(request, env, pathname) {
     if (!order) return fail(404,'not_found','Order not found.',NO_INDEX);
     if (await paidWithPaypal(env,order)) return fail(409,'paypal_order','This order was paid with PayPal; refund checks run against Airwallex only.',NO_INDEX);
     const result = await runSandboxRefundCheck(env,order,body.scenario,actor.id);
-    return json({result,order:await adminOrderView(env,id)},result.outcome === 'blocked' ? 409 : 200,NO_INDEX);
+    return json({result,order:await adminOrderView(env,id,actor)},result.outcome === 'blocked' ? 409 : 200,NO_INDEX);
   }
   const emailRetry = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/emails\/([^/]+)\/retry$/);
   if (emailRetry) {
@@ -322,7 +412,7 @@ export async function handleAdminApi(request, env, pathname) {
     if (!order) return fail(404, "not_found", "Order not found.", NO_INDEX);
     const email = await retryCustomerEmail(env, order, kind);
     await recordAudit(env.DB, { orderId: id, action: "order.email.retry", actor: actor.id, detail: { kind, result: email.status } });
-    return json({ email, order: await adminOrderView(env, id) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
+    return json({ email, order: await adminOrderView(env, id, actor) }, email.status === "blocked" ? 409 : 200, NO_INDEX);
   }
   const notes = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/notes$/);
   if (notes) {
@@ -356,6 +446,12 @@ export async function handleAdminApi(request, env, pathname) {
       throw error;
     }
   }
+  const refund = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refund$/);
+  if (refund) {
+    const id = decodeURIComponent(refund[1]);
+    if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
+    return handleRefund(request, env, id, actor);
+  }
   const orderAction = pathname.match(/^\/admin\/api\/orders\/([^/]+)\/(confirm|cancel|address|cancel-refund)$/);
   if (orderAction) {
     const id = decodeURIComponent(orderAction[1]);
@@ -381,7 +477,7 @@ export async function handleAdminApi(request, env, pathname) {
     } catch {
       return fail(502,'refund_sync_failed','Could not verify refunds with Airwallex. Try again or review the provider dashboard.',NO_INDEX);
     }
-    return json({order:await adminOrderView(env,id)},200,NO_INDEX);
+    return json({order:await adminOrderView(env,id,actor)},200,NO_INDEX);
   }
   if (ship) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
@@ -471,7 +567,7 @@ export async function handleAdminApi(request, env, pathname) {
   if (match) {
     const id = decodeURIComponent(match[1]);
     if (!ORDER_ID_PATTERN.test(id)) return fail(404, "not_found", "Order not found.", NO_INDEX);
-    const order = await adminOrderView(env, id);
+    const order = await adminOrderView(env, id, actor);
     return order ? json(order, 200, NO_INDEX) : fail(404, "not_found", "Order not found.", NO_INDEX);
   }
   return fail(404, "not_found", "Not found.", NO_INDEX);

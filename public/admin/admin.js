@@ -3,6 +3,8 @@
 //   #/orders           orders, ?view=&q= (./orders.js)       #/orders/<id>    one order (./order.js)
 //   #/checkouts        unfinished checkouts (./checkouts.js)
 //   #/products         products (./products.js)              #/products/<id>  one product, stop selling
+//   #/customers        customers, ?q=&sort= (./customers.js) #/customers/<order number>  one customer, privacy requests
+//   #/reports          reports and CSV exports, ?preset=&from=&to= (./reports.js)
 //   #/messages         Contact us messages (./messages.js)
 //   #/activity         activity log, #/members  members (./team.js)
 // The Worker gates this page and /admin/api/* (Cloudflare Access, or until then HTTP Basic, which the browser re-sends
@@ -17,6 +19,8 @@ import { renderOrder } from "./order.js";
 import { renderProduct, renderProducts } from "./products.js";
 import { renderCheckouts } from "./checkouts.js";
 import { renderMessages } from "./messages.js";
+import { renderCustomer, renderCustomers } from "./customers.js";
+import { renderReports } from "./reports.js";
 import { renderActivity, renderMembers } from "./team.js";
 
 // The back office only works on its own host (commerce/worker/hosts.js). Until the cutover the brand host (Cloudflare
@@ -26,13 +30,6 @@ if (["www.shopapgo.com", "shopapgo.com"].includes(location.hostname)) location.r
 const $ = (selector, root = document) => root.querySelector(selector);
 const ORDER_ID = /^APGO-US-[0-9A-Z]{12}$/;
 
-const soon = (key) => (host) => {
-  host.replaceChildren(
-    el("header", { class: "page-head" }, el("h1", { class: "page-title" }, t(`nav.${key}`))),
-    el("section", { class: "card" }, el("p", { class: "muted" }, t(`soon.${key}`))),
-  );
-};
-
 const VIEWS = {
   dashboard: { title: "nav.dashboard", render: renderDashboard },
   orders: { title: "nav.orders", render: renderOrders },
@@ -40,9 +37,10 @@ const VIEWS = {
   checkouts: { title: "nav.checkouts", render: renderCheckouts },
   products: { title: "nav.products", render: renderProducts },
   product: { title: "nav.products", render: renderProduct },
-  customers: { title: "nav.customers", render: soon("customers") },
+  customers: { title: "nav.customers", render: renderCustomers },
+  customer: { title: "nav.customers", render: renderCustomer },
   messages: { title: "nav.messages", render: renderMessages },
-  reports: { title: "nav.reports", render: soon("reports") },
+  reports: { title: "nav.reports", render: renderReports },
   activity: { title: "nav.activity", render: renderActivity },
   members: { title: "nav.members", render: renderMembers },
 };
@@ -53,7 +51,7 @@ function parseRoute() {
   if (ORDER_ID.test(raw)) return { redirect: `#/orders/${raw}` };
   const [path, query = ""] = raw.split("?");
   const [section = "dashboard", id = null] = path.replace(/^\/+/, "").split("/").filter(Boolean);
-  const name = id && section === "orders" ? "order" : id && section === "products" ? "product" : section;
+  const name = !id ? section : { orders: "order", products: "product", customers: "customer" }[section] ?? section;
   return { name: VIEWS[name] ? name : "dashboard", id, params: new URLSearchParams(query) };
 }
 

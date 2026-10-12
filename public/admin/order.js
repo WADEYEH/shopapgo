@@ -1,7 +1,8 @@
 // One order (M9 订单页, D50): where it is (progress), what was bought and paid, refunds and disputes, Amazon, the
 // timeline with the internal notes (I10, M9-18), the customer and the address. The changes people make (confirm,
 // cancel, change the address) are in ./order-actions.js. API: GET /admin/api/orders/:id (worker/admin.js
-// adminOrderView); writes: ship, MCF submit/sync/cancel, cancel and refund, refund sync, email retry, notes.
+// adminOrderView); writes: ship, MCF submit/sync/cancel, cancel and refund, refund sync, email retry, notes, and the
+// owners' Refund (D51, D55; POST /admin/api/orders/:id/refund, commerce/worker/admin-refunds.js).
 import { formatDate, lang, t, when } from "./i18n.js";
 import { badge, card, cardHead, el, icon, money, notice, priceRows, routineTile, usPhone } from "./ui.js";
 import { cancelReason, holdText, renderOrderActions } from "./order-actions.js";
@@ -147,7 +148,7 @@ function paymentCard(order, ctx) {
     el("section", { class: "sub", "aria-label": t("refunds.title"), "data-order-refunds": true },
       el("h3", { class: "sub__title" }, t("refunds.title")),
       refunds?.records?.some((item) => item.status === "FAILED") && notice("warning", t("refunds.failedTitle"), t("refunds.failedBody", { where: providerName(order.paymentProvider) })),
-      el("p", { class: "hint" }, paypal ? t("refunds.paypalHint") : t("refunds.airwallexHint")),
+      el("p", { class: "hint" }, order.refund?.allowed ? t("refunds.hereHint", { where: providerName(order.paymentProvider) }) : paypal ? t("refunds.paypalHint") : t("refunds.airwallexHint")),
       el("p", { class: "hint" }, refunds?.records?.length
         ? t("refunds.summary", { refunded: money(refunds.refundedCents), pending: money(refunds.pendingCents), hold: refunds.hold ? t("refunds.onHold") : "" })
         : paypal ? t("refunds.noneRecorded") : t("refunds.noneSync")),
@@ -159,6 +160,8 @@ function paymentCard(order, ctx) {
       asked && el("div", { "data-refund-request": asked.status },
         el("p", { class: "hint" }, t("refunds.asked", { amount: money(asked.amountCents), where: providerName(asked.provider), state: askedState, at: formatDate(asked.at) })),
         again),
+      refundRequests(order),
+      refundPanel(order, ctx),
       el("div", { class: "button-row" }, sync, checks),
       feedback),
     disputesSection(order),
@@ -175,6 +178,101 @@ function paymentCard(order, ctx) {
         [t("failures.trace"), failure.traceId || "—"],
       ]))),
   );
+}
+
+// ---------- refund from here (owners, D51, D55, M9-25) ----------
+
+// Refunds asked from this page: how much, why, who, and how it went.
+function refundRequests(order) {
+  const requests = order.refund?.requests ?? [];
+  if (!requests.length) return null;
+  return el("ul", { class: "record-list", "data-refund-requests": true }, ...requests.map((request) => el("li", { class: "record", "data-refund-request-id": request.id, "data-status": request.status },
+    el("div", { class: "record__head" },
+      el("strong", {}, money(request.amountCents)),
+      badge({ requested: "ok", failed: "bad", not_cancelled: "warn" }[request.status] ?? "neutral", t(`refund.status.${request.status}`)),
+      el("small", {}, `${request.by} · ${formatDate(request.at)}`)),
+    el("p", { class: "record__text" }, [t(`refund.reason.${request.reason}`), request.note, request.notify ? null : t("refund.notNotified")].filter(Boolean).join(" · ")),
+    request.error && el("p", { class: "record__warn" }, request.error))));
+}
+
+// The Refund button and its panel. Members see neither (M9-25); an owner sees why when it cannot be used.
+function refundPanel(order, ctx) {
+  const panel = order.refund;
+  if (!panel || panel.why === "owner_only") return null;
+  if (!panel.allowed) return el("p", { class: "hint", "data-refund-why": panel.why }, t(`refund.why.${panel.why}`));
+  const where = providerName(order.paymentProvider);
+  const message = el("div", { "aria-live": "polite", "data-refund-message": true });
+  let key = null;
+  const amount = el("input", { id: "refund-amount", type: "text", inputmode: "decimal", autocomplete: "off", value: (panel.refundableCents / 100).toFixed(2), disabled: panel.fullOnly, "data-refund-amount": true });
+  const reason = el("select", { id: "refund-reason", "data-refund-reason": true },
+    el("option", { value: "" }, t("refund.choose")), ...panel.reasons.map((code) => el("option", { value: code }, t(`refund.reason.${code}`))));
+  const note = el("input", { id: "refund-note", type: "text", maxlength: "300", autocomplete: "off", "data-refund-note": true });
+  const notify = el("input", { id: "refund-notify", type: "checkbox", checked: true, "data-refund-notify": true });
+  const cancelFirst = panel.canCancelFirst ? el("input", { id: "refund-cancel", type: "checkbox", checked: true, "data-refund-cancel": true }) : null;
+  const summary = el("p", { class: "callout", "data-refund-summary": true });
+  const go = el("button", { class: "btn btn--danger", type: "submit", "data-refund-go": true }, t("refund.go"));
+  const keep = el("button", { class: "btn btn--ghost", type: "button" }, t("refund.keep"));
+  const open = el("button", { class: "btn btn--primary", type: "button", "data-refund-open": true }, t("refund.open"));
+  const cents = () => Math.round(Number(String(amount.value).replace(/[$,\s]/g, "")) * 100);
+  const check = el("label", { class: "check" }, notify, el("span", {}, t("refund.notify")));
+  const describe = () => {
+    const value = Number.isFinite(cents()) && cents() > 0 ? money(cents()) : "—";
+    const what = cancelFirst?.checked ? t("refund.summaryCancel", { amount: value, where })
+      : panel.canCancelFirst ? t("refund.summaryDirect", { amount: value, where })
+      : t("refund.summaryShipped", { amount: value, where });
+    summary.textContent = `${what} ${t(notify.checked ? "refund.summaryEmail" : "refund.summaryNoEmail")}`;
+  };
+  for (const input of [amount, notify, cancelFirst].filter(Boolean)) input.addEventListener(input === amount ? "input" : "change", describe);
+  describe();
+  const form = el("form", { class: "confirm", role: "alertdialog", hidden: true, "aria-labelledby": "refund-title", "data-refund-form": true, novalidate: true },
+    el("p", { class: "confirm__title", id: "refund-title" }, t("refund.title", { id: order.id })),
+    el("p", { class: "hint" }, t(panel.fullOnly ? "refund.fullOnly" : "refund.upTo", { amount: money(panel.refundableCents) })),
+    el("div", { class: "field" }, el("label", { class: "field__label", for: "refund-amount" }, t("refund.amount")), amount),
+    el("div", { class: "field" }, el("label", { class: "field__label", for: "refund-reason" }, t("refund.reason")), el("span", { class: "select" }, reason)),
+    el("div", { class: "field" }, el("label", { class: "field__label", for: "refund-note" }, t("refund.note")), note, el("span", { class: "field__hint" }, t("refund.noteHint"))),
+    cancelFirst && el("label", { class: "check" }, cancelFirst, el("span", {}, t("refund.cancelFirst"))),
+    check,
+    summary,
+    el("div", { class: "button-row" }, go, keep),
+    message);
+  open.addEventListener("click", () => {
+    key = crypto.randomUUID();
+    form.hidden = false;
+    open.hidden = true;
+    reason.focus();
+  });
+  keep.addEventListener("click", () => {
+    form.hidden = true;
+    open.hidden = false;
+    message.replaceChildren();
+    open.focus();
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const amountCents = panel.fullOnly ? panel.refundableCents : cents();
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || amountCents > panel.refundableCents) return message.replaceChildren(notice("warning", t("refund.checkTitle"), t("refund.checkAmount", { amount: money(panel.refundableCents) })));
+    if (!reason.value) return message.replaceChildren(notice("warning", t("refund.checkTitle"), t("refund.checkReason")));
+    if (reason.value === "other" && !note.value.trim()) return message.replaceChildren(notice("warning", t("refund.checkTitle"), t("refund.checkNote")));
+    go.disabled = true;
+    message.replaceChildren(el("p", { class: "hint" }, t("refund.sending", { where })));
+    try {
+      const { result, order: next } = await ctx.adminApi(`/admin/api/orders/${encodeURIComponent(order.id)}/refund`, {
+        method: "POST", body: { key, amountCents, reason: reason.value, note: note.value.trim(), notify: notify.checked, cancelFirst: Boolean(cancelFirst?.checked) },
+      });
+      const text = {
+        requested: () => notice("success", t("refund.doneTitle"), `${t("refund.done", { amount: money(amountCents), where })}${result.cancelled ? ` ${t("refund.doneCancelled")}` : ""}`),
+        already_requested: () => notice("info", t("refund.doneTitle"), t("refund.already")),
+        in_progress: () => notice("info", t("refund.doneTitle"), t("refund.inProgress")),
+        failed: () => notice("warning", t("refund.failedTitle"), t("refund.failedBody", { where, error: result.error ?? "" })),
+        not_cancelled: () => notice("warning", t("refund.notCancelledTitle"), t("refund.notCancelledBody", { error: result.error ?? "" })),
+      }[result.outcome] ?? (() => null);
+      ctx.show(next, text());
+    } catch (error) {
+      go.disabled = false;
+      message.replaceChildren(notice("warning", t("refund.failedTitle"), error.message));
+    }
+  });
+  return el("div", { class: "refund-panel", "data-refund-panel": true }, open, form);
 }
 
 // Disputes (worker/disputes.js): answered in the provider's dashboard; shown with the deadline.
@@ -455,8 +553,11 @@ function timelineCard(order, ctx) {
 
 function customerCard(order) {
   const s = order.shipping ?? {};
+  // The customer's data was deleted for a privacy request (D53): only the amounts and the state are left.
+  if (s.erased) return card({ "aria-label": t("order.customer"), "data-order-customer": "erased" }, cardHead(t("order.customer")), el("p", { class: "hint" }, t("customers.erasedOrder", { state: s.state ?? "—" })));
   return card({ "aria-label": t("order.customer"), "data-order-customer": true },
     cardHead(t("order.customer")),
+    order.paidAt && el("p", {}, el("a", { href: `#/customers/${encodeURIComponent(order.id)}`, "data-customer-link": true }, t("customers.open"))),
     el("p", { class: "aside-name" }, `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim() || "—"),
     facts([
       [t("order.email"), el("a", { href: `mailto:${order.email}` }, order.email)],
@@ -467,6 +568,7 @@ function customerCard(order) {
 
 function addressCard(order) {
   const s = order.shipping ?? {};
+  if (s.erased) return null;
   const check = s.addressCheck?.status;
   const tone = { verified: "ok", corrected: "ok", kept_original: "ok", no_unit_confirmed: "ok", unverified: "warn" }[check] ?? "muted";
   return card({ "aria-label": t("order.shipTo"), "data-order-address-card": true },

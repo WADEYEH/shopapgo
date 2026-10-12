@@ -54,3 +54,22 @@ export function calendar(env, nowMs = Date.now()) {
 }
 
 export const DAY = DAY_MS;
+
+// The UTC instant of a local day's midnight, from "YYYY-MM-DD" (reports and exports, worker/reports.js). null if invalid.
+export function dayStart(env, ymd) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? ""));
+  if (!match) return null;
+  const [year, month, day] = match.slice(1).map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || new Date(Date.UTC(year, month - 1, day)).getUTCDate() !== day) return null;
+  return midnight(timeZoneOf(env), year, month, day);
+}
+
+// "YYYY-MM-DD HH:mm" in the team's time zone (CSV exports).
+export function localTime(env, ms) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: timeZoneOf(env), hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      .formatToParts(new Date(ms))
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}

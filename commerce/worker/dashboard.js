@@ -13,6 +13,7 @@ import { coolingOffMinutes } from "./order-core.js";
 import { listOrders } from "./orders.js";
 import { listProducts } from "./products.js";
 import { waitingLists } from "./team-digest.js";
+import { privacyReminders } from "./customer-privacy.js";
 
 const ATTENTION_MAX = 20;
 const iso = (ms) => new Date(ms).toISOString();
@@ -150,5 +151,7 @@ export async function dashboard(env, { nowMs = Date.now() } = {}) {
     health: connections,
     products: products.map(({ id, sku, name, routine, size, priceCents, onSale, stock }) => ({ id, sku, name, routine, size, priceCents, onSale, stock })),
     latest: latest.orders,
+    // Privacy requests not answered yet (M11-05), closest deadline first.
+    privacy: await privacyReminders(env.DB, { nowMs }),
   };
 }

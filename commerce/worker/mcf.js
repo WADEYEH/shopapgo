@@ -296,6 +296,7 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs =
       await audit(env.DB, orderId, "mcf.submitted", actor, { sellerOrderId, tier: input.tier, attempts, items: input.items });
       console.log("mcf_submitted", { orderId, sellerOrderId, tier: input.tier });
       await verifyAmazonCopy(env, orderId, { input, sellerOrderId, actor });
+      await saveFeeEstimate(env, orderId, input);
       return { outcome: "submitted", record: publicRecord(await getMcfRecord(env.DB, orderId)) };
     } catch (error) {
       // Timeout / network / 5xx: the order may exist at Amazon. Reconcile by id before calling it a failure.
@@ -316,11 +317,26 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs =
   }
 }
 
+// Amazon's fee estimate for the order just sent (read-only preview), for the report's "shipping charged vs Amazon's fee"
+// (I8, M9-16). Kept once; a failure only means the report has no estimate for this order.
+async function saveFeeEstimate(env, orderId, input) {
+  try {
+    const preview = await getFulfillmentPreview(env, { address: input.address, items: input.items, tier: input.tier });
+    const fee = preview?.offer?.feeCents;
+    if (!Number.isSafeInteger(fee) || fee < 0) return;
+    await env.DB.prepare("INSERT OR IGNORE INTO order_mcf_fees (order_id, fee_cents, currency, tier, captured_at) VALUES (?, ?, 'USD', ?, ?)")
+      .bind(orderId, fee, input.tier ?? "", now()).run();
+  } catch (error) {
+    console.error("mcf_fee_estimate_failed", { orderId, reason: error?.message });
+  }
+}
+
 // Amazon already has this order id (our earlier request landed): record it and apply its current status.
 async function adopt(env, orderId, sellerOrderId, amazonOrder, actor, attempts, input) {
   await saveState(env.DB, orderId, { status: "submitted", mcfStatus: amazonOrder.status, submittedAt: now(), errorKind: "", errorMessage: "", note: "Found at Amazon after an unconfirmed attempt." });
   await audit(env.DB, orderId, "mcf.submitted", actor, { sellerOrderId, recovered: true, attempts });
   if (input) await verifyAmazonCopy(env, orderId, { input, sellerOrderId, actor, amazonOrder });
+  if (input) await saveFeeEstimate(env, orderId, input);
   const synced = await applyAmazonOrder(env, orderId, amazonOrder, actor);
   if (!synced.shipped && !TERMINAL_BAD.includes(amazonOrder.status)) {
     const current = await getMcfRecord(env.DB, orderId);

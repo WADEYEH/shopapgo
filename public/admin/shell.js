@@ -6,19 +6,19 @@ import { el, icon, notice } from "./ui.js";
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
-// soon: in a later PR (3-10); owner: owners only.
+// owner: owners only.
 const NAV = [
   { key: "dashboard", href: "#/", icon: "dashboard" },
   { key: "orders", href: "#/orders", icon: "orders", badge: true },
   { key: "checkouts", href: "#/checkouts", icon: "checkouts" },
   { key: "products", href: "#/products", icon: "products" },
-  { key: "customers", href: "#/customers", icon: "customers", soon: true },
+  { key: "customers", href: "#/customers", icon: "customers" },
   { key: "messages", href: "#/messages", icon: "messages" },
-  { key: "reports", href: "#/reports", icon: "reports", soon: true },
+  { key: "reports", href: "#/reports", icon: "reports" },
   { key: "activity", href: "#/activity", icon: "activity" },
   { key: "members", href: "#/members", icon: "members", owner: true },
 ];
-const ROUTE_NAV = { order: "orders", product: "products" };
+const ROUTE_NAV = { order: "orders", product: "products", customer: "customers" };
 
 const state = { active: "dashboard", me: null, ordersBadge: 0 };
 
@@ -32,7 +32,6 @@ export function renderNav(active = state.active) {
           icon(item.icon),
           el("span", { class: "nav-link__label" }, t(`nav.${item.key}`)),
           item.badge && state.ordersBadge > 0 && el("span", { class: "nav-link__count", "data-nav-count": true, title: t("nav.ordersBadge") }, String(state.ordersBadge)),
-          item.soon && el("span", { class: "nav-link__soon" }, t("nav.soon")),
         ))),
   );
   for (const button of $$("[data-lang]")) button.setAttribute("aria-pressed", String(button.dataset.lang === lang()));
