@@ -121,9 +121,11 @@ export async function closePrivacyRequest(env, actor, id, body, { nowMs = Date.n
 // Open requests for the dashboard and the daily team email: overdue first, then the closest deadline.
 export async function privacyReminders(db, { nowMs = Date.now(), withinDays = 7 } = {}) {
   try {
-    const { results } = await db.prepare("SELECT * FROM privacy_requests WHERE status = 'open' ORDER BY due_at").all();
+    // ref: one of the customer's order numbers, to open the customer page.
+    const { results } = await db.prepare(`SELECT p.*, (SELECT o.id FROM orders o WHERE lower(trim(o.email)) = p.customer AND o.paid_at IS NOT NULL
+      ORDER BY o.paid_at DESC LIMIT 1) AS ref FROM privacy_requests p WHERE p.status = 'open' ORDER BY p.due_at`).all();
     return results.map((row) => ({
-      id: row.id, kind: row.kind, dueAt: row.due_at, handler: row.handler,
+      id: row.id, kind: row.kind, dueAt: row.due_at, handler: row.handler, ref: row.ref ?? null,
       daysLeft: Math.ceil((Date.parse(row.due_at) - nowMs) / DAY_MS),
       erased: row.customer.startsWith("deleted:"),
     })).map((item) => ({ ...item, urgent: item.daysLeft <= withinDays }));

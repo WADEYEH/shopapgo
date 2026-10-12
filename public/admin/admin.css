@@ -66,7 +66,6 @@ h1, h2, h3, p { margin: 0; }
 .nav-link[aria-current="page"] svg { stroke: var(--accent); }
 .nav-link__label { flex: 1; min-width: 0; }
 .nav-link__count { min-width: 24px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--accent); color: var(--bg); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
-.nav-link__soon { color: var(--text-4); font-size: 12px; }
 .side__foot { margin-top: auto; display: grid; gap: 12px; padding: 16px 12px 4px; border-top: 1px solid var(--line); justify-items: start; }
 .seg { display: inline-flex; padding: 3px; border: 1px solid var(--line-2); border-radius: var(--radius-button); background: var(--bg); }
 .seg button { min-width: 58px; height: 36px; padding: 0 10px; border: 0; border-radius: var(--radius-tag); background: transparent; color: var(--text-2); font-weight: 600; cursor: pointer; }
@@ -381,3 +380,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .confirm { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--dry); border-radius: var(--radius-card); background: var(--surface); }
 .confirm__title { font-size: 17px; font-weight: 700; }
 .confirm__list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+
+/* PR 3-10: customers, privacy, refunds from the order page, reports */
+.inline-field { display: inline-flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 14px; }
+.inline-field .select select { min-height: 40px; }
+.toolbar .inline-field { margin-left: auto; }
+@media (max-width: 600px) { .toolbar .inline-field { margin-left: 0; width: 100%; } }
+.refund-panel { display: grid; gap: 12px; margin-top: 4px; }
+.refund-panel .confirm { border-color: var(--line-2); }
+.bars--dense .bars__plot { gap: 1px; }
+.bars--dense .bars__bar { border-radius: 1px 1px 0 0; }
+[data-customer-privacy] .button-row { margin-top: 4px; }
+[data-customer-addresses] .address + .address { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.tbl--customers td { vertical-align: top; }

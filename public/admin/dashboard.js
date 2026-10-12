@@ -35,6 +35,7 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
   const data = await adminApi("/admin/api/dashboard");
   if (!isCurrent()) return;
   const { numbers, pipeline, attention, health, products, latest } = data;
+  const privacy = data.privacy ?? [];
   setOrdersBadge(attention.items.filter((item) => ["review", "not_sent", "stockout", "disputes", "refunds"].includes(item.kind)).length);
 
   const search = el("form", { class: "search", role: "search", "data-dashboard-search": true },
@@ -54,7 +55,17 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
   const attentionCard = card({ "aria-labelledby": "attn-h", "data-dashboard-attention": true },
     el("div", { class: "card__head" },
       el("h2", { class: "card__title", id: "attn-h" }, t("dashboard.attention")),
-      attention.total > 0 && el("span", { class: "card__meta card__meta--accent" }, t("dashboard.attentionCount", { n: attention.total }))),
+      attention.total + privacy.length > 0 && el("span", { class: "card__meta card__meta--accent" }, t("dashboard.attentionCount", { n: attention.total + privacy.length }))),
+    // Privacy requests to answer (M11-05): overdue or close first, to the customer's page.
+    privacy.length > 0 && el("ul", { class: "row-list", "data-dashboard-privacy": true }, ...privacy.map((item) =>
+      el("li", {},
+        el(item.ref ? "a" : "div", { class: "row-link", ...(item.ref ? { href: `#/customers/${encodeURIComponent(item.ref)}` } : {}), "data-attention": "privacy" },
+          el("span", { class: `dot dot--${item.daysLeft < 0 ? "bad" : item.urgent ? "warn" : "neutral"}` }),
+          el("span", { class: "row-link__text" },
+            el("span", { class: "row-link__title" }, t(`attention.privacy.${item.kind}`)),
+            el("span", { class: "row-link__detail" }, [item.handler, item.daysLeft < 0 ? t("attention.privacyLate", { n: -item.daysLeft }) : t("attention.privacyDue", { date: formatDate(item.dueAt, { time: false }), n: item.daysLeft })].join(" · "))),
+          el("span", { class: "row-link__action" }, t("attention.privacy.action")),
+          item.ref && icon("next", 18))))),
     attention.items.length
       ? el("ul", { class: "row-list" }, ...attention.items.map((item) =>
         el("li", {},
@@ -65,7 +76,7 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
               el("span", { class: "row-link__detail" }, [item.orderId, item.name, attentionDetail(item)].filter(Boolean).join(" · "))),
             el("span", { class: "row-link__action" }, t(`attention.${item.kind}.action`)),
             icon("next", 18)))))
-      : el("p", { class: "all-clear" }, icon("check", 18), t("dashboard.nothingWaiting")),
+      : !privacy.length && el("p", { class: "all-clear" }, icon("check", 18), t("dashboard.nothingWaiting")),
     attention.clear.length > 0 && el("div", { class: "chips chips--clear" },
       el("span", { class: "chips__label" }, t("dashboard.allClear")),
       ...attention.clear.map((kind) => el("span", { class: "chip" }, icon("check", 14), t(`attention.${kind}.clear`)))),

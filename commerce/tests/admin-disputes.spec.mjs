@@ -47,7 +47,8 @@ test("a PayPal order's refunds panel points to PayPal and has no Airwallex sync 
   await mockAdminApi(page, { providers: { [PAID]: "paypal" }, disputes: { [PAID]: [{ ...lost, status: "won", providerStatus: "RESOLVED:RESOLVED_SELLER_FAVOUR" }] } });
   await page.goto(`/admin/index.html#${PAID}`);
   const refunds = page.getByRole("region", { name: "Refunds", exact: true });
-  await expect(refunds).toContainText("Paid with PayPal. Initiate refunds in PayPal");
+  // Owners refund from here (D51) or in PayPal; members are told to use PayPal.
+  await expect(refunds).toContainText("Owners refund here with the Refund button (through PayPal), or in the PayPal dashboard");
   await expect(refunds).toContainText("No refunds recorded.");
   await expect(page.getByRole("button", { name: "Sync refunds", exact: true })).toHaveCount(0);
   const disputes = page.getByRole("region", { name: "Disputes", exact: true });

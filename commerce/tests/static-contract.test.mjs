@@ -53,13 +53,15 @@ test("the admin page is noindex, writes only through the known back-office endpo
   assert.deepEqual([...sources["i18n.js"].matchAll(/localStorage\.(\w+)\((\w+)/g)].map((m) => `${m[1]}:${m[2]}`), ["getItem:LANG_KEY", "setItem:LANG_KEY"]);
   assert.ok(!/method:\s*["'](PUT|PATCH|DELETE)/.test(script));
   const posts = script.match(/method:\s*["']POST["']/g) ?? [];
-  assert.equal(posts.length, 13, "writes: team emails, MCF sync-all, Hold test order, refund sync, sandbox refund check, MCF submit/sync/cancel, cancel and refund, mark-as-shipped, email retry, notes, confirm/cancel/address, stop selling, members");
+  assert.equal(posts.length, 18, "writes: team emails, MCF sync-all, Hold test order, refund sync, sandbox refund check, MCF submit/sync/cancel, cancel and refund, mark-as-shipped, email retry, notes, confirm/cancel/address, stop selling, members; PR 3-10: refund, customer notes, privacy request record/close, delete customer data");
   assert.ok(/\/ship`/.test(sources["order.js"]));
   assert.ok(/\/mcf\/\$\{action\}`/.test(sources["order.js"]) && sources["orders.js"].includes('"/admin/api/mcf/sync"'));
   assert.ok(/\/emails\/\$\{encodeURIComponent\(mail\.kind\)\}\/retry`/.test(sources["order.js"]));
   assert.ok(sources["order.js"].includes("/refunds/sync`") && sources["order.js"].includes("/refunds/sandbox-check`"));
   assert.ok(sources["order.js"].includes("/cancel-refund`") && sources["orders.js"].includes('"/admin/api/mcf/hold-test"'));
   assert.ok(sources["order.js"].includes("/notes`") && sources["products.js"].includes("/sale`"));
+  assert.ok(sources["order.js"].includes("/refund`, {") && sources["customers.js"].includes("/notes`") && sources["customers.js"].includes("/erase`"));
+  assert.ok(sources["customers.js"].includes("/privacy-requests`") && sources["customers.js"].includes("/close`"));
   // Text is set as text: no HTML parsing of data anywhere in the page code.
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(script), "no HTML parsing");
 });

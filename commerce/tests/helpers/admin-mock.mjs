@@ -106,8 +106,24 @@ export function coreBlock(o, core) {
   };
 }
 
+// Who the mocked back office thinks is signed in (mockAdminApi's team.role), for the refund panel.
+let mockRole = "owner";
+const REFUND_REASONS = ["customer_request", "returned", "damaged", "not_received", "out_of_stock", "goodwill", "other"];
+function refundPanelOf(o) {
+  const requests = o.adminRefunds ?? [];
+  const base = { requests, reasons: REFUND_REASONS };
+  if (mockRole !== "owner") return { ...base, allowed: false, why: "owner_only" };
+  if (!o.paidAt) return { ...base, allowed: false, why: "not_paid" };
+  if (openDisputes(o).length) return { ...base, allowed: false, why: "dispute_open" };
+  const left = o.totalCents - (o.refunds?.refundedCents ?? 0);
+  if (left <= 0) return { ...base, allowed: false, why: "nothing_left", refundableCents: 0 };
+  const unshipped = !o.fulfillment && ["paid", "review"].includes(o.status);
+  return { ...base, allowed: true, refundableCents: left, fullOnly: unshipped, canCancelFirst: unshipped, stage: unshipped ? "paid" : o.fulfillment ? "shipped" : "cancelled" };
+}
+
 const view = (o, mcf = { mode: "off" }) => ({
   ...o,
+  refund: refundPanelOf(o),
   fulfillmentStatus: o.fulfillment ? "shipped" : "unfulfilled",
   fulfillment: o.fulfillment ?? null,
   paymentProvider: o.paymentProvider ?? (o.paymentIntentId ? "airwallex" : null),
@@ -193,7 +209,10 @@ function teamMock(team, writes) {
 // checkouts: the Unfinished checkouts list (worker/checkouts.js listCheckouts shape).
 // lang: the back office's language for the test (D49), "en" unless asked; null leaves the page's own choice.
 // messages: the Contact us messages. stopped: product ids an owner stopped selling. notes: { [orderId]: notes }.
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {} } = {}) {
+// fulfilled: order ids already shipped. refundOutcome: what the refund POST answers (requested | failed | not_cancelled).
+// privacy: the dashboard's open privacy requests. customers: see CUSTOMERS. erasureBlockers: why deleting must wait.
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {}, fulfilled = [], refundOutcome = "requested", privacy = [], erasureBlockers = [] } = {}) {
+  mockRole = team?.role ?? "owner";
   if (lang) await page.addInitScript((value) => { try { localStorage.setItem("apgo_admin_lang", value); } catch { /* none */ } }, lang);
   const requests = [];
   requests.writes = [];
@@ -208,6 +227,12 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
   for (const [id, list] of Object.entries(disputes)) orders.find((o) => o.id === id).disputes = structuredClone(list);
   for (const [id, provider] of Object.entries(providers)) orders.find((o) => o.id === id).paymentProvider = provider;
   for (const [id, list] of Object.entries(notes)) orders.find((o) => o.id === id).notes = structuredClone(list);
+  for (const id of fulfilled) orders.find((o) => o.id === id).fulfillment = { status: "shipped", carrier: "UPS", trackingNumber: "1Z999", trackingUrl: null, shippedAt: "2026-10-02T03:00:00.000Z", shippedBy: "mcf" };
+  requests.refunds = [];
+  requests.customers = [];
+  requests.downloads = [];
+  const customer = structuredClone(CUSTOMER);
+  customer.erasure = { blockers: structuredClone(erasureBlockers) };
   const products = PRODUCTS.map((p) => ({ ...p, onSale: !stopped.includes(p.id), history: [] }));
   requests.sales = [];
   requests.notes = [];
@@ -256,6 +281,7 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
         ],
         products: products.map(({ id, sku, name, routine, size, priceCents, onSale }) => ({ id, sku, name, routine, size, priceCents, onSale, stock: { connected: false, threshold: 5 } })),
         latest: list.slice(0, 5).map(summary),
+        privacy,
       });
     }
     if (url.pathname === "/admin/api/products") return reply(200, { products: products.map(productView) });
@@ -391,6 +417,88 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
       order.emails = [...(order.emails ?? []), { kind: "shipment", status: email.status, detail: "", updatedAt: shippedAt }];
       return reply(200, { order: view(order, mcf), email });
     }
+    // ---------- PR 3-10: refunds, customers, privacy, reports, exports, payment lookup ----------
+    const refundMatch = url.pathname.match(/^\/admin\/api\/orders\/([^/]+)\/refund$/);
+    if (refundMatch) {
+      const request = route.request();
+      const body = request.postDataJSON();
+      requests.refunds.push({ method: request.method(), contentType: request.headers()["content-type"], body });
+      const order = orders.find((o) => o.id === decodeURIComponent(refundMatch[1]));
+      if (!order) return reply(404, { error: { code: "not_found", message: "Order not found." } });
+      if (mockRole !== "owner") return reply(403, { error: { code: "owner_only", message: "Only an owner can refund." } });
+      const entry = { id: `refund-${body.key}`, amountCents: body.amountCents, currency: "USD", provider: order.paymentProvider ?? "airwallex", reason: body.reason, note: body.note || null,
+        notify: body.notify !== false, cancelFirst: Boolean(body.cancelFirst), status: refundOutcome === "requested" ? "requested" : refundOutcome, refundId: refundOutcome === "requested" ? "rfd_mock" : null,
+        error: refundOutcome === "failed" ? "Refund rejected" : null, by: TEAM_OWNER, at: stamp, updatedAt: stamp };
+      if (refundOutcome === "not_cancelled") {
+        return reply(200, { result: { outcome: "not_cancelled", error: "Amazon could not cancel this shipment (PICKING). The order stays with Amazon; the team was told." }, order: view(order, mcf) });
+      }
+      order.adminRefunds = [entry, ...(order.adminRefunds ?? [])];
+      if (refundOutcome === "failed") return reply(200, { result: { outcome: "failed", error: "Refund rejected" }, order: view(order, mcf) });
+      const refunded = (order.refunds?.refundedCents ?? 0) + body.amountCents;
+      order.refunds = { records: [{ id: "rfd_mock", provider: entry.provider, amountCents: body.amountCents, currency: "USD", status: "RECEIVED", failureCode: "", createdAt: stamp, updatedAt: stamp }, ...(order.refunds?.records ?? [])], refundedCents: refunded, pendingCents: 0, hold: false, status: refunded >= order.totalCents ? "fully_refunded" : "partially_refunded" };
+      const cancelled = Boolean(body.cancelFirst) && !order.fulfillment;
+      if (cancelled) order.status = "cancelled";
+      return reply(200, { result: { outcome: "requested", refundId: "rfd_mock", cancelled }, order: view(order, mcf) });
+    }
+    if (url.pathname === "/admin/api/customers") {
+      requests.customers.push(url.search);
+      const q = (url.searchParams.get("q") || "").toLowerCase();
+      const list = CUSTOMERS.filter((c) => !q || `${c.name} ${c.email} ${c.phone}`.toLowerCase().includes(q));
+      return reply(200, { customers: list, nextPage: null, total: CUSTOMERS.length });
+    }
+    const customerMatch = url.pathname.match(/^\/admin\/api\/customers\/([^/]+)(?:\/(notes|export|erase|privacy-requests))?$/);
+    if (customerMatch) {
+      const request = route.request();
+      const body = request.method() === "POST" ? request.postDataJSON() : null;
+      requests.customers.push(`${request.method()} ${url.pathname}`);
+      if (customer.erased || decodeURIComponent(customerMatch[1]) !== customer.ref && !customer.orderList.some((o) => o.id === decodeURIComponent(customerMatch[1]))) {
+        return customer.erased ? reply(200, { ref: customer.ref, erased: true, erasedAt: stamp }) : reply(404, { error: { code: "not_found", message: "Customer not found." } });
+      }
+      if (customerMatch[2] === "notes") {
+        customer.notes = [...customer.notes, { id: customer.notes.length + 1, author: TEAM_OWNER, body: String(body.body).trim(), at: stamp }];
+        return reply(200, { notes: customer.notes });
+      }
+      if (customerMatch[2] === "privacy-requests") {
+        customer.privacyRequests = [{ id: "PR-00000000-0000-4000-8000-000000000001", kind: body.kind, receivedAt: `${body.receivedAt}T00:00:00.000Z`, dueAt: "2026-11-25T00:00:00.000Z", handler: body.handler || TEAM_OWNER, status: "open", outcome: null, note: null, createdBy: TEAM_OWNER, createdAt: stamp, closedBy: null, closedAt: null }, ...customer.privacyRequests];
+        return reply(200, { customer });
+      }
+      if (customerMatch[2] === "export") {
+        requests.downloads.push(url.pathname);
+        return route.fulfill({ status: 200, contentType: "application/json; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="apgo-customer-${customer.ref}.json"` }, body: JSON.stringify({ customer: { email: customer.email } }) });
+      }
+      if (customerMatch[2] === "erase") {
+        if (customer.erasure.blockers.length) return reply(409, { error: { code: "not_yet", message: "This customer's data cannot be deleted yet.", blockers: customer.erasure.blockers } });
+        if (String(body.confirm).trim().toLowerCase() !== customer.email) return reply(400, { error: { code: "confirm_mismatch", message: "Type the customer's email exactly to confirm." } });
+        customer.erased = true;
+        return reply(200, { result: { erased: true, orders: customer.orderList.length }, customer: { ref: customer.ref, erased: true, erasedAt: stamp } });
+      }
+      return reply(200, customer);
+    }
+    const closeMatch = url.pathname.match(/^\/admin\/api\/privacy-requests\/([^/]+)\/close$/);
+    if (closeMatch) {
+      const body = route.request().postDataJSON();
+      requests.customers.push(`close ${body.outcome}`);
+      const found = customer.privacyRequests.find((r) => r.id === decodeURIComponent(closeMatch[1]));
+      Object.assign(found, { status: "done", outcome: body.outcome, closedBy: TEAM_OWNER, closedAt: stamp });
+      return reply(200, { request: found });
+    }
+    if (url.pathname === "/admin/api/reports/sales") {
+      const preset = url.searchParams.get("preset") || "month";
+      if (preset === "custom" && url.searchParams.get("from") > url.searchParams.get("to")) return reply(400, { error: { code: "invalid_period", message: "The end day is before the start day." } });
+      return reply(200, sampleReport(preset, url.searchParams.get("from"), url.searchParams.get("to")));
+    }
+    const exportMatch = url.pathname.match(/^\/admin\/api\/exports\/(orders|payments)\.csv$/);
+    if (exportMatch) {
+      requests.downloads.push(url.pathname + url.search);
+      return route.fulfill({ status: 200, contentType: "text/csv; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="apgo-${exportMatch[1]}-2026-10-01-to-2026-10-31.csv"` }, body: "\ufefforder,total\r\n" });
+    }
+    const lookupMatch = url.pathname.match(/^\/admin\/api\/(airwallex\/intents|paypal\/orders)\/([^/]+)$/);
+    if (lookupMatch) {
+      if (lookupMatch[1].startsWith("paypal")) return reply(404, { error: { code: "not_found", message: "PayPal has no payment with this id." } });
+      return reply(200, { id: lookupMatch[2], status: "REQUIRES_PAYMENT_METHOD", amount: 59.99, currency: "USD", merchant_order_id: "APGO-US-0123456789AB",
+        latest_payment_attempt: { id: "att_1", status: "FAILED", payment_method: "card", failure_code: "issuer_declined", failure_details: null, provider_original_response_code: "05", provider_original_response_msg: "Do not honor" },
+        next_action: null, created_at: stamp, updated_at: stamp });
+    }
     if (url.pathname === "/admin/api/orders") {
       const filter = url.searchParams.get("status");
       const fulfillment = url.searchParams.get("fulfillment");
@@ -424,4 +532,41 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     return order ? reply(200, view(order, mcf)) : reply(404, { error: { code: "not_found", message: "Order not found." } });
   });
   return requests;
+}
+
+// ---------- PR 3-10 samples ----------
+
+export const CUSTOMERS = [
+  { ref: "APGO-US-0123456789AB", email: "ada.lee@example.com", name: "Ada Lee", phone: "+15125550148", city: "Austin", state: "TX", orders: 2, paidCents: 18896, refundedCents: 1000, spentCents: 17896,
+    firstOrderAt: "2026-09-12T05:11:00.000Z", lastOrderAt: "2026-09-30T05:11:00.000Z", marketingOptIn: true },
+  { ref: "APGO-US-B2C4D6F8G0H1", email: "x@example.com", name: "Xi Chen", phone: "", city: "San Francisco", state: "CA", orders: 1, paidCents: 5999, refundedCents: 5999, spentCents: 0,
+    firstOrderAt: "2026-09-29T20:00:00.000Z", lastOrderAt: "2026-09-29T20:00:00.000Z", marketingOptIn: false },
+];
+
+const CUSTOMER = {
+  ...CUSTOMERS[0], erased: false,
+  orderList: [
+    { id: "APGO-US-0123456789AB", status: "paid", totalCents: 12897, paidAt: "2026-09-30T05:11:00.000Z", createdAt: "2026-09-30T05:10:00.000Z", payment: "partly_refunded", shipping: "shipped" },
+    { id: "APGO-US-4K7M2N9P3Q5R", status: "paid", totalCents: 5999, paidAt: "2026-09-12T05:11:00.000Z", createdAt: "2026-09-12T05:10:00.000Z", payment: "paid", shipping: "shipped" },
+  ],
+  addresses: [
+    { name: "Ada Lee", street: "100 Example Ave", street2: "Apt 4", city: "Austin", state: "TX", zip: "78701", lastUsedAt: "2026-09-30T05:11:00.000Z" },
+    { name: "Ada Lee", street: "9 Other St", street2: "", city: "Austin", state: "TX", zip: "78702", lastUsedAt: "2026-09-12T05:11:00.000Z" },
+  ],
+  notes: [],
+  messages: [{ id: "CM-1", at: "2026-10-02T03:00:00.000Z", name: "Ada", message: "Where is my second bottle?" }],
+  privacyRequests: [],
+};
+
+function sampleReport(preset, from, to) {
+  const days = Array.from({ length: preset === "today" ? 1 : 7 }, (_, i) => ({ day: `2026-10-0${i + 1}`, orders: i % 2, paidCents: (i % 3) * 5999, refundedCents: 0 }));
+  return {
+    period: { preset, from: from ?? "2026-10-01", to: to ?? "2026-10-31", timeZone: "Asia/Taipei" },
+    orders: 3, productsCents: 23994, shippingCents: 2397, taxCents: 1200, grossCents: 27591,
+    refunds: { cents: 1000, count: 1, orders: 1 }, netCents: 26591, averageCents: 9197,
+    products: [{ sku: "D204", name: "APGO Atomic Colored Glaze", units: 3, salesCents: 17997 }, { sku: "D215", name: "APGO Atomic Glaze Coating", units: 2, salesCents: 5998 }],
+    payments: [{ provider: "airwallex", orders: 2, paidCents: 21592, refundedCents: 1000 }, { provider: "paypal", orders: 1, paidCents: 5999, refundedCents: 0 }],
+    days,
+    shippingVsAmazon: { orders: 2, withoutEstimate: 1, chargedCents: 1598, feeCents: 1782, differenceCents: -184 },
+  };
 }
