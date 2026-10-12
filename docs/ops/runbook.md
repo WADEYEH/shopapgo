@@ -486,6 +486,8 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 **线上设定比对**：网站每天一次，以及每次新版本上线后，把自己的设定跟 repo 的 `commerce/wrangler.toml` 比对：一般设定的值、必须有的密钥（只看有没有，不看值）、数据库和限速的绑定。不一样就寄团队信「Live settings differ from the repo」，写出哪一项、应该是什么、现在是什么。处理：故意改的，就把改动写进 `wrangler.toml`、经 PR 部署；不是故意的，重新部署一次就恢复。在 Cloudflare 后台「新增」的一般设定、排程和网域路由，网站本身看不到，靠「只从 CI 部署」管住。
 
+正式环境必须有的密钥（10/12 起）还包括 Amazon 出货连线（`AMAZON_OUTBOUND_BASE_URL`、`OUTBOUND_INTERNAL_TOKEN`、`MCF_SKU_MAP_JSON`）、`RESEND_WEBHOOK_SECRET` 和 `GOOGLE_ADDRESS_VALIDATION_KEY`。目前的正式环境（landing 的店）还没有这些和 `RESEND_API_KEY`、`PAYPAL_WEBHOOK_ID`，切换时要设好，否则会收到提醒信（总表在 `docs/commerce-plan.md` 第 8.1 节）。
+
 **密钥外泄的处理步骤**。通用顺序：先建新的 → 设到 Worker → 确认能用 → 停用旧的 → 在操作纪录和付款服务后台看有没有被盗用 → 记在下面的演练纪录或事故纪录。设定一律用 `wrangler secret put <名称> --env production`（测试站用 `--env staging`），值从剪贴簿贴进去，不贴到聊天、文件或 Git。
 
 | 密钥 | 在哪里换 | 换完怎么确认 |
@@ -519,6 +521,9 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-09 | 排程纪录（第 9 节） | staging | 部署后第一次排程（UTC 08:38）三个工作都成功；`cron_runs` 记下整次执行（`_tick`）和各工作的开始、结束、成功时间 | — |
 | 2026-10-12 | 线上设定比对（第 21 节，J6，Claude 操作，D60） | staging | PR 3-11 部署（版本 `6cee4ea6`）后第一次比对：没有差异。故意部署只改了 `CUSTOMER_EMAIL_POLICY_NOTE` 的版本（`5ab34e45`、`354cd8db`）：下一次排程就发现，产生团队通知「Live settings differ from the repo (staging)」，写出哪一项、应有和实际的值；再部署原设定（`f3c0bbdd`）恢复。**发现**：通知信没寄出，寄信服务回答「HTTP 403: This API key is not authorized to send emails from shopapgo.com」：测试站的 `RESEND_API_KEY` 只允许旧网域，10/11 改用 orders@shopapgo.com 寄信后，测试站的团队信和顾客信都寄不出去（10/12 的每日摘要也是）。要在 Resend 建一把可以用 shopapgo.com 寄信的金钥，设成测试站的 `RESEND_API_KEY`；正式环境切换时也要这样的金钥。之后团队通知失败时，纪录会写出原因 | 发现差异：部署后 2 分钟内 |
 | 2026-10-12 | 换密钥（第 21 节，J5，Claude 操作，D60） | staging | `ADMIN_TOKEN` 换成在这台电脑产生的新值（没有显示在任何地方），用 `wrangler secret put` 设定；新值只存在这台电脑的 `commerce/.dev.vars.staging`（不进 Git，给测试脚本用）。确认：新金钥呼叫 `/admin/api/me` 得到 200，错的金钥得到 401 | 约 1 分钟 |
+| 2026-10-12 | 回退 Worker（第 5 节；阶段 3 演练第 13 项，Claude 操作） | staging | 版本 `83fa2d6e`（PR 3-12）退回 `0a114912`（PR 3-11）：商店设定、商品页、`/api/health`、后台都正常，商品设定里没有 3-12 的新栏位（确认是旧版在跑），旧版在已套用迁移 0013 的数据库上照常运作；再回到 `83fa2d6e` | 回退含检查 10 秒；回到新版 16 秒（目标 10 分钟内：通过） |
+| 2026-10-12 | 还原数据库（第 6 节；演练第 13 项，Claude 操作） | staging | 记下还原点 → 建标记资料表 `drill_marker_20261012`（写 1 笔）→ 还原到还原点 → 标记资料表消失；订单 23 张、迁移纪录 13 笔、商品内容 0 笔都不变；还原指令同时保留「还原前」的还原点 | 还原指令 6 秒 |
+| 2026-10-12 | 报表对帐（第 19 节；演练第 14 项的只读部分，Claude 操作） | staging | 期间 9/1–10/12：报表营收 $394.74、退款 $49.80、净额 $344.94、12 张订单，跟数据库加总、订单 CSV（12 列，总额和退款相同）、收款与退款 CSV（16 列：收款 $394.74、退款 −$49.80）、客户名单（5 位客户、12 张订单、累计 $344.94）全部一致。个人资料只在程式里比对，没有显示 | — |
 
 ---
 
