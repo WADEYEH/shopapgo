@@ -10,7 +10,9 @@
 //   refunds         failed refunds, and refunds the store asked for that did not go through
 //   emails          customer emails in the last day that bounced, were marked as spam, were blocked or failed
 //   addresses       paid in the last day with the address unchecked because the check service was down
+//   privacy         privacy requests not answered yet, with the date to answer by (M11-05; worker/customer-privacy.js)
 import { alertTeam } from "./team-alerts.js";
+import { privacyReminders } from "./customer-privacy.js";
 import { addWorkingDays } from "./fulfillment-checks.js";
 import { adminHost } from "./hosts.js";
 
@@ -74,9 +76,19 @@ const SECTIONS = {
 
 // The sections with something in them: [{ title, count, detail }].
 export async function digestSections(env, { nowMs = Date.now() } = {}) {
-  return (await waitingLists(env, { nowMs }))
+  const sections = (await waitingLists(env, { nowMs }))
     .filter((list) => list.rows.length)
     .map(({ key, rows }) => ({ title: SECTIONS[key][0], count: rows.length, detail: ids(rows, SECTIONS[key][1]) }));
+  const privacy = await privacyReminders(env.DB, { nowMs });
+  if (privacy.length) {
+    sections.push({
+      title: "Privacy requests to answer (open the customer in the back office)",
+      count: privacy.length,
+      detail: privacy.slice(0, LIST).map((item) => `${item.kind === "delete" ? "delete" : "see their data"}, ${item.handler}, ${item.daysLeft < 0 ? `${-item.daysLeft} days late` : `answer by ${day(Date.parse(item.dueAt))}`}`).join("; ")
+        + (privacy.length > LIST ? ` and ${privacy.length - LIST} more` : ""),
+    });
+  }
+  return sections;
 }
 
 // Cron job: the first run of each UTC day sends the summary (or nothing when nothing waits). Never throws.

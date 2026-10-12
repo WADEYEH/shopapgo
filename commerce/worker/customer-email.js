@@ -20,10 +20,12 @@
 
 import { getOrder, claimOrderEmail, finishOrderEmail } from "./orders.js";
 import { getFulfillment } from "./fulfillment.js";
+import { refundNoticeMuted } from "./refunds.js";
 import { noticeKind, sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
 
 const DEFAULT_EMAIL_API = "https://api.resend.com/emails";
 
+const MUTED_DETAIL = "Not sent: the refund was made with \"don't email the customer\".";
 const money = (cents, currency) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 
 const escapeHtml = (value) =>
@@ -324,6 +326,14 @@ export async function processMessageJob(env, order, kind, options = {}) {
   try {
     const job = await env.DB.prepare('SELECT status FROM order_message_jobs WHERE order_id=? AND kind=?').bind(order.id,kind).first();
     if (!job || job.status !== 'pending') return { status:'duplicate',detail:'' };
+    // A refund made with "don't email the customer" (worker/admin-refunds.js, D55): recorded as not sent, never sent later.
+    if (await refundNoticeMuted(env.DB,kind)) {
+      await claimOrderEmail(env.DB,order.id,kind);
+      await finishOrderEmail(env.DB,order.id,kind,{status:'skipped',detail:MUTED_DETAIL});
+      await env.DB.prepare("UPDATE order_message_jobs SET status='skipped',next_attempt_at=NULL,updated_at=? WHERE order_id=? AND kind=? AND status='pending'")
+        .bind(new Date().toISOString(),order.id,kind).run();
+      return { status:'skipped',detail:MUTED_DETAIL };
+    }
     const legacy = await env.DB.prepare('SELECT status FROM order_emails WHERE order_id=? AND kind=?').bind(order.id,kind).first();
     let row = await getDelivery(env.DB,order.id,kind);
     const shipment = kind === 'shipment' ? await getFulfillment(env.DB,order.id) : undefined;

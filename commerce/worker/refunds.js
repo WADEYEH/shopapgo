@@ -90,6 +90,18 @@ export async function recordRefund(db, order, refund) {
     : results[1].meta.changes > 0 || results[2].meta.changes > 0 ? `refund:failed:${refund.id}` : null;
 }
 
+// A refund from the order page (worker/admin-refunds.js) made with "don't email the customer": true for its customer
+// emails (refund:<id>, refund:failed:<id>). The team's refund:team-failed:<id> is never muted.
+export async function refundNoticeMuted(db, kind) {
+  const match = /^refund:(?:failed:)?([\w-]{1,120})$/.exec(String(kind));
+  if (!match) return false;
+  try {
+    return Boolean(await db.prepare("SELECT 1 AS x FROM admin_refunds WHERE refund_id = ? AND notify = 0 LIMIT 1").bind(match[1]).first());
+  } catch {
+    return false; // a database without admin_refunds (before migration 0011)
+  }
+}
+
 export async function refundHold(db, orderId) {
   return Boolean(await db.prepare("SELECT id FROM order_refunds WHERE order_id = ? AND status != 'FAILED' LIMIT 1").bind(orderId).first());
 }

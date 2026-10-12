@@ -264,7 +264,7 @@ export function publicOrder(order) {
 // The order list shows orders only (D36, M9-22): paid, review, and cancelled after payment. Unpaid checkouts (pending,
 // expired, or closed before any payment) are in the Unfinished checkouts list (worker/checkouts.js listCheckouts).
 export const ORDER_STATUSES = ["paid", "review", "cancelled"];
-const IS_ORDER = `(o.status IN ('paid', 'review') OR (o.status = 'cancelled' AND (o.paid_at IS NOT NULL
+export const IS_ORDER = `(o.status IN ('paid', 'review') OR (o.status = 'cancelled' AND (o.paid_at IS NOT NULL
   OR EXISTS (SELECT 1 FROM order_cancellations c WHERE c.order_id = o.id))))`;
 
 const ADMIN_LIST_LIMIT = 100;
@@ -310,7 +310,8 @@ function adminSummary(row, options) {
     id: row.id,
     status: row.status,
     email: row.email,
-    name: `${shipping.firstName} ${shipping.lastName}`.trim(),
+    name: shipping.erased ? "" : `${shipping.firstName ?? ""} ${shipping.lastName ?? ""}`.trim(),
+    erased: Boolean(shipping.erased),
     city: shipping.city ?? "",
     state: shipping.state,
     itemCount: lines.reduce((sum, line) => sum + line.qty, 0),
@@ -352,9 +353,14 @@ const LIST_FROM = `FROM orders o LEFT JOIN order_notifications n ON n.order_id =
   LEFT JOIN order_fulfillments f ON f.order_id = o.id
   LEFT JOIN order_mcf m ON m.order_id = o.id`;
 
-export async function listOrders(db, { status, fulfillment, issue, view, q, limit = 50, before, coolingMinutes = 60, nowMs = Date.now() } = {}) {
+// customer: one customer's orders (worker/customers.js), by the lowercased email.
+export async function listOrders(db, { status, fulfillment, issue, view, q, customer, limit = 50, before, coolingMinutes = 60, nowMs = Date.now() } = {}) {
   const clauses = [IS_ORDER];
   const args = [];
+  if (customer) {
+    clauses.push("lower(trim(o.email)) = ?");
+    args.push(String(customer));
+  }
   if (status && ORDER_STATUSES.includes(status)) {
     clauses.push("o.status = ?");
     args.push(status);
