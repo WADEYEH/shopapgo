@@ -500,7 +500,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | `RESEND_API_KEY` | Resend → API Keys：新增（只给寄信权限），设好后删除旧的 | 订单页重寄一封信 |
 | `RESEND_WEBHOOK_SECRET` | Resend → Webhooks → 重新产生 | 下一封信的送达状态有更新 |
 | `META_CAPI_ACCESS_TOKEN` | Meta 事件管理工具 → 资料集 → 设定 → 产生存取权杖 | Meta「测试事件」看到事件 |
-| `OUTBOUND_INTERNAL_TOKEN` | 跟 amazon-spapi-mcp 服务的同名密钥一起换（两个 Worker 都要设） | 后台「检查 Amazon 连线」 |
+| `OUTBOUND_INTERNAL_TOKEN` | 自己产生一串随机字，依序设到 amazon-spapi-mcp（`wrangler secret put OUTBOUND_INTERNAL_TOKEN --name amazon-spapi-mcp`）、测试站、正式环境。10/13 查过：只有我们的商店（apgo-us-store、apgo-us-store-staging，以及已停用的 apgo-us-store-next）用这个密码；评论邀请排程走内部连结、MCP 网关用 `MCP_API_KEY`，都不受影响 | 用新密码呼叫 `https://amazon-mcp.apgo.tw/internal/outbound/orders` 得到 200，错的得到 401 |
 | `ADMIN_TOKEN` | 自己产生一串随机字（例如 `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`，结果直接贴进 secret put，不显示在画面上更好） | 用新金钥呼叫 `/admin/api/me` 得到 200 |
 | `ADMIN_LOGIN_PASSWORD` | 自己设一个新密码 | 用新密码登入后台 |
 | `ACCESS_LIST_API_TOKEN`、Cloudflare 部署金钥 | Cloudflare → 我的个人资料 → API 权杖 → 轮换；部署金钥同时更新 GitHub 的 Secret | 成员页同步；下一次部署成功 |
@@ -508,6 +508,8 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | `TURNSTILE_SECRET_KEY` | Cloudflare → Turnstile → 该网站 → 轮换密钥 | 联络表单送得出去 |
 | `GA4_API_SECRET` | GA4 → 资料串流 → Measurement Protocol API 密钥：新增，设好后删除旧的 | GA4 即时报表看到下一笔退款 |
 | `STAGING_BASIC_AUTH_*`（测试站） | 自己设新的帐号密码 | 用新的登入测试站 |
+
+**先存好、之后才生效**：`npx wrangler versions secret put <名称> --env production` 会建一个带新金钥、但不部署的版本；下一次正式部署（`wrangler deploy` 或 GitHub 的 Deploy）会自动带上它（10/13 在测试站验证过）。要设一把「切换后才该生效」的金钥时用这个方法。直接用 `wrangler secret put` 则是马上生效（会以现在的程序重新部署一次）。
 
 **演练纪录**：第 22 节（2026-10-12 J5、J6）。
 
@@ -528,6 +530,9 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-12 | 报表对帐（第 19 节；演练第 14 项的只读部分，Claude 操作） | staging | 期间 9/1–10/12：报表营收 $394.74、退款 $49.80、净额 $344.94、12 张订单，跟数据库加总、订单 CSV（12 列，总额和退款相同）、收款与退款 CSV（16 列：收款 $394.74、退款 −$49.80）、客户名单（5 位客户、12 张订单、累计 $344.94）全部一致。个人资料只在程式里比对，没有显示 | — |
 | 2026-10-13 | 换测试站的 Resend 金钥（第 21 节，M1） | staging | 你在 Resend 建 `shopapgo-staging-shopapgo.com`（Sending access，只限 shopapgo.com），在这台电脑的终端机用 `wrangler secret put RESEND_API_KEY --env staging` 自己贴上（值没有出现在任何地方）。测试：经你同意，从测试站联络表单送一则测试留言 → 系统纪录「sent」，Resend 显示 Delivered 到 wadeyeh@apgo.com.tw。旧金钥 `shopapgo-staging` 暂留 | 设定约 1 分钟；寄出到送达几秒 |
 | 2026-10-13 | 设定地址验证（M7） | staging | Google Cloud（wadeyeh@apgo.com.tw）新专案 `shopapgo`，付款帐户 My Billing Account；开启 Address Validation API；配额「ValidateAddressRequests per day」从无限制改成 150；新金钥 `shopapgo-worker-address-validation`，只允许 Address Validation API（应用程式限制选「无」：Worker 没有固定 IP）。你在终端机用 `wrangler secret put GOOGLE_ADDRESS_VALIDATION_KEY --env staging` 自己贴上。测试（公开的商家地址）：正确地址 valid；邮递区号写错 → suggest，建议 94043-1351 | 设定约 15 分钟 |
+| 2026-10-13 | 「先存好、切换时才生效」测试（第 21 节） | staging | 用 `wrangler versions secret put` 存一把测试用金钥 `ZZ_STAGED_TEST`（不部署），测试站仍跑原版本；接着正常部署一次，新版本带有这把金钥；之后删除 | 约 2 分钟 |
+| 2026-10-13 | 正式环境设定 M7、M8、M9（你决定现在就生效） | production | 设之前确认正式环境「最新版本」就是线上版本（设金钥只会带上新值，不会换程序），并请帮手代理逐行看过旧程序会怎么用这些金钥。设了：`RESEND_API_KEY`、`RESEND_WEBHOOK_SECRET`、`GOOGLE_ADDRESS_VALIDATION_KEY`（跟测试站共用）、`OUTBOUND_INTERNAL_TOKEN`（新）、`AMAZON_OUTBOUND_BASE_URL`、`MCF_SKU_MAP_JSON`。金钥由你在终端机贴上，或在这台电脑产生直接交给 wrangler，都没有显示在任何地方。Amazon 连线：amazon-spapi-mcp 健康检查 200、新密码 200、错的 401 | 约 1 小时 |
+| 2026-10-13 | 测试站 Airwallex 通知加事件（M6） | staging | Airwallex Sandbox → 开发者 → Webhooks → `https://staging.shopapgo.com/api/webhooks/airwallex`：退款 4 个原本已有，加上全部 9 个争议事件，共 21 个（储存时要你输入密码确认） | 约 5 分钟 |
 
 ---
 
