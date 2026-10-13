@@ -257,6 +257,8 @@ Amazon 出货服务没有测试环境，staging 的订单如果真的送出去�
 
 **顾客信**：取消确认信、改地址确认信在 PR 3-7 加入；在那之前，取消或改地址后请从客服信箱回覆顾客。
 
+**地址验证的用量和费用**（M7，10/13）：Google Cloud 帐号 wadeyeh@apgo.com.tw 的专案 `shopapgo`，付款帐户 My Billing Account。结账的地址检查算「Address Validation Pro」：每月前 5,000 次免费，之后约每 1,000 次 US$17。配额设每天最多 150 次（一个月最多约 4,650 次，不会产生费用）。一张订单通常要 2–3 次（填地址时一次、付款前再一次，改地址再加）。超过当天上限时结账照常，只是地址记「未验证」，后台订单页看得到。每天订单常超过约 50 张时，到 Google Cloud → Google 地图平台 → 配额，把「ValidateAddressRequests per day」调高（会开始收费）。
+
 ---
 
 ## 13. 未完成结账（D36，PR 3-4）
@@ -502,7 +504,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | `ADMIN_TOKEN` | 自己产生一串随机字（例如 `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`，结果直接贴进 secret put，不显示在画面上更好） | 用新金钥呼叫 `/admin/api/me` 得到 200 |
 | `ADMIN_LOGIN_PASSWORD` | 自己设一个新密码 | 用新密码登入后台 |
 | `ACCESS_LIST_API_TOKEN`、Cloudflare 部署金钥 | Cloudflare → 我的个人资料 → API 权杖 → 轮换；部署金钥同时更新 GitHub 的 Secret | 成员页同步；下一次部署成功 |
-| `GOOGLE_ADDRESS_VALIDATION_KEY` | Google Cloud → API 和服务 → 凭证 → 重新产生 | 结账时地址检查有结果 |
+| `GOOGLE_ADDRESS_VALIDATION_KEY` | Google Cloud（wadeyeh@apgo.com.tw）→ 专案 `shopapgo` → API 和服务 → 凭证：建新金钥，只允许 Address Validation API，设好后删除旧的 | 用公开地址呼叫测试站的 `/api/checkout/address` 得到 valid |
 | `TURNSTILE_SECRET_KEY` | Cloudflare → Turnstile → 该网站 → 轮换密钥 | 联络表单送得出去 |
 | `GA4_API_SECRET` | GA4 → 资料串流 → Measurement Protocol API 密钥：新增，设好后删除旧的 | GA4 即时报表看到下一笔退款 |
 | `STAGING_BASIC_AUTH_*`（测试站） | 自己设新的帐号密码 | 用新的登入测试站 |
@@ -525,6 +527,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-12 | 还原数据库（第 6 节；演练第 13 项，Claude 操作） | staging | 记下还原点 → 建标记资料表 `drill_marker_20261012`（写 1 笔）→ 还原到还原点 → 标记资料表消失；订单 23 张、迁移纪录 13 笔、商品内容 0 笔都不变；还原指令同时保留「还原前」的还原点 | 还原指令 6 秒 |
 | 2026-10-12 | 报表对帐（第 19 节；演练第 14 项的只读部分，Claude 操作） | staging | 期间 9/1–10/12：报表营收 $394.74、退款 $49.80、净额 $344.94、12 张订单，跟数据库加总、订单 CSV（12 列，总额和退款相同）、收款与退款 CSV（16 列：收款 $394.74、退款 −$49.80）、客户名单（5 位客户、12 张订单、累计 $344.94）全部一致。个人资料只在程式里比对，没有显示 | — |
 | 2026-10-13 | 换测试站的 Resend 金钥（第 21 节，M1） | staging | 你在 Resend 建 `shopapgo-staging-shopapgo.com`（Sending access，只限 shopapgo.com），在这台电脑的终端机用 `wrangler secret put RESEND_API_KEY --env staging` 自己贴上（值没有出现在任何地方）。测试：经你同意，从测试站联络表单送一则测试留言 → 系统纪录「sent」，Resend 显示 Delivered 到 wadeyeh@apgo.com.tw。旧金钥 `shopapgo-staging` 暂留 | 设定约 1 分钟；寄出到送达几秒 |
+| 2026-10-13 | 设定地址验证（M7） | staging | Google Cloud（wadeyeh@apgo.com.tw）新专案 `shopapgo`，付款帐户 My Billing Account；开启 Address Validation API；配额「ValidateAddressRequests per day」从无限制改成 150；新金钥 `shopapgo-worker-address-validation`，只允许 Address Validation API（应用程式限制选「无」：Worker 没有固定 IP）。你在终端机用 `wrangler secret put GOOGLE_ADDRESS_VALIDATION_KEY --env staging` 自己贴上。测试（公开的商家地址）：正确地址 valid；邮递区号写错 → suggest，建议 94043-1351 | 设定约 15 分钟 |
 
 ---
 
