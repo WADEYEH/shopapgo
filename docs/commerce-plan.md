@@ -433,13 +433,13 @@ wrangler.toml            Worker 设定（staging / production）
 
 | # | 事项 | 不做会怎样（卡住什么） | 怎么做 | 期限 | 状态 |
 |---|---|---|---|---|---|
-| M1 | Resend 新金钥，要能用 shopapgo.com 寄信：设成测试站的 `RESEND_API_KEY`；正式环境切换时再建一把 | 测试站从 10/11 起一封信都寄不出去；演练第 2–8、12 项都要看信 | Resend → API Keys → 新增（只给寄信权限），值由你贴进 `wrangler secret put`；我可以在你的 Chrome 带你做 | 演练第二轮前 | 未做 |
+| M1 | Resend 新金钥，要能用 shopapgo.com 寄信：设成测试站的 `RESEND_API_KEY`；正式环境切换时再建一把 | 测试站从 10/11 起一封信都寄不出去；演练第 2–8、12 项都要看信 | Resend → API Keys → 新增（只给寄信权限），值由你贴进 `wrangler secret put`；我可以在你的 Chrome 带你做 | 演练第二轮前 | **测试站完成**（10/13）：你在 Resend 建了 `shopapgo-staging-shopapgo.com`（只能寄信、只限 shopapgo.com），自己贴进测试站；测试信已送达。旧金钥 `shopapgo-staging` 还在，要不要删由你决定。正式环境的金钥见 M9 |
 | M2 | PayPal 测试买家帐号 | 演练第 6 项（PayPal 付款、退款）和阶段 2 留下的 PayPal 测试 | PayPal Developer → Sandbox → Accounts | 演练第二轮前 | 未做 |
 | M3 | 演练时用测试卡付款（我不能在网页输入卡号） | 演练第 1–8、10、14 项都需要已付款的测试订单 | 演练第二轮一起做 | 演练第二轮 | 未做 |
 | M4 | 打开后台的 Cloudflare 登录（Zero Trust、Google 登录、成员名单、名单金钥 `ACCESS_LIST_API_TOKEN`；营运手册第 11 节） | 演练第 11 项；正式后台没有个人登录，只能用共用密码 | 我可以在你的 Chrome 带你做 | 演练第二轮前 | 未做 |
 | M5 | 部署权限：Cloudflare 部署金钥、GitHub 的 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` 和 `production` 环境（营运手册第 2 节第 1–3 项） | 正式环境无法部署（规定不从本机部署）；合并到 main 后测试站也不会自动更新 | 要 WADEYEH 的 GitHub 管理权限和 Cloudflare 登录 | 切换前 | 未做 |
 | M6 | 付款服务的通知：Airwallex 订阅退款和拒付事件；PayPal 设定通知并设 `PAYPAL_WEBHOOK_ID`（营运手册第 2 节第 9、10 项）。测试站和正式环境各一次 | 测试站：演练第 6、7 项收不到真的通知；正式：在付款服务后台退款或拒付不会被系统记下。测试站和正式环境都还没有 `PAYPAL_WEBHOOK_ID` | 我写好步骤，你在后台操作 | 测试站：演练第二轮前；正式：切换前 | 未做 |
-| M7 | Google 地址验证金钥 `GOOGLE_ADDRESS_VALIDATION_KEY`（D18 规定结账要验证地址） | 测试站和正式环境都没有：每张订单的地址都记「未验证」，打错地址不会被挡下；演练第 3 项「改地址要重新验证」做不了 | Google Cloud → 建 API 金钥（只开 Address Validation API），你贴进 `wrangler secret put` | 测试站：演练第二轮前；正式：切换前 | 未做 |
+| M7 | Google 地址验证金钥 `GOOGLE_ADDRESS_VALIDATION_KEY`（D18 规定结账要验证地址） | 测试站和正式环境都没有：每张订单的地址都记「未验证」，打错地址不会被挡下；演练第 3 项「改地址要重新验证」做不了 | Google Cloud → 建 API 金钥（只开 Address Validation API），你贴进 `wrangler secret put` | 测试站：演练第二轮前；正式：切换前 | **测试站完成**（10/13）：Google Cloud 帐号 wadeyeh@apgo.com.tw 新建专案 `shopapgo`（付款帐户 My Billing Account），开启 Address Validation API，每天上限 150 次；金钥 `shopapgo-worker-address-validation` 只能用地址验证，你自己贴进测试站。测试：正确地址回答 valid，邮递区号写错会建议正确的。正式环境切换时另建一把（或沿用），由你贴上 |
 | M8 | Amazon 出货连线的正式设定：`AMAZON_OUTBOUND_BASE_URL`、`OUTBOUND_INTERNAL_TOKEN`、`MCF_SKU_MAP_JSON` | 正式环境（目前还是 landing 的店）一个都没有：切换后订单不会自动送 Amazon 出货 | 测试站已有这三项；值跟 amazon-spapi-mcp 服务的设定一致，你贴进 `wrangler secret put --env production` | 切换前 | 未做 |
 | M9 | 正式环境的 `RESEND_API_KEY`、`RESEND_WEBHOOK_SECRET` | 切换后顾客信、团队信、送达状态都没有 | 跟 M1 一起，切换时建正式用的金钥和 Resend 的通知 | 切换时 | 未做 |
 | M10 | healthchecks.io 和 `HEALTHCHECK_PING_URL`（营运手册第 2 节第 6、7 项） | 排程整个停掉时没有人会知道（演练第 12 项的一部分） | 免费方案即可 | 切换前 | 未做 |
@@ -460,8 +460,9 @@ wrangler.toml            Worker 设定（staging / production）
 | C2 | 演练中「把时间调到…」的步骤（第 7 项拒付期限、第 10 项 24 小时和 30 天）：在测试站把测试订单的时间往前调 | 第二轮 | 等 |
 | C3 | 第 10 项「满 30 天删除个人资料」：测试站最早的未完成结账 10/30 满 30 天，到时查一次（或在第二轮用调时间验证） | 10/30 | 等 |
 | C4 | 库存功能 PR | M13 | 等 |
-| C5 | 确认收到的信 SPF、DKIM、DMARC 都通过（M8-09） | M1 | 等 |
+| C5 | 确认收到的信 SPF、DKIM、DMARC 都通过（M8-09） | — | **完成**（10/13）：测试站寄到 wadeyeh@apgo.com.tw 的信进了收件匣，Gmail 原始邮件显示 SPF PASS、DKIM PASS（网域 shopapgo.com）、DMARC PASS |
 | C6 | 首页 Hero、两种用法介绍、页尾区块、指南文章旁的商品卡，跟着后台改的商品名称一起变（目前写在程式里，营运手册第 23 节） | 你决定要不要做 | 未排 |
+| C7 | DMARC 目前是只观察（`p=none`）：上线稳定约一个月、确认没有合法的信被挡后，把 Cloudflare 的 `_dmarc` 纪录改成 `p=quarantine`，让冒用 shopapgo.com 的信进垃圾邮件 | 切换后约一个月，你同意后由我带你改 | 未排 |
 
 ---
 
@@ -542,6 +543,8 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/11 | 阶段 3 PR 3-8（后台第一版画面）完成，已部署到 staging（版本 `89d4cff5`，数据库迁移 0009：订单备注、商品设定）：后台照设计稿重做，中英双语（预设中文）；首页四个数字、需要处理的事、出货进度、系统状态；订单列表分类与两栏状态；订单页时间线与内部备注（不能删除）；商品页销量与停售开关（只有拥有者），停售后商品页不能加入购物车、购物车里有它的不能结账；手机版选单。操作说明在手册第 17 节 |
 | 10/12 | PR #50、#51（3-11）已合并。阶段 3 PR 3-12（在后台改商品）完成，已部署到 staging（版本 `83fa2d6e`，数据库迁移 0013）：拥有者在商品页修改名称、价格、介绍文字、搜索结果标题和描述、图片（主图加图库最多 6 张，存在新建的 R2），先看改前改后再上线，每个版本都能一键恢复（D61–D64）；改价马上影响购物车、结账和新订单；Worker 送出页面时就换好内容，Google 看到的也是新的。操作说明在手册第 23 节。staging 已确认：迁移套用、没改过的页面原样送出、成员不能改；实际改一次要用拥有者登录，由你在 staging 试 |
 | 10/12 | PR #52（3-12）已合并，阶段 3 的 PR 全部完成。开始第 9 章的 staging 完整演练：你决定先做不需要邮件的部分、库存那一项先跳过（继续找 amazon-spapi-mcp 原始码）。第一轮（Claude 做）：回退 Worker 10 秒、回到新版 16 秒；还原数据库 6 秒（标记资料表消失，订单 23 张、迁移 13 笔不变）；11 张未完成结账都已由排程失效；报表、两个 CSV、客户名单的金额和订单数都跟订单资料一致。你要求把缺的东西全部记下来：新增第 8.1 节「切换前还缺的东西」总表（M1–M16 你要做的、C1–C6 我要做的），演练逐项进度记在 `phase3-plan.md` 第 9 章。发现正式环境还没有 Amazon 出货连线、Resend、PayPal 通知、地址验证的金钥，已加进线上设定检查，切换后没设会寄信提醒 |
+| 10/13 | PR #53（演练第一轮与缺项总表）已合并。M1 测试站完成：你在 Resend 建新金钥（只能寄信、只限 shopapgo.com）并自己设到测试站，我从测试站的联络表单送一则测试留言，Resend 显示已送达 wadeyeh@apgo.com.tw（之前每封都被拒绝）。你看了那封信的原始邮件：SPF、DKIM（shopapgo.com）、DMARC 都是 PASS，C5 完成。下一步：演练第二轮前的 M2、M6、M7 |
+| 10/13 | M7 测试站完成：你选用公司帐号 wadeyeh@apgo.com.tw，付款帐户 My Billing Account，加每天 150 次上限。新专案 `shopapgo`，地址验证金钥只能用 Address Validation API。我们的检查算 Google 的「Address Validation Pro」：每月前 5,000 次免费，之后约每 1,000 次 US$17；每天 150 次，一个月最多约 4,650 次，不会产生费用。测试站结账的地址检查已经生效（正确地址 valid、邮递区号写错会建议正确的）。Google 开 API 时自动建的「Maps Platform API Key」（能用 32 种地图服务，没人用）照你的决定保留不动 |
 
 ---
 
