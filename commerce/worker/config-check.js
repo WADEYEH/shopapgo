@@ -46,7 +46,13 @@ export const CONFIG_MANIFEST = {
       GA4_MEASUREMENT_ID: "G-YM10YMKE30",
       CONTACT_EMAIL_TO: "wadeyeh@apgo.com.tw",
     },
-    secrets: ["ADMIN_TOKEN", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_WEBHOOK_ID", "RESEND_API_KEY", "META_CAPI_ACCESS_TOKEN"],
+    // 10/12: the live store (landing's) has none of RESEND_*, PAYPAL_WEBHOOK_ID, the Amazon shipping connection or the
+    // address check key yet; they are set at the cutover (docs/commerce-plan.md §8.1), and this check says so if not.
+    secrets: [
+      "ADMIN_TOKEN", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET",
+      "PAYPAL_WEBHOOK_ID", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "META_CAPI_ACCESS_TOKEN",
+      "AMAZON_OUTBOUND_BASE_URL", "OUTBOUND_INTERNAL_TOKEN", "MCF_SKU_MAP_JSON", "GOOGLE_ADDRESS_VALIDATION_KEY",
+    ],
     bindings: BINDINGS,
   },
 };
