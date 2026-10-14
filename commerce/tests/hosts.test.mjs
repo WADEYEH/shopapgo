@@ -32,6 +32,32 @@ const env = (extra = {}) => ({
 const call = (host, path, { method = "GET", headers = {}, body, e = env() } = {}) =>
   worker.fetch(new Request(`https://${host}${path}`, { method, headers, body }), e, { waitUntil() {} });
 
+test("moved hosts: the old store host and the bare domain answer 301 to the same page on SITE_HOST, webhooks stay", { skip }, async () => {
+  const OLD = "store.shop.example";
+  const e = env({ SITE_HOST: STORE, MOVED_HOSTS: `${OLD}, shop.example` });
+  const location = async (host, path, method = "GET") => {
+    const res = await call(host, path, { method, e });
+    return [res.status, res.headers.get("location")];
+  };
+  // Pages move in one hop, already past the moved-URL map (old product URLs, .html pages), keeping the query string.
+  assert.deepEqual(await location(OLD, "/"), [301, `https://${STORE}/`]);
+  assert.deepEqual(await location(OLD, "/products/d204?utm_source=ads"), [301, `https://${STORE}/products/atomic-colored-glaze?utm_source=ads`]);
+  assert.deepEqual(await location(OLD, "/checkout.html?order=APGO-US-AAAA"), [301, `https://${STORE}/checkout?order=APGO-US-AAAA`]);
+  assert.deepEqual(await location(OLD, "/privacy", "HEAD"), [301, `https://${STORE}/privacy`]);
+  assert.deepEqual(await location("shop.example", "/cart"), [301, `https://${STORE}/cart`], "the bare domain too");
+  // No Basic login is asked on the moved host: the redirect comes before the staging gate.
+  // Payment and email webhooks keep arriving on the old host until the providers point at www; Apple Pay's file stays.
+  for (const [path, method] of [["/api/webhooks/airwallex", "POST"], ["/api/health", "GET"], ["/.well-known/apple-developer-merchantid-domain-association", "GET"]]) {
+    const [status] = await location(OLD, path, method);
+    assert.notEqual(status, 301, `${method} ${path}`);
+  }
+  assert.notEqual((await location(OLD, "/contact", "POST"))[0], 301, "only GET and HEAD move");
+  // The site host itself, the back office host and an unset SITE_HOST change nothing.
+  assert.notEqual((await call(STORE, "/", { headers: { Authorization: BASIC }, e })).status, 301);
+  assert.notEqual((await call(ADMIN, "/admin/", { headers: bearer, e })).status, 301);
+  assert.notEqual((await call(OLD, "/", { e: env({ MOVED_HOSTS: OLD }) })).status, 301);
+});
+
 test("store host: /admin and /admin/api/* answer 404 (even with the right token), the store keeps working", { skip }, async () => {
   for (const path of ["/admin", "/admin/", "/admin/index.html", "/admin/api/orders", "/admin/api/mcf/sync"]) {
     for (const headers of [{ Authorization: BASIC }, bearer, {}]) {
@@ -150,11 +176,15 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(production, /pattern = "store\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /pattern = "admin\.shopapgo\.com", custom_domain = true/);
   assert.match(production, /^ADMIN_HOST = "admin\.shopapgo\.com"/m);
-  // The live www/apex store routes (Cloudflare Workers Routes, 2026-10-06). Wrangler replaces dashboard routes with the
-  // configured list on deploy, so dropping one here would take that store path off the live site.
-  const storePaths = ["/products*", "/cart*", "/checkout*", "/api/*", "/terms*", "/privacy*", "/returns*", "/contact*", "/css/*", "/js/*", "/assets/*", "/.well-known/*"];
+  // The cutover deploy takes whole hosts (www and the bare domain) from Pages: a Workers route in front of the Pages DNS
+  // record, as the store paths were since 2026-10-06. The old store host and the bare domain then answer 301 to www.
   const zoneRoutes = [...production.matchAll(/\{ pattern = "([^"]+)", zone_name = "shopapgo\.com" \}/g)].map((match) => match[1]);
-  assert.deepEqual(zoneRoutes.sort(), ["www.shopapgo.com", "shopapgo.com"].flatMap((host) => storePaths.map((path) => host + path)).sort());
+  assert.deepEqual(zoneRoutes.sort(), ["shopapgo.com/*", "www.shopapgo.com/*"]);
+  assert.match(production, /^SITE_HOST = "www\.shopapgo\.com"$/m);
+  assert.match(production, /^MOVED_HOSTS = "store\.shopapgo\.com,shopapgo\.com"$/m);
+  assert.match(staging, /pattern = "store-staging\.shopapgo\.com", custom_domain = true/, "a stand-in for the old store host");
+  assert.match(staging, /^SITE_HOST = "staging\.shopapgo\.com"$/m);
+  assert.match(staging, /^MOVED_HOSTS = "store-staging\.shopapgo\.com"$/m);
   // The same site in production, which takes effect with the cutover deploy (www moves to this Worker then).
   assert.match(production, /^directory = "\.\.\/out"/m);
   assert.match(production, /^not_found_handling = "404-page"/m);

@@ -568,3 +568,34 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 **出问题时**：网站显示不对 → 在「版本」卡片恢复上一个版本（10 秒内生效）。照片上传不了 → 看错误讯息（格式、2 MB、每边 200 到 4000 像素）。
 
 **技术备注**：内容存在数据库（迁移 0013：`product_content` 目前内容、`product_versions` 每个版本、`product_images` 上传纪录），只存「跟网站原本不同的部分」，所以恢复原始内容就是清空。照片在 R2（正式 `apgo-us-store-images`、测试站 `apgo-us-store-images-staging`，绑定名 `PRODUCT_IMAGES`，线上设定比对也会检查它），网址 `/media/products/<商品>/<编号>.webp`，快取一年（新照片就是新网址）；照片不会自动删除。Worker 送出页面时把最新内容写进 HTML（`worker/site-content.js`，含 Next.js 换页用的资料），每个 Worker 最多每 10 秒读一次数据库；没有改过的商品，页面原样送出。
+
+## 24. 切换：把 www 搬到新系统、旧网址转址、回退
+
+**现在（切换前）**
+- `www.shopapgo.com` 的 DNS 指向 Cloudflare Pages（品牌站）。www 和裸网域各有 12 条商店路径（`/products*`、`/cart*`、`/checkout*`、`/api/*`、`/terms*`、`/privacy*`、`/returns*`、`/contact*`、`/css/*`、`/js/*`、`/assets/*`、`/.well-known/*`），用 Workers 路由送到 `apgo-us-store`（旧 landing 程序）。完整清单在 commit 0d60b41 的 `commerce/wrangler.toml`。
+- 裸网域 `shopapgo.com` 由 Cloudflare 的转址规则 301 到 www（在 Worker 之前）。
+- `store.shopapgo.com`、`admin.shopapgo.com` 是 Worker 的自订网域。
+
+**切换部署之后**（GitHub 的 Deploy → production；设定已在 `commerce/wrangler.toml`）
+- 路由只剩两条：`www.shopapgo.com/*`、`shopapgo.com/*`。整个 www 由新程序服务；Pages 的 DNS 纪录不动，Worker 路由在它前面（商店路径从 10/6 起就是这样运作的）。
+- `store.shopapgo.com` 和裸网域：网页（GET、HEAD）301 到 www 的同一页，旧商品网址一次就转到新网址（例：`/products/d204` → `https://www.shopapgo.com/products/atomic-colored-glaze`），查询参数保留。`/api/*` 不转址（Airwallex 正式通知现在还打到 `store.shopapgo.com/api/webhooks/airwallex`，通知不会跟着转址走），`/.well-known/*` 不转址（Apple Pay 网域档）。设定是 `SITE_HOST`、`MOVED_HOSTS`（`worker/redirects.js`）。
+
+**切换后马上检查**（每一行都要对）
+
+| 网址 | 应该得到 |
+|---|---|
+| `https://www.shopapgo.com/` | 200，新网站首页（页首有 Shop 和购物车） |
+| `https://www.shopapgo.com/products` | 200，商品总览 |
+| `https://www.shopapgo.com/us/guides` 的任一篇 | 200 |
+| `https://store.shopapgo.com/products/d204` | 301 → `https://www.shopapgo.com/products/atomic-colored-glaze` |
+| `https://shopapgo.com/cart` | 301 → `https://www.shopapgo.com/cart` |
+| `https://store.shopapgo.com/api/health` | 200（不转址） |
+| `https://admin.shopapgo.com/` | 302 → `/admin/` |
+
+**回退**
+- Worker 版本回退（后台 Deployments → Rollback，或 `wrangler rollback`）**不会改路由**。只回退版本的话，整个 www 会由旧程序服务，而旧程序没有品牌页。
+- 所以回退是两步：（1）Worker 回到切换前的版本；（2）Cloudflare → shopapgo.com → Workers Routes：删掉 `www.shopapgo.com/*`、`shopapgo.com/*`，加回上面那 24 条商店路径（都指向 `apgo-us-store`）。第 2 步做完，品牌页马上回到 Pages。没有后台登录时，要用 M5 的 Cloudflare 金钥呼叫 API 做同样的事（切换前我会把这一步写成指令并在测试站试过）。
+- Pages 专案保留两周，之后由你删除。
+
+**测试站的演练**：`store-staging.shopapgo.com` 扮演旧的 store 网址（`MOVED_HOSTS`），网页 301 到 `staging.shopapgo.com`，`/api/*` 照常。
+

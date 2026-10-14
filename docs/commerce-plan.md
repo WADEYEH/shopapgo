@@ -375,11 +375,11 @@ wrangler.toml            Worker 设定（staging / production）
 - 切换步骤（由 GitHub 的 Deploy 工作执行、你按核准，你在线上待命）：
   1. 记录正式数据库的还原点，套用迁移。迁移只增不改（D45），不影响旧版还在运作的店。
   2. 把 shopapgo 的新版部署到正式环境的 Worker `apgo-us-store`，取代 landing 的代码（沿用正式数据库和 Airwallex 正式帐户）。store 和 admin 的网域本来就绑在这个 Worker 上：store 的网址改为 301 转到 www，webhook 路径照常处理。
-  3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker（先在 staging 网域演练过）。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
+  3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker：同一次部署把路由换成 `www.shopapgo.com/*` 和 `shopapgo.com/*`（Workers 路由在 Pages 前面，DNS 不动，Pages 专案留着）；`store.shopapgo.com` 和裸网域的网页 301 到 www 的同一页，`/api/*`（付款、寄信的通知）和 `/.well-known/*`（Apple Pay）不转址。设定在 10/14 的 PR 已经写好，转址在测试站用 `store-staging.shopapgo.com` 演练；做法、检查和回退在营运手册第 24 节。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
   4. 在 Airwallex 和 Resend 把 webhook 网址改成 www；在 Airwallex 登记 www 网域（Apple Pay 需要）。Resend 的正式通知（`https://www.shopapgo.com/api/webhooks/resend`，10/13 建好、暂停中）在这一步打开。Airwallex 正式通知目前是 `https://store.shopapgo.com/api/webhooks/airwallex`、版本 2024-08-07（全部事件）：改成 `https://www.shopapgo.com/api/webhooks/airwallex`，版本改成 2026-08-21（跟测试站一样，新程序是用这个版本测的）。PayPal 正式通知 10/14 起已经是 www，不用改。
   5. 冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。真钱付款（M18、M19）：用真的信用卡（Airwallex）和真的 PayPal 各买一笔最便宜的商品，确认收得到钱、订单和信都正常后马上退款；也确认 PayPal 视窗里有没有「用信用卡或金融卡付款」。测试站用的是沙盒帐户，正式帐户能不能收款只有这一步能证明。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。在 GA4 建 Measurement Protocol 密钥，设成正式环境的 `GA4_API_SECRET`（D58，营运手册第 20 节）。确认没有收到「Live settings differ from the repo」的团队信（第 21 节）。
   6. 观察 48 小时。Search Console 是用网域验证的，不受影响，重新提交 sitemap 即可。
-- 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒）；Pages 专案保留两周，www 可以在几分钟内改回 Pages。数据库只增不改，旧版可以照常读写。
+- 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒），**但路由不会跟着回去**：版本回退后整个 www 仍然由 Worker（旧程序）服务，旧程序没有品牌页。所以回退要两步：（1）Worker 回到切换前的版本；（2）把路由换回切换前的 24 条商店路径（Cloudflare 后台 Workers Routes，或用 M5 的金钥跑营运手册第 24 节的步骤），www 的品牌页就回到 Pages。Pages 专案保留两周。数据库只增不改，旧版可以照常读写。
 
 **完成条件**：正式环境全部由新版服务；48 小时内没有未处理的错误。
 

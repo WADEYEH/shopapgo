@@ -91,9 +91,11 @@ preview_urls = false
 # Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy; workers.dev stays on.
 #   staging.shopapgo.com        the storefront (Basic-auth gate); /admin* answers 404 here
 #   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); email/password or ADMIN_TOKEN
+#   store-staging.shopapgo.com  plays the old store host: pages answer 301 to staging.shopapgo.com, /api/* stays (MOVED_HOSTS)
 routes = [
   { pattern = "staging.shopapgo.com", custom_domain = true },
   { pattern = "admin-staging.shopapgo.com", custom_domain = true },
+  { pattern = "store-staging.shopapgo.com", custom_domain = true },
 ]
 
 [env.staging.assets]
@@ -140,6 +142,9 @@ AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but 
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
 CONFIG_PROFILE = "staging"   # worker/config-check.js: the settings this Worker must have (J6); keep its manifest equal to this file
 ADMIN_HOST = "admin-staging.shopapgo.com"   # worker/hosts.js: /admin* only on this host; other hosts 404 it
+# worker/redirects.js: the one site host; the hosts in MOVED_HOSTS answer 301 to it (except /api/* and /.well-known/*)
+SITE_HOST = "staging.shopapgo.com"
+MOVED_HOSTS = "store-staging.shopapgo.com"
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
 ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
@@ -189,33 +194,12 @@ workers_dev = false
 routes = [
   { pattern = "store.shopapgo.com", custom_domain = true },
   { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host (ADMIN_HOST below); the store host answers 404 for /admin*
-  # www.shopapgo.com and the apex: the brand pages stay on Pages, these store paths come to this Worker. They were added in
-  # the dashboard (copied from Workers Routes on 2026-10-06). Wrangler replaces dashboard routes with this list on deploy,
-  # so every one of them must stay here or a production deploy takes the store off www.
-  { pattern = "www.shopapgo.com/products*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/cart*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/checkout*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/api/*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/terms*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/privacy*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/returns*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/contact*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/css/*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/js/*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/assets/*", zone_name = "shopapgo.com" },
-  { pattern = "www.shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/products*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/cart*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/checkout*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/api/*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/terms*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/privacy*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/returns*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/contact*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/css/*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/js/*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/assets/*", zone_name = "shopapgo.com" },
-  { pattern = "shopapgo.com/.well-known/*", zone_name = "shopapgo.com" },
+  # www.shopapgo.com and the bare domain, whole hosts: the cutover deploy (docs/commerce-plan.md stage 4) takes all of
+  # www from Cloudflare Pages to this Worker. The www DNS record stays as it is (Pages); a Workers route runs in front of
+  # it, as the store paths already did since 2026-10-06. Routes are not part of a Worker version: rolling back the
+  # version keeps these routes, so moving www back to Pages means deploying a config without them (runbook section 24).
+  { pattern = "www.shopapgo.com/*", zone_name = "shopapgo.com" },
+  { pattern = "shopapgo.com/*", zone_name = "shopapgo.com" },
 ]
 
 # Do NOT deploy main here before the cutover (docs/commerce-plan.md §6, stage 4). Every customer page is a Next.js page
@@ -264,6 +248,10 @@ CONFIG_PROFILE = "production"   # worker/config-check.js: the settings this Work
 # API secret from GA4 → Data streams → shopapgo.com) is created and set at the cutover (D58). Without it nothing is sent.
 GA4_MEASUREMENT_ID = "G-YM10YMKE30"
 ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
+# worker/redirects.js (D37, D39): www is the one site host; store.shopapgo.com and the bare domain answer 301 to the
+# same page there, except /api/* (webhooks still arrive on store until the providers point at www) and /.well-known/*.
+SITE_HOST = "www.shopapgo.com"
+MOVED_HOSTS = "store.shopapgo.com,shopapgo.com"
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
 ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
 # Cloudflare Access sign-in (worker/admin-identity.js), switched on once Zero Trust is set up (docs/ops/runbook.md):
