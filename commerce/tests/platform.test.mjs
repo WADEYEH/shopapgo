@@ -219,6 +219,22 @@ test("staging order to a STOCKOUT name: the fake reports UNFULFILLABLE and the o
   });
 });
 
+test("staging order to a REJECT name: the fake refuses it, the order is marked failed and the team is told (C10)", { skip }, async () => {
+  const db = await createD1();
+  const env = stagingEnv(db, { FAKE_MCF_SHIP_MINUTES: "0", ADMIN_OWNER_EMAIL: "owner@shop.example" });
+  await withWorld(async ({ others }) => {
+    const orderId = await placePaidOrder(env, "REJECT");
+    assert.equal(row(db, "SELECT 1 AS x FROM staging_fake_mcf_orders WHERE seller_order_id = ?", orderId), null, "nothing was accepted");
+    const mcf = row(db, "SELECT status, error_kind, error_message FROM order_mcf WHERE order_id = ?", orderId);
+    assert.equal(mcf.status, "failed");
+    assert.match(mcf.error_message, /REJECT scenario/);
+    const alert = row(db, "SELECT kind, subject FROM team_alerts WHERE order_id = ? AND kind = 'mcf_failed'", orderId);
+    assert.match(alert.subject, /sending to Amazon failed/);
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", orderId).status, "paid", "the order itself stays paid");
+    assert.deepEqual(others, []);
+  });
+});
+
 test("fake Amazon: duplicate create is refused as alreadyExists, cancel works before shipping only, list / tracking / connection check answer", { skip }, async () => {
   const db = await createD1();
   const env = stagingEnv(db); // default: ships after 10 minutes

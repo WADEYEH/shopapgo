@@ -10,6 +10,8 @@
 //   hold      fulfillment_action "Hold" (the Hold test order, worker/mcf-hold-test.js): stays RECEIVED, never ships
 //   mismatch  any recipient name containing "MISMATCH": Amazon's copy has one unit more of the first item, so the
 //             read-back check after sending (D26, M6-16) can be tried on staging
+//   reject    any recipient name containing "REJECT": the order is refused when sent (a validation error, as Amazon
+//             answers a bad address), so the "sending to Amazon failed" team alert can be tried on staging (C10)
 //   cancel    allowed while RECEIVED or PROCESSING, as at Amazon
 //
 // MCF_FAKE anywhere else (production, local dev without SITE_ENV=staging) is "blocked": nothing is sent at all, neither
@@ -21,6 +23,7 @@ const DEFAULT_SHIP_MINUTES = 10;
 const LIST_LIMIT = 200;
 const STOCKOUT = /STOCKOUT/i;
 const MISMATCH = /MISMATCH/i;
+const REJECT = /REJECT/i;
 
 // "on" | "blocked" | null (off).
 export function fakeMode(env = {}) {
@@ -143,6 +146,7 @@ async function create(env, body, nowMs) {
   if (!id || String(id).length > 40 || !body.items?.length || !body.destination_address?.postalCode || !body.shipping_speed_category || !body.displayable_order_id) {
     return invalid("seller_fulfillment_order_id, items, destination_address and shipping_speed_category are required");
   }
+  if (REJECT.test(String(body.destination_address.name ?? ""))) return invalid("destination address could not be verified (staging REJECT scenario)");
   const scenario = body.fulfillment_action === "Hold" ? "hold" : STOCKOUT.test(String(body.destination_address.name ?? "")) ? "stockout" : "ship";
   const stamp = iso(nowMs);
   const inserted = await db

@@ -339,7 +339,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 3. 三步都显示 OK 才算通过，之后才把 `MCF_AUTO_SUBMIT` 打开。
 4. 取消失败：会寄信给拥有者，请到 Seller Central 手动取消那张 `HOLDTEST-…` 单（Hold 单不会出货，但会占 1 件库存）。
 
-**staging 的模拟 Amazon**：收件人姓名含 `STOCKOUT` 会变成缺货；含 `MISMATCH` 会让 Amazon 的版本多 1 件，用来试送单后比对；Hold 单永远不会出货。
+**staging 的模拟 Amazon**：收件人姓名含 `STOCKOUT` 会变成缺货；含 `MISMATCH` 会让 Amazon 的版本多 1 件，用来试送单后比对；含 `REJECT` 会在送单时被拒收，用来试「送单失败」的团队通知（C10）；Hold 单永远不会出货。
 
 **库存**：商品页缺货显示和后台库存数字，要等 Amazon 转接程序（`amazon-spapi-mcp`）开放一个只读的查库存入口，另开小 PR；在那之前后台显示「库存未连接」。
 
