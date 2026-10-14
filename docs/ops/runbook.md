@@ -53,8 +53,8 @@ flowchart LR
 | 6 | healthchecks.io（免费方案即可）| 新增一个 check：Period 5 分钟、Grace 10 分钟，通知方式选你的 email；复制它的 Ping URL | 切换前 |
 | 7 | 终端机（我可以帮你打指令，值由你贴上） | `npx wrangler secret put HEALTHCHECK_PING_URL --env production`，贴上第 6 步的 Ping URL。staging 要不要也设一个可以自己决定 | 切换前 |
 | 8 | Cloudflare → Workers & Pages → `apgo-us-store` → Issues | 部署后自动开启，可以看到所有错误。要「主动通知」：Issues 的自动通知目前只能送到聊天工具或 webhook，不能直接寄 email；PR 3-7（团队通知）会加一个接收端，收到就寄团队信 | PR 3-7 |
-| 9 | Airwallex 后台 → Developer → Webhooks | 正式与 staging 各一个通知网址，订阅第 14 节表格里的 Airwallex 事件（加上退款和争议） | 切换前 |
-| 10 | PayPal Developer → Apps & Credentials → 正式（Live）的 App → Webhooks | 新增通知网址，订阅第 14 节表格里的 8 个 PayPal 事件；把产生的 Webhook ID 用 `npx wrangler secret put PAYPAL_WEBHOOK_ID --env production` 设进去（值由你贴上）。staging 用 Sandbox 的 App 做一次 | 切换前 |
+| 9 | Airwallex 后台 → Developer → Webhooks | 正式与 staging 各一个通知网址，订阅第 14 节表格里的 Airwallex 事件（加上退款和争议）。10/14：staging 21 个事件；正式已订阅全部事件，切换当天把网址改成 www、版本改成 2026-08-21 | 切换前 |
+| 10 | PayPal Developer → Apps & Credentials → 正式（Live）的 App → Webhooks | 新增通知网址，订阅第 14 节表格里的 8 个 PayPal 事件；把产生的 Webhook ID 用 `npx wrangler secret put PAYPAL_WEBHOOK_ID --env production` 设进去（值由你贴上）。staging 用 Sandbox 的 App 做一次。10/14 两边都做好了：正式是公司帐号的 `MyApp_Wix_com_Ltd`，staging 是同一帐号 Sandbox 的「Default Application」 | 切换前 |
 
 金钥第 1 步的权限说明：「Edit Cloudflare Workers」范本可以部署 Worker、改路由；加上 D1 Edit 才能套用数据库迁移和查还原点。这个金钥只放在 GitHub 的 Secrets，不会出现在任何档案或纪录里。
 
@@ -533,6 +533,8 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-13 | 「先存好、切换时才生效」测试（第 21 节） | staging | 用 `wrangler versions secret put` 存一把测试用金钥 `ZZ_STAGED_TEST`（不部署），测试站仍跑原版本；接着正常部署一次，新版本带有这把金钥；之后删除 | 约 2 分钟 |
 | 2026-10-13 | 正式环境设定 M7、M8、M9（你决定现在就生效） | production | 设之前确认正式环境「最新版本」就是线上版本（设金钥只会带上新值，不会换程序），并请帮手代理逐行看过旧程序会怎么用这些金钥。设了：`RESEND_API_KEY`、`RESEND_WEBHOOK_SECRET`、`GOOGLE_ADDRESS_VALIDATION_KEY`（跟测试站共用）、`OUTBOUND_INTERNAL_TOKEN`（新）、`AMAZON_OUTBOUND_BASE_URL`、`MCF_SKU_MAP_JSON`。金钥由你在终端机贴上，或在这台电脑产生直接交给 wrangler，都没有显示在任何地方。Amazon 连线：amazon-spapi-mcp 健康检查 200、新密码 200、错的 401 | 约 1 小时 |
 | 2026-10-13 | 测试站 Airwallex 通知加事件（M6） | staging | Airwallex Sandbox → 开发者 → Webhooks → `https://staging.shopapgo.com/api/webhooks/airwallex`：退款 4 个原本已有，加上全部 9 个争议事件，共 21 个（储存时要你输入密码确认） | 约 5 分钟 |
+| 2026-10-14 | 正式环境付款通知（M6） | production | Airwallex 正式：通知 `https://store.shopapgo.com/api/webhooks/airwallex` 已订阅全部 268 个事件，不用改。PayPal 正式：公司帐号（wadeyeh@apgo.com.tw）→ Apps & Credentials → Live → `MyApp_Wix_com_Ltd` → Add Webhook，网址 `https://www.shopapgo.com/api/webhooks/paypal`，勾第 14 节的 8 个事件（要先把每一组展开，收起来时勾不上），储存后把 Webhook ID 用 `wrangler secret put PAYPAL_WEBHOOK_ID --env production` 设进去（你决定现在就生效） | 约 15 分钟 |
+| 2026-10-14 | 测试站 PayPal 通知（M6） | staging | 同一个帐号 → Sandbox → 「Default Application」（测试站用的 App）→ Add Webhook，网址 `https://staging.shopapgo.com/api/webhooks/paypal`，同样 8 个事件，Webhook ID 设成测试站的 `PAYPAL_WEBHOOK_ID`。检查：后台首页 7 个连线全部正常（PayPal 显示通知已设定）；没签名的假通知得到 400 | 约 10 分钟 |
 
 ---
 
