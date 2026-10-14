@@ -377,7 +377,7 @@ wrangler.toml            Worker 设定（staging / production）
   2. 把 shopapgo 的新版部署到正式环境的 Worker `apgo-us-store`，取代 landing 的代码（沿用正式数据库和 Airwallex 正式帐户）。store 和 admin 的网域本来就绑在这个 Worker 上：store 的网址改为 301 转到 www，webhook 路径照常处理。
   3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker（先在 staging 网域演练过）。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
   4. 在 Airwallex 和 Resend 把 webhook 网址改成 www；在 Airwallex 登记 www 网域（Apple Pay 需要）。Resend 的正式通知（`https://www.shopapgo.com/api/webhooks/resend`，10/13 建好、暂停中）在这一步打开。Airwallex 正式通知目前是 `https://store.shopapgo.com/api/webhooks/airwallex`、版本 2024-08-07（全部事件）：改成 `https://www.shopapgo.com/api/webhooks/airwallex`，版本改成 2026-08-21（跟测试站一样，新程序是用这个版本测的）。PayPal 正式通知 10/14 起已经是 www，不用改。
-  5. 冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。在 GA4 建 Measurement Protocol 密钥，设成正式环境的 `GA4_API_SECRET`（D58，营运手册第 20 节）。确认没有收到「Live settings differ from the repo」的团队信（第 21 节）。
+  5. 冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。真钱付款（M18、M19）：用真的信用卡（Airwallex）和真的 PayPal 各买一笔最便宜的商品，确认收得到钱、订单和信都正常后马上退款；也确认 PayPal 视窗里有没有「用信用卡或金融卡付款」。测试站用的是沙盒帐户，正式帐户能不能收款只有这一步能证明。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。在 GA4 建 Measurement Protocol 密钥，设成正式环境的 `GA4_API_SECRET`（D58，营运手册第 20 节）。确认没有收到「Live settings differ from the repo」的团队信（第 21 节）。
   6. 观察 48 小时。Search Console 是用网域验证的，不受影响，重新提交 sitemap 即可。
 - 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒）；Pages 专案保留两周，www 可以在几分钟内改回 Pages。数据库只增不改，旧版可以照常读写。
 
@@ -434,8 +434,8 @@ wrangler.toml            Worker 设定（staging / production）
 | # | 事项 | 不做会怎样（卡住什么） | 怎么做 | 期限 | 状态 |
 |---|---|---|---|---|---|
 | M1 | Resend 新金钥，要能用 shopapgo.com 寄信：设成测试站的 `RESEND_API_KEY`；正式环境切换时再建一把 | 测试站从 10/11 起一封信都寄不出去；演练第 2–8、12 项都要看信 | Resend → API Keys → 新增（只给寄信权限），值由你贴进 `wrangler secret put`；我可以在你的 Chrome 带你做 | 演练第二轮前 | **测试站完成**（10/13）：你在 Resend 建了 `shopapgo-staging-shopapgo.com`（只能寄信、只限 shopapgo.com），自己贴进测试站；测试信已送达。旧金钥 `shopapgo-staging` 还在，要不要删由你决定。正式环境的金钥见 M9 |
-| M2 | PayPal 测试买家帐号 | 演练第 6 项（PayPal 付款、退款）和阶段 2 留下的 PayPal 测试 | PayPal Developer → Sandbox → Accounts | 演练第二轮前 | **找到了**（10/14）：公司 PayPal 帐号的 Sandbox 里已有一个测试买家（Personal、国家 TW、10/5 建的）。演练第二轮用它付款，登录密码由你在 PayPal 付款视窗自己输入（在 PayPal Developer → Testing Tools → Sandbox Accounts 看得到）。实际付款成功后再标完成；如果 TW 帐号付美元有问题，再建一个 US 的 |
-| M3 | 演练时用测试卡付款（我不能在网页输入卡号） | 演练第 1–8、10、14 项都需要已付款的测试订单 | 演练第二轮一起做 | 演练第二轮 | 未做 |
+| M2 | PayPal 测试买家帐号 | 演练第 6 项（PayPal 付款、退款）和阶段 2 留下的 PayPal 测试 | PayPal Developer → Sandbox → Accounts | 演练第二轮前 | **完成**（10/14）：公司 PayPal 帐号 Sandbox 里的测试买家（Personal、TW）在演练第二轮登录付款 3 次：2 次扣款成功（美元），1 次是「两个分页」测试，被系统正确挡下没扣款。测试商家帐号也能登录，用来退款 |
+| M3 | 演练时用测试卡付款（我不能在网页输入卡号） | 演练第 1–8、10、14 项都需要已付款的测试订单 | 演练第二轮一起做 | 演练第二轮 | **完成**（10/14）：第二轮你输入了 6 次测试卡（Airwallex 测试卡 4035…0008），全部成功 |
 | M4 | 打开后台的 Cloudflare 登录（Zero Trust、Google 登录、成员名单、名单金钥 `ACCESS_LIST_API_TOKEN`；营运手册第 11 节） | 演练第 11 项；正式后台没有个人登录，只能用共用密码 | 我可以在你的 Chrome 带你做 | 演练第二轮前 | 未做 |
 | M5 | 部署权限：Cloudflare 部署金钥、GitHub 的 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` 和 `production` 环境（营运手册第 2 节第 1–3 项） | 正式环境无法部署（规定不从本机部署）；合并到 main 后测试站也不会自动更新 | 要 WADEYEH 的 GitHub 管理权限和 Cloudflare 登录 | 切换前 | **延后**（10/13）：Cloudflare 后台和 GitHub 的 WADEYEH 帐号你都登录不了（这台 Chrome 的 GitHub 是 anpuuuuu，只有推送权限）。要等能登录再做；没有它正式环境不能部署，切换前一定要完成 |
 | M6 | 付款服务的通知：Airwallex 订阅退款和拒付事件；PayPal 设定通知并设 `PAYPAL_WEBHOOK_ID`（营运手册第 2 节第 9、10 项）。测试站和正式环境各一次 | 测试站：演练第 6、7 项收不到真的通知；正式：在付款服务后台退款或拒付不会被系统记下。测试站和正式环境都还没有 `PAYPAL_WEBHOOK_ID` | 我写好步骤，你在后台操作 | 测试站：演练第二轮前；正式：切换前 | **完成**（10/14）：测试站 Airwallex 10/13 已加退款和争议事件（共 21 个）。正式 Airwallex 查过已订阅全部 268 个事件，不用改（网址和版本切换当天改，见第 9 节第 4 步）。PayPal 正式：公司帐号（wadeyeh@apgo.com.tw）的正式 App `MyApp_Wix_com_Ltd` 新增通知 `https://www.shopapgo.com/api/webhooks/paypal`，8 个事件，Webhook ID 设成正式环境的 `PAYPAL_WEBHOOK_ID`。PayPal 测试站：同一个帐号的测试 App「Default Application」新增通知 `https://staging.shopapgo.com/api/webhooks/paypal`，同样 8 个事件，Webhook ID 设成测试站的 `PAYPAL_WEBHOOK_ID`；测试站后台 7 个连线全部「正常」，没签名的假通知被拒绝（400） |
@@ -449,6 +449,9 @@ wrangler.toml            Worker 设定（staging / production）
 | M14 | 在测试站后台用拥有者登录，自己试一次改商品再恢复（营运手册第 23 节） | 演练第 14 项的改价、改文字和图片（只有拥有者能改；我用来检查的金钥是成员身分，测试站已正确拒绝） | 后台 → 商品与库存 → 修改价格、文字和图片 | 演练第二轮 | 未做 |
 | M15 | 从 Airwallex、PayPal 后台下载同一段期间的交易报表 | 演练第 14 项「汇出的 CSV 跟付款服务的报表对得上」 | 你下载给我，或让我在你的 Chrome 只看金额 | 演练第二轮 | 未做 |
 | M16 | 销售税（O1，会计师）、政策法务审核（O6）、CCPA 选项（O7） | 能不能上线、结账金额、政策页内容 | 你和会计师、法务 | 阶段 4 前 | 未做 |
+| M17 | 新订单通知的收件人：`ORDER_NOTIFY_EMAIL_TO`（谁收）和 `ORDER_NOTIFY_EMAIL_FROM`（寄件人，`APGO <orders@shopapgo.com>`）。10/14 演练才发现两个环境都没设，之前漏记 | 正式环境有新订单时团队收不到信（只能看后台） | 你决定收件人（可以多个，用逗号分开），我设定；正式环境要你同意 | 切换前 | **测试站完成**（10/14）：收件人 wadeyeh@apgo.com.tw，第二轮每张新订单都有收到。正式环境等你决定收件人 |
+| M18 | 正式 Airwallex 开通信用卡收款：Visa、Mastercard、American Express（Apple Pay、Google Pay 也靠它），把 www.shopapgo.com 加进已批准网站，以美元收款 | **没开通就切换的话，结帐页的 Card、Apple Pay、Google Pay 在正式环境都刷不过**，只剩 PayPal 和 Airwallex Pay。测试站用沙盒帐户（信用卡预设开通），演练测不出来 | 你向 Airwallex 客服或客户经理申请（中英文申请内容 10/14 我写好了）；开通后切换当天用真卡买一笔再退款 | 切换前（一定要） | **查过、待申请**（10/14）：正式帐户（瑋瑄科技有限公司）「我的支付方式」只有 Airwallex Pay，没有信用卡；已批准网站只有 https://apgo-store.1shop.tw；限额每笔 20,000 TWD、每月 500,000 TWD；最近 30 天 0 笔成功交易。你决定**保留 Airwallex Pay**，并由你送出开通申请 |
+| M19 | 确认 PayPal 正式帐户能收款：帐户有没有被限制，切换当天用真钱付一笔再退款；顺便确认 PayPal 视窗里有没有「用信用卡或金融卡付款」 | 公司 PayPal 帐户（WEI SYUAN TECHNOLOGY CO., LTD.）的交易纪录查不到任何交易，从没正式收过款；有问题要到切换当天才会发现 | 你登录 paypal.com（帐户首页要再验证一次），我看帐户首页的提醒；切换当天的真钱测试写在切换步骤里 | 切换前看限制；切换当天测 | **暂缓**（10/14 你决定先等）：正式 App `MyApp_Wix_com_Ltd` 正常、连结公司帐号，通知 10/14 已设 |
 
 正式环境的设定检查（营运手册第 21 节）在切换后会把 M6、M7、M8、M9 还没设的金钥列出来，寄团队信提醒。
 
@@ -456,7 +459,7 @@ wrangler.toml            Worker 设定（staging / production）
 
 | # | 事项 | 在等什么 | 状态 |
 |---|---|---|---|
-| C1 | 演练第二轮：第 1–8、10、12、14 项剩下的部分（第 11 项另等 M4） | M1、M2、M3、M6（测试站）、M7（测试站） | 等 |
+| C1 | 演练第二轮：第 1–8、10、12、14 项剩下的部分（第 11 项另等 M4） | M1、M2、M3、M6（测试站）、M7（测试站） | **大部分完成**（10/14）：第 1–8 项完成，第 12、14 项部分完成，结果在 `docs/design/phase3-plan.md` 第 9 章；剩下的见 C2、C3、M14、M15 和第 12 项 |
 | C2 | 演练中「把时间调到…」的步骤（第 7 项拒付期限、第 10 项 24 小时和 30 天）：在测试站把测试订单的时间往前调 | 第二轮 | 等 |
 | C3 | 第 10 项「满 30 天删除个人资料」：测试站最早的未完成结账 10/30 满 30 天，到时查一次（或在第二轮用调时间验证） | 10/30 | 等 |
 | C4 | 库存功能 PR | M13 | 等 |
@@ -464,6 +467,7 @@ wrangler.toml            Worker 设定（staging / production）
 | C6 | 首页 Hero、两种用法介绍、页尾区块、指南文章旁的商品卡，跟着后台改的商品名称一起变（目前写在程式里，营运手册第 23 节） | 你决定要不要做 | 未排 |
 | C7 | DMARC 目前是只观察（`p=none`）：上线稳定约一个月、确认没有合法的信被挡后，把 Cloudflare 的 `_dmarc` 纪录改成 `p=quarantine`，让冒用 shopapgo.com 的信进垃圾邮件 | 切换后约一个月，你同意后由我带你改 | 未排 |
 | C8 | 正式环境 PayPal 用的 App 是当年 Wix 建的 `MyApp_Wix_com_Ltd`（2025/6/4，公司帐号）。上线稳定后考虑另建一个专用的 App：要一起换正式环境的 `PAYPAL_CLIENT_ID`、`PAYPAL_CLIENT_SECRET`，并在新 App 重建通知、换 `PAYPAL_WEBHOOK_ID`；换好后旧 App 不再用（Wix 网站已不用它收款时才能停） | 切换后，你决定 | 未排 |
+| C9 | 演练第二轮发现的问题：PayPal 订单的收件人被换成付款人名字、订单已送 Amazon 才收到拒付时通知写错、PayPal 通知纪录的名称是 undefined | — | **完成**（10/14）：PR #57 修正并部署到测试站；用 PayPal 单 F（收件人 Gift Recipient）确认收件人正确。正式环境的旧程序也有收件人问题，切换后才会修好 |
 
 ---
 
@@ -548,6 +552,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/13 | M7 测试站完成：你选用公司帐号 wadeyeh@apgo.com.tw，付款帐户 My Billing Account，加每天 150 次上限。新专案 `shopapgo`，地址验证金钥只能用 Address Validation API。我们的检查算 Google 的「Address Validation Pro」：每月前 5,000 次免费，之后约每 1,000 次 US$17；每天 150 次，一个月最多约 4,650 次，不会产生费用。测试站结账的地址检查已经生效（正确地址 valid、邮递区号写错会建议正确的）。Google 开 API 时自动建的「Maps Platform API Key」（能用 32 种地图服务，没人用）照你的决定保留不动 |
 | 10/13 | 正式环境设定（你决定「现在就生效」）：M7、M8、M9 完成；M5、M6 的 PayPal 与正式 Airwallex 因为登录不了延后。设之前先查正式环境的旧程序（landing）：Resend 金钥没有寄件地址不会寄信；Amazon 连线没开自动送单不会出货；Google 金钥和 Resend 通知密钥旧程序不用。也在测试站验证过「先存好、切换时才生效」的做法（`wrangler versions secret put` 存的金钥，下一次部署会带上），这次没用到，记在营运手册第 21 节 |
 | 10/14 | M6 完成（你登录了 Airwallex 和 PayPal）：正式 Airwallex 已订阅全部事件，不用改，切换当天把网址改成 www、版本改成跟测试站一样（第 9 节第 4 步）。PayPal 正式和测试站各新增一个通知（8 个事件），两边的 `PAYPAL_WEBHOOK_ID` 都设好。设之前查过正式环境旧程序：有了这个 ID 它会先验证 PayPal 通知，付款完成的通知把订单记成已付款，其他事件只记录。找到 PayPal 测试买家帐号（M2）。新增 C8：正式 PayPal App 是 Wix 建的，之后考虑换专用的 |
+| 10/14 | 演练第二轮（测试站）：你登录测试站和付款服务，我在你的 Chrome 填资料，卡号和 PayPal 登录由你输入。第 1–8 项完成（第 8 项：完成（10/14））。发现 3 个问题（C9），PR #57 修好、已部署测试站；新增缺项 M17（新订单通知收件人）、M18（正式 Airwallex 只开通 Airwallex Pay，信用卡要申请；你决定保留 Airwallex Pay）、M19（PayPal 正式帐户从没收过款，检查暂缓）。真的 Amazon 出货纪录查过：没有任何出货 |
 
 ---
 
