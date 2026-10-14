@@ -230,11 +230,12 @@ export function getNotification(db, orderId) {
   return db.prepare("SELECT status, detail_json, updated_at FROM order_notifications WHERE order_id = ?").bind(orderId).first();
 }
 
-// Audit log of delivered events; returns true the first time an event id is seen.
+// Audit log of delivered events; returns true the first time an event id is seen. Airwallex names an event `name`,
+// PayPal `event_type`.
 export async function recordWebhookEvent(db, event) {
   const result = await db
     .prepare("INSERT OR IGNORE INTO webhook_events (id, name, received_at) VALUES (?, ?, ?)")
-    .bind(String(event.id), String(event.name), now())
+    .bind(String(event.id), String(event.name ?? event.event_type ?? ""), now())
     .run();
   return result.meta.changes > 0;
 }

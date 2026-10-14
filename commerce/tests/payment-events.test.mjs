@@ -294,6 +294,9 @@ test("PayPal: a denied capture on a paid order alerts the team; events for payme
     assert.equal(row(db, "SELECT COUNT(*) AS n FROM order_refunds").n, 0);
     assert.equal(row(db, "SELECT COUNT(*) AS n FROM order_disputes").n, 0);
     assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", paid.orderId).status, "paid");
+    // The event log keeps PayPal's event type (it read "undefined" until the 10/14 rehearsal).
+    assert.equal(row(db, "SELECT COUNT(*) AS n FROM webhook_events WHERE name = 'CUSTOMER.DISPUTE.CREATED'").n, 1);
+    assert.equal(row(db, "SELECT COUNT(*) AS n FROM webhook_events WHERE name = 'undefined'").n, 0);
 
     // PayPal unreachable: 502, so PayPal sends the event again later.
     providers.paypalRefund("REF9", paid.captureId, { value: "1.00" });
@@ -325,6 +328,7 @@ test("M5-12: an Airwallex dispute holds the order with its deadline, reminds 3 d
     assert.equal(opened.length, 1, "told once");
     assert.match(opened[0].text, /Respond before/);
     assert.match(opened[0].text, /Fraudulent transaction/);
+    assert.match(opened[0].text, /will not be sent to Amazon or shipped until the dispute is won/);
 
     let order = await adminGet(env, `/admin/api/orders/${paid.orderId}`);
     assert.ok(order.core.holds.some((hold) => hold.code === "dispute"), "held");
@@ -338,7 +342,13 @@ test("M5-12: an Airwallex dispute holds the order with its deadline, reminds 3 d
       id: "dsp_2", payment_intent_id: other.intentId, merchant_order_id: other.orderId, amount: 10, currency: "USD", reason: { description: "Not received" },
       status: "NEEDS_RESPONSE", stage: "RFI", due_at: iso(t0 + 2 * DAY), created_at: iso(t0), updated_at: iso(t0),
     });
+    // That order already went to Amazon (rehearsal 10/14): the hold cannot stop the parcel, and the alert says so.
+    db.raw.prepare("INSERT INTO order_mcf (order_id, seller_order_id, status, submitted_at, created_at, updated_at) VALUES (?, ?, 'submitted', ?, ?, ?)").run(other.orderId, other.orderId, iso(t0), iso(t0), iso(t0));
     await call(env, "/api/webhooks/airwallex", airwallexHook("payment_dispute.requires_response", { id: "dsp_2" }));
+    const withAmazon = alerts(providers.calls, new RegExp(`${other.orderId}: a dispute was opened`));
+    assert.equal(withAmazon.length, 1);
+    assert.match(withAmazon[0].text, /already with Amazon and may still ship/);
+    assert.doesNotMatch(withAmazon[0].text, /will not be sent to Amazon/);
     const list = await adminGet(env, "/admin/api/orders?issue=disputes");
     assert.deepEqual(list.orders.map((o) => [o.id, o.disputed]), [[other.orderId, true], [paid.orderId, true]]);
     assert.deepEqual(list.issueCounts, { disputes: 2 });

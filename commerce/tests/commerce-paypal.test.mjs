@@ -138,6 +138,21 @@ test("shippingFromPaypalOrder maps payer/purchase_unit into a US store address",
   assert.equal(isUsableUsShipping({ ...shipping, zip: "9513" }), false);
 });
 
+test("shippingFromPaypalOrder addresses the parcel to the shipping name, not the payer (rehearsal 10/14)", () => {
+  const order = (fullName, payerName = { given_name: "John", surname: "Doe" }) => shippingFromPaypalOrder({
+    payer: { name: payerName },
+    purchase_units: [{ shipping: { ...(fullName === undefined ? {} : { name: { full_name: fullName } }), address: { address_line_1: "1 Apple Park Way", admin_area_2: "Cupertino", admin_area_1: "CA", postal_code: "95014", country_code: "US" } } }],
+  });
+  // A gift: the recipient typed at checkout, whoever paid.
+  assert.deepEqual([order("Rehearsal STOCKOUT").firstName, order("Rehearsal STOCKOUT").lastName], ["Rehearsal", "STOCKOUT"]);
+  assert.deepEqual([order("Mary Ann Smith").firstName, order("Mary Ann Smith").lastName], ["Mary", "Ann Smith"]);
+  // The payer's own name keeps PayPal's exact split; no usable shipping name falls back to the payer.
+  const payer = { given_name: "Mary Ann", surname: "Smith" };
+  assert.deepEqual([order("Mary Ann Smith", payer).firstName, order("Mary Ann Smith", payer).lastName], ["Mary Ann", "Smith"]);
+  assert.deepEqual([order(undefined).firstName, order(undefined).lastName], ["John", "Doe"]);
+  assert.deepEqual([order("Cher").firstName, order("Cher").lastName], ["John", "Doe"]);
+});
+
 test("validatePaypalCheckout allows email-only when tax is undecided", () => {
   const result = validatePaypalCheckout({ contact: { email: "Ada@Example.com" } });
   assert.equal(result.email, "ada@example.com");
