@@ -538,6 +538,8 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-14 | 演练第二轮第 1–7 项 | staging | 8 张测试单（卡 6 张、PayPal 2 张）。只扣一次款（两个分页）、确认信、新订单通知、改地址重新验证、取消、自动送假 Amazon 与读回比对、出货信、Airwallex 与 PayPal 退款（冻结、通知、退款信）、拒付（Airwallex 模拟 API，期限 2 天 → 下一次排程寄提醒）全部照规格。发现 3 个问题，PR #57 修正 | 约 2.5 小时 |
 | 2026-10-14 | 演练第二轮第 8 项（缺货） | staging | 订单 E（卡片、收件人含 STOCKOUT）冷静期结束后送假 Amazon，4 分钟后回报缺货：缺货延迟信送达、团队收到缺货通知；后台按「取消并退款」→ 订单取消、Airwallex 全额退款 $37.98、取消信和退款信送达。PayPal 单 D 原本要测缺货，因为收件人被换成付款人名字（C9）而变成出货 | 约 1.2 小时（含 1 小时冷静期） |
 | 2026-10-14 | 部署 #57 到测试站 | staging | 自动部署因为 GitHub 没有部署金钥（M5）而跳过，从这台电脑 `npm run deploy:staging`（版本 8f1bf7ed），7 个连线全部正常 | 约 3 分钟 |
+| 2026-10-14 | 演练第 10 项（调时间） | staging | 用 `/api/checkout/session` 建一张未付款结账（测试地址）；`UPDATE orders SET created_at = <25 小时前>` → 下一次排程改成 expired、`checkout_payments` 作废；再调到 31 天前 → 下一次排程清掉 email 和地址（只留州别、金额、商品），`purged_at` 有值 | 约 5 分钟 |
+| 2026-10-14 | 演练第 12 项（部分） | staging | 对已出货订单 POST `/cancel` → 409 not_allowed，订单不变，团队通知「a change was refused」已寄出；`team_alerts` 有当天的每日摘要（sent） | 约 2 分钟 |
 
 ---
 
