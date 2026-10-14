@@ -535,6 +535,9 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-13 | 测试站 Airwallex 通知加事件（M6） | staging | Airwallex Sandbox → 开发者 → Webhooks → `https://staging.shopapgo.com/api/webhooks/airwallex`：退款 4 个原本已有，加上全部 9 个争议事件，共 21 个（储存时要你输入密码确认） | 约 5 分钟 |
 | 2026-10-14 | 正式环境付款通知（M6） | production | Airwallex 正式：通知 `https://store.shopapgo.com/api/webhooks/airwallex` 已订阅全部 268 个事件，不用改。PayPal 正式：公司帐号（wadeyeh@apgo.com.tw）→ Apps & Credentials → Live → `MyApp_Wix_com_Ltd` → Add Webhook，网址 `https://www.shopapgo.com/api/webhooks/paypal`，勾第 14 节的 8 个事件（要先把每一组展开，收起来时勾不上），储存后把 Webhook ID 用 `wrangler secret put PAYPAL_WEBHOOK_ID --env production` 设进去（你决定现在就生效） | 约 15 分钟 |
 | 2026-10-14 | 测试站 PayPal 通知（M6） | staging | 同一个帐号 → Sandbox → 「Default Application」（测试站用的 App）→ Add Webhook，网址 `https://staging.shopapgo.com/api/webhooks/paypal`，同样 8 个事件，Webhook ID 设成测试站的 `PAYPAL_WEBHOOK_ID`。检查：后台首页 7 个连线全部正常（PayPal 显示通知已设定）；没签名的假通知得到 400 | 约 10 分钟 |
+| 2026-10-14 | 演练第二轮第 1–7 项 | staging | 8 张测试单（卡 6 张、PayPal 2 张）。只扣一次款（两个分页）、确认信、新订单通知、改地址重新验证、取消、自动送假 Amazon 与读回比对、出货信、Airwallex 与 PayPal 退款（冻结、通知、退款信）、拒付（Airwallex 模拟 API，期限 2 天 → 下一次排程寄提醒）全部照规格。发现 3 个问题，PR #57 修正 | 约 2.5 小时 |
+| 2026-10-14 | 演练第二轮第 8 项（缺货） | staging | 订单 E（卡片、收件人含 STOCKOUT）冷静期结束后送假 Amazon，4 分钟后回报缺货：缺货延迟信送达、团队收到缺货通知；后台按「取消并退款」→ 订单取消、Airwallex 全额退款 $37.98、取消信和退款信送达。PayPal 单 D 原本要测缺货，因为收件人被换成付款人名字（C9）而变成出货 | 约 1.2 小时（含 1 小时冷静期） |
+| 2026-10-14 | 部署 #57 到测试站 | staging | 自动部署因为 GitHub 没有部署金钥（M5）而跳过，从这台电脑 `npm run deploy:staging`（版本 8f1bf7ed），7 个连线全部正常 | 约 3 分钟 |
 
 ---
 
