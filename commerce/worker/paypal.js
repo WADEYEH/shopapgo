@@ -284,13 +284,16 @@ export function normalizePaypalState(value) {
   return NAME_LOOKUP[raw.toLowerCase()] ?? "";
 }
 
+// The parcel goes to the shipping name (the one typed at checkout, or chosen in PayPal), not to whoever paid: a gift
+// is addressed to its recipient (rehearsal 10/14). The payer's given name / surname only split that name when it is
+// the payer's own, and fill in when PayPal sends no full shipping name (a last name is required).
 function splitFullName(fullName, payerName = {}) {
   const given = clip(payerName.given_name, 60);
   const surname = clip(payerName.surname, 60);
   const parts = clip(fullName, 120).split(/\s+/).filter(Boolean);
-  const firstName = given || parts[0] || "";
-  const lastName = surname || (parts.length > 1 ? parts.slice(1).join(" ") : "");
-  return { firstName, lastName };
+  const payers = given && surname && parts.join(" ").toLowerCase() === `${given} ${surname}`.replace(/\s+/g, " ").toLowerCase();
+  if (parts.length < 2 || payers) return { firstName: given || parts[0] || "", lastName: surname || parts.slice(1).join(" ") };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
 }
 
 export function shippingFromPaypalOrder(paypalOrder) {

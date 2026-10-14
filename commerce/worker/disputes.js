@@ -93,10 +93,17 @@ export async function recordDispute(env, { provider, disputeId, orderId, state }
     const base = { orderId, adminUrl };
     await recordAudit(db, { orderId, action: `order.dispute_${to === "open" ? "opened" : to}`, actor: "system", detail: { provider, disputeId, providerStatus: state.providerStatus, amountCents: state.amountCents, dueAt: state.dueAt } });
     if (to === "open") {
+      // The hold only stops what has not left yet: an order already with Amazon may still ship (rehearsal 10/14).
+      const stage = (await orderState(env, orderId, nowMs))?.stage;
+      const effect = stage === "fulfilling"
+        ? "The order is already with Amazon and may still ship: decide whether to cancel it with Amazon (Cancel at Amazon on the order page)."
+        : stage === "shipped"
+          ? "The order has already shipped."
+          : "The order is on hold: it will not be sent to Amazon or shipped until the dispute is won.";
       await alertTeam(env, {
         ...base, key: `dispute-open:${provider}:${disputeId}`, kind: "dispute_open",
         subject: `Order ${orderId}: a dispute was opened with ${name}`,
-        lines: [`The customer disputed ${money} with ${name} (${state.reason || "no reason given"}).`, dueText(state.dueAt), "The order is on hold: it will not be sent to Amazon or shipped until the dispute is won. Respond with the order, payment and tracking details in the dashboard."],
+        lines: [`The customer disputed ${money} with ${name} (${state.reason || "no reason given"}).`, dueText(state.dueAt), `${effect} Respond with the order, payment and tracking details in the dashboard.`],
       });
     } else if (to === "won") {
       await alertTeam(env, { ...base, key: `dispute-won:${provider}:${disputeId}`, kind: "dispute_won", subject: `Order ${orderId}: the ${name} dispute was won`, lines: ["The hold is released; the order continues as usual."] });
