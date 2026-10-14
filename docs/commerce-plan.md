@@ -469,6 +469,8 @@ wrangler.toml            Worker 设定（staging / production）
 | C8 | 正式环境 PayPal 用的 App 是当年 Wix 建的 `MyApp_Wix_com_Ltd`（2025/6/4，公司帐号）。上线稳定后考虑另建一个专用的 App：要一起换正式环境的 `PAYPAL_CLIENT_ID`、`PAYPAL_CLIENT_SECRET`，并在新 App 重建通知、换 `PAYPAL_WEBHOOK_ID`；换好后旧 App 不再用（Wix 网站已不用它收款时才能停） | 切换后，你决定 | 未排 |
 | C9 | 演练第二轮发现的问题：PayPal 订单的收件人被换成付款人名字、订单已送 Amazon 才收到拒付时通知写错、PayPal 通知纪录的名称是 undefined | — | **完成**（10/14）：PR #57 修正并部署到测试站；用 PayPal 单 F（收件人 Gift Recipient）确认收件人正确。正式环境的旧程序也有收件人问题，切换后才会修好 |
 | C10 | 测试站的假 Amazon 加一个「收件人名字含 REJECT 就拒收」的情境，用来演练第 12 项的送单失败告警（只在测试站生效） | — | **完成**（10/14）：PR #60 加了拒收情境（只在测试站），部署后用一张测试卡单（APGO-US-83Z1HSD2S3T5）验证：送单被拒、团队收到送单失败通知 |
+| C11 | 回退时把路由换回切换前的 24 条商店路径：写成用 Cloudflare API 执行的指令，先在测试站试一次（营运手册第 24 节）。Worker 版本回退不会改路由 | M5（Cloudflare 金钥） | 等 |
+| C12 | 切换前在测试站验证旧 store 网址的转址：`store-staging.shopapgo.com` 的网页 301 到 `staging.shopapgo.com`，`/api/*` 不转址 | 10/14 的 www 切换设定 PR 合并后部署测试站 | 等 |
 
 ---
 
@@ -556,6 +558,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/14 | 演练第二轮（测试站）：你登录测试站和付款服务，我在你的 Chrome 填资料，卡号和 PayPal 登录由你输入。第 1–8 项完成（第 8 项：完成（10/14））。发现 3 个问题（C9），PR #57 修好、已部署测试站；新增缺项 M17（新订单通知收件人）、M18（正式 Airwallex 只开通 Airwallex Pay，信用卡要申请；你决定保留 Airwallex Pay）、M19（PayPal 正式帐户从没收过款，检查暂缓）。真的 Amazon 出货纪录查过：没有任何出货 |
 | 10/14 | 演练第 10、12 项（测试站，我做）：24 小时失效、30 天删除个人资料用调时间验证通过（C2、C3 完成）；不合法转换被拒并通知团队、每日摘要有寄出。送单失败要先加假 Amazon 的拒收情境（C10），排程停掉要 M10 |
 | 10/14 | C10 完成：PR #60（假 Amazon 的拒收情境）合并并部署测试站，送单失败的团队通知验证通过。第 12 项只差排程停掉（M10） |
+| 10/14 | 准备搬 www：发现计划写的「store.shopapgo.com 转址到 www」（D39）程序还没做。补上转址（网页 301 到 www 同一页，`/api/*`、`/.well-known/*` 不转址，裸网域也一样），正式环境的路由改成整个 www 和裸网域（切换那次部署才生效）；测试站加 `store-staging.shopapgo.com` 演练。也更正回退方案：Worker 版本回退不会改路由，要另外把路由换回去（C11） |
 
 ---
 
