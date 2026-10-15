@@ -41,6 +41,8 @@ flowchart LR
 
 这些都在网页上操作，不需要指令。设定完告诉我，我帮你检查。
 
+**10/15 进度**：第 1–3 项完成（金钥 `github-deploy-shopapgo`；GitHub 的 Production 环境原本是 Vercel 建的，补上核准人 anpuuuuu 和只允许 `main`，D65）；用新金钥从 GitHub 部署测试站成功。第 4 项照计划切换当天才设。
+
 **谁能做**：第 2–5 项要 GitHub repo 拥有者帐号（WADEYEH）的管理权限，这台电脑登录的 GitHub 帐号（anpuuuuu）只有推送权限，不能改设定；第 1、6、8 项要能登录 Cloudflare 后台（帐号 wadeyeh@apgo.com.tw 的 Cloudflare）；第 9、10 项要能登录 Airwallex 和 PayPal 后台。权限还没拿到之前：staging 照旧从这台电脑部署，阶段 3 开发不受影响；**切换上线前一定要完成**，否则正式环境无法部署（依规则不从本机部署）。
 
 | # | 在哪里 | 做什么 | 什么时候 |
