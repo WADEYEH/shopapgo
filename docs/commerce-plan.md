@@ -113,6 +113,7 @@
 | D62 | 10/12 | 可以改主图，也可以改商品页图库（最多 6 张，可排序、写图片说明） | 3-12 |
 | D63 | 10/12 | 改完先看「改前／改后」对照，按确认就上线；每次上线都是一个版本，任何版本（含原始内容）都能一键恢复 | 3-12，M9-26、M9-27 |
 | D64 | 10/12 | 改价只要在对照画面按确认，不另设涨跌幅限制 | 3-12 |
+| D65 | 10/15 | 正式部署的核准人只设 anpuuuuu（GitHub 的 production 环境，只允许 `main`）。anpuuuuu 也是 Claude 在这台电脑用的帐号，所以规则是：**只有你在对话里明确说要部署正式环境，Claude 才会发动并核准**，平常绝不碰 | 你选的（Claude 建议 WADEYEH） |
 
 ---
 
@@ -437,7 +438,7 @@ wrangler.toml            Worker 设定（staging / production）
 | M2 | PayPal 测试买家帐号 | 演练第 6 项（PayPal 付款、退款）和阶段 2 留下的 PayPal 测试 | PayPal Developer → Sandbox → Accounts | 演练第二轮前 | **完成**（10/14）：公司 PayPal 帐号 Sandbox 里的测试买家（Personal、TW）在演练第二轮登录付款 3 次：2 次扣款成功（美元），1 次是「两个分页」测试，被系统正确挡下没扣款。测试商家帐号也能登录，用来退款 |
 | M3 | 演练时用测试卡付款（我不能在网页输入卡号） | 演练第 1–8、10、14 项都需要已付款的测试订单 | 演练第二轮一起做 | 演练第二轮 | **完成**（10/14）：第二轮你输入了 6 次测试卡（Airwallex 测试卡 4035…0008），全部成功 |
 | M4 | 打开后台的 Cloudflare 登录（Zero Trust、Google 登录、成员名单、名单金钥 `ACCESS_LIST_API_TOKEN`；营运手册第 11 节） | 演练第 11 项；正式后台没有个人登录，只能用共用密码 | 我可以在你的 Chrome 带你做 | 演练第二轮前 | 未做 |
-| M5 | 部署权限：Cloudflare 部署金钥、GitHub 的 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` 和 `production` 环境（营运手册第 2 节第 1–3 项） | 正式环境无法部署（规定不从本机部署）；合并到 main 后测试站也不会自动更新 | 要 WADEYEH 的 GitHub 管理权限和 Cloudflare 登录 | 切换前 | **延后**（10/13）：Cloudflare 后台和 GitHub 的 WADEYEH 帐号你都登录不了（这台 Chrome 的 GitHub 是 anpuuuuu，只有推送权限）。要等能登录再做；没有它正式环境不能部署，切换前一定要完成 |
+| M5 | 部署权限：Cloudflare 部署金钥、GitHub 的 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` 和 `production` 环境（营运手册第 2 节第 1–3 项） | 正式环境无法部署（规定不从本机部署）；合并到 main 后测试站也不会自动更新 | 要 WADEYEH 的 GitHub 管理权限和 Cloudflare 登录 | 切换前 | **完成**（10/15）：你登录 Cloudflare 建金钥 `github-deploy-shopapgo`（「Edit Cloudflare Workers」范本加 D1 Edit，只限公司帐号和 shopapgo.com），自己存进 GitHub 的 `CLOUDFLARE_API_TOKEN`；`CLOUDFLARE_ACCOUNT_ID` 也存了。GitHub 原本就有 Vercel 建的「Production」环境（没有保护），补上核准人 anpuuuuu（D65）和只允许 `main`。用这把金钥让 GitHub 部署测试站成功（run 38712885934，版本 49b04994，三个网域都正常）。`PRODUCTION_DEPLOY_ENABLED` 照计划没建，切换当天才设。之后合并到 main 会自动部署测试站 |
 | M6 | 付款服务的通知：Airwallex 订阅退款和拒付事件；PayPal 设定通知并设 `PAYPAL_WEBHOOK_ID`（营运手册第 2 节第 9、10 项）。测试站和正式环境各一次 | 测试站：演练第 6、7 项收不到真的通知；正式：在付款服务后台退款或拒付不会被系统记下。测试站和正式环境都还没有 `PAYPAL_WEBHOOK_ID` | 我写好步骤，你在后台操作 | 测试站：演练第二轮前；正式：切换前 | **完成**（10/14）：测试站 Airwallex 10/13 已加退款和争议事件（共 21 个）。正式 Airwallex 查过已订阅全部 268 个事件，不用改（网址和版本切换当天改，见第 9 节第 4 步）。PayPal 正式：公司帐号（wadeyeh@apgo.com.tw）的正式 App `MyApp_Wix_com_Ltd` 新增通知 `https://www.shopapgo.com/api/webhooks/paypal`，8 个事件，Webhook ID 设成正式环境的 `PAYPAL_WEBHOOK_ID`。PayPal 测试站：同一个帐号的测试 App「Default Application」新增通知 `https://staging.shopapgo.com/api/webhooks/paypal`，同样 8 个事件，Webhook ID 设成测试站的 `PAYPAL_WEBHOOK_ID`；测试站后台 7 个连线全部「正常」，没签名的假通知被拒绝（400） |
 | M7 | Google 地址验证金钥 `GOOGLE_ADDRESS_VALIDATION_KEY`（D18 规定结账要验证地址） | 测试站和正式环境都没有：每张订单的地址都记「未验证」，打错地址不会被挡下；演练第 3 项「改地址要重新验证」做不了 | Google Cloud → 建 API 金钥（只开 Address Validation API），你贴进 `wrangler secret put` | 测试站：演练第二轮前；正式：切换前 | **完成**（10/13）：测试站和正式环境共用同一把金钥 `shopapgo-worker-address-validation`（你的决定），只能用地址验证，Google 专案 `shopapgo` 每天上限 150 次（两边合计）。正式环境的旧程序不用它，切换后新程序才会用 |
 | M8 | Amazon 出货连线的正式设定：`AMAZON_OUTBOUND_BASE_URL`、`OUTBOUND_INTERNAL_TOKEN`、`MCF_SKU_MAP_JSON` | 正式环境（目前还是 landing 的店）一个都没有：切换后订单不会自动送 Amazon 出货 | 测试站已有这三项；值跟 amazon-spapi-mcp 服务的设定一致，你贴进 `wrangler secret put --env production` | 切换前 | **完成**（10/13）：Amazon 连线密码 `OUTBOUND_INTERNAL_TOKEN` 换新（找不到旧的，你的决定）：同时设到 amazon-spapi-mcp、测试站、正式环境，确认新密码通过、错的被拒；查过其他工具都不用这个密码。正式环境另设 `AMAZON_OUTBOUND_BASE_URL`（https://amazon-mcp.apgo.tw）和 `MCF_SKU_MAP_JSON`（D204→D204、D215→D215，Amazon 上的卖家 SKU 就是这两个）。正式环境旧程序没开自动送单，不会出货 |
@@ -449,7 +450,7 @@ wrangler.toml            Worker 设定（staging / production）
 | M14 | 在测试站后台用拥有者登录，自己试一次改商品再恢复（营运手册第 23 节） | 演练第 14 项的改价、改文字和图片（只有拥有者能改；我用来检查的金钥是成员身分，测试站已正确拒绝） | 后台 → 商品与库存 → 修改价格、文字和图片 | 演练第二轮 | 未做 |
 | M15 | 从 Airwallex、PayPal 后台下载同一段期间的交易报表 | 演练第 14 项「汇出的 CSV 跟付款服务的报表对得上」 | 你下载给我，或让我在你的 Chrome 只看金额 | 演练第二轮 | 未做 |
 | M16 | 销售税（O1，会计师）、政策法务审核（O6）、CCPA 选项（O7） | 能不能上线、结账金额、政策页内容 | 你和会计师、法务 | 阶段 4 前 | 未做 |
-| M17 | 新订单通知的收件人：`ORDER_NOTIFY_EMAIL_TO`（谁收）和 `ORDER_NOTIFY_EMAIL_FROM`（寄件人，`APGO <orders@shopapgo.com>`）。10/14 演练才发现两个环境都没设，之前漏记 | 正式环境有新订单时团队收不到信（只能看后台） | 你决定收件人（可以多个，用逗号分开），我设定；正式环境要你同意 | 切换前 | **测试站完成**（10/14）：收件人 wadeyeh@apgo.com.tw，第二轮每张新订单都有收到。正式环境等你决定收件人 |
+| M17 | 新订单通知的收件人：`ORDER_NOTIFY_EMAIL_TO`（谁收）和 `ORDER_NOTIFY_EMAIL_FROM`（寄件人，`APGO <orders@shopapgo.com>`）。10/14 演练才发现两个环境都没设，之前漏记 | 正式环境有新订单时团队收不到信（只能看后台） | 你决定收件人（可以多个，用逗号分开），我设定；正式环境要你同意 | 切换前 | **完成**（10/15）：你决定先寄给 wadeyeh@apgo.com.tw，之后要换再说。测试站 10/14 已设；正式环境写进设定档（`ORDER_NOTIFY_EMAIL_TO`、`ORDER_NOTIFY_EMAIL_FROM`），切换那次部署时生效。没有现在就设到线上：旧店的顾客信会改用这个寄件人，会开始寄信给真的顾客。顺便补上切换后才需要的顾客信寄件人、回信地址、寄信重试和退款失败收件人（原本写「切换时手动设」） |
 | M18 | 正式 Airwallex 开通信用卡收款：Visa、Mastercard、American Express（Apple Pay、Google Pay 也靠它），把 www.shopapgo.com 加进已批准网站，以美元收款 | **没开通就切换的话，结帐页的 Card、Apple Pay、Google Pay 在正式环境都刷不过**，只剩 PayPal 和 Airwallex Pay。测试站用沙盒帐户（信用卡预设开通），演练测不出来 | 你向 Airwallex 客服或客户经理申请（中英文申请内容 10/14 我写好了）；开通后切换当天用真卡买一笔再退款 | 切换前（一定要） | **查过、待申请**（10/14）：正式帐户（瑋瑄科技有限公司）「我的支付方式」只有 Airwallex Pay，没有信用卡；已批准网站只有 https://apgo-store.1shop.tw；限额每笔 20,000 TWD、每月 500,000 TWD；最近 30 天 0 笔成功交易。你决定**保留 Airwallex Pay**，并由你送出开通申请 |
 | M19 | 确认 PayPal 正式帐户能收款：帐户有没有被限制，切换当天用真钱付一笔再退款；顺便确认 PayPal 视窗里有没有「用信用卡或金融卡付款」 | 公司 PayPal 帐户（WEI SYUAN TECHNOLOGY CO., LTD.）的交易纪录查不到任何交易，从没正式收过款；有问题要到切换当天才会发现 | 你登录 paypal.com（帐户首页要再验证一次），我看帐户首页的提醒；切换当天的真钱测试写在切换步骤里 | 切换前看限制；切换当天测 | **查过、可以收款**（10/15）：你登录正式 PayPal 后我看了（只看不改）：帐户首页没有受限或待处理的提醒；收款限额每日无上限、余额无上限；提领每笔、每日 $59,517.61，寄款每年 $3,897.12（新帐户的初始限额，跟收款无关，要调高在 Limits 页按 Lift Limits）；网站偏好设置的「PayPal account optional」开着（没有 PayPal 帐户的顾客也能在 PayPal 视窗刷卡，由 PayPal 判断要不要显示）；还没有任何交易。剩下：切换当天真钱付一笔再退款（切换步骤第 5 步） |
 
@@ -583,6 +584,8 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/14 | 准备搬 www：发现计划写的「store.shopapgo.com 转址到 www」（D39）程序还没做。补上转址（网页 301 到 www 同一页，`/api/*`、`/.well-known/*` 不转址，裸网域也一样），正式环境的路由改成整个 www 和裸网域（切换那次部署才生效）；测试站加 `store-staging.shopapgo.com` 演练。也更正回退方案：Worker 版本回退不会改路由，要另外把路由换回去（C11） |
 | 10/15 | #61、#62 合并，测试站部署（版本 08b8706b）：旧 store 网址转址在 `store-staging.shopapgo.com` 实测通过（C12 完成） |
 | 10/15 | M19：正式 PayPal 帐户查过，没有受限提醒、收款无上限、「PayPal 帐户可选」开着，可以收款；只差切换当天的真钱测试。Airwallex 开通信用卡（M18）前，顾客至少还能透过 PayPal 视窗刷卡 |
+| 10/15 | M17 完成（新订单通知寄给 wadeyeh@apgo.com.tw）。发现正式环境的设定档没有任何寄信设定（原本写切换时手动设），一起补进 `commerce/wrangler.toml`，切换部署时生效；不在切换前设到线上旧店，因为旧店会因此开始寄信给真的顾客 |
+| 10/15 | M5 完成：Cloudflare 部署金钥、GitHub 密钥、Production 环境保护（核准人 anpuuuuu，D65；只允许 main）。GitHub 用新金钥部署测试站成功；从此合并到 main 会自动部署测试站，正式环境仍要手动发动加核准 |
 
 ---
 

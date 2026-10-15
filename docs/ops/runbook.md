@@ -41,6 +41,8 @@ flowchart LR
 
 这些都在网页上操作，不需要指令。设定完告诉我，我帮你检查。
 
+**10/15 进度**：第 1–3 项完成（金钥 `github-deploy-shopapgo`；GitHub 的 Production 环境原本是 Vercel 建的，补上核准人 anpuuuuu 和只允许 `main`，D65）；用新金钥从 GitHub 部署测试站成功。第 4 项照计划切换当天才设。
+
 **谁能做**：第 2–5 项要 GitHub repo 拥有者帐号（WADEYEH）的管理权限，这台电脑登录的 GitHub 帐号（anpuuuuu）只有推送权限，不能改设定；第 1、6、8 项要能登录 Cloudflare 后台（帐号 wadeyeh@apgo.com.tw 的 Cloudflare）；第 9、10 项要能登录 Airwallex 和 PayPal 后台。权限还没拿到之前：staging 照旧从这台电脑部署，阶段 3 开发不受影响；**切换上线前一定要完成**，否则正式环境无法部署（依规则不从本机部署）。
 
 | # | 在哪里 | 做什么 | 什么时候 |
@@ -369,7 +371,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 1. 登录 Resend → Domains → **Add domain**，输入 `shopapgo.com`。
 2. 选「Manual setup」（不要用 Auto configure，那会让 Resend 取得 Cloudflare 的权限）。Resend 会列出 DNS 纪录：TXT `resend._domainkey`（DKIM）、CNAME `rsend` → `rsend.forge.rmta.net`、CNAME `send` → `send.forge.rmta.net`。到 Cloudflare → shopapgo.com → DNS → Records 照抄加入，CNAME 的 Proxy 要关闭（DNS only，灰色云）。
 3. 加一笔 DMARC（Gmail、Yahoo 要求寄件网域要有）：Type `TXT`，Name `_dmarc`，Content `v=DMARC1; p=none;`（Resend 建议的值：先只观察、不拦信，确认都没问题再收紧）。如果已经有 `_dmarc` 纪录就不要重复加，告诉我。
-4. 回 Resend 按 **Verify DNS Records**，几分钟内显示 Verified。之后把寄件人（`CUSTOMER_EMAIL_FROM`）改成 `APGO <orders@shopapgo.com>`：staging 已在 10/11 改好；正式环境在切换时改。回信地址维持 services@apgo.com.tw。
+4. 回 Resend 按 **Verify DNS Records**，几分钟内显示 Verified。之后把寄件人（`CUSTOMER_EMAIL_FROM`）改成 `APGO <orders@shopapgo.com>`：staging 已在 10/11 改好；正式环境 10/15 写进 `commerce/wrangler.toml`（连同回信地址、寄信重试、新订单通知和退款失败的收件人），切换那次部署时生效。不要在切换前把这些设到线上的旧店：旧店的顾客信会改用新订单通知的寄件人，开始寄信给真的顾客。回信地址维持 services@apgo.com.tw。
 5. 确认：收到 shopapgo.com 寄出的信后，在 Gmail 打开「显示原始邮件」，SPF、DKIM、DMARC 都应显示 PASS（M8-09）。
 
 ---

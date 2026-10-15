@@ -267,6 +267,15 @@ META_DATASET_ID = "2606879866471418"
 # (RESEND_API_KEY + CUSTOMER_EMAIL_FROM). Turnstile (bot check) once the owner sets TURNSTILE_SITE_KEY here and the secret
 # TURNSTILE_SECRET_KEY. The receiving inbox is the owner's choice (2026-10-08).
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
+# Email (worker/customer-email.js, worker/notify.js), with the secret RESEND_API_KEY. Plain vars on purpose: they take
+# effect with the cutover deploy only. The live landing code falls back to ORDER_NOTIFY_EMAIL_FROM for customer mail,
+# so setting these on it before the cutover would start emails to real customers from the old store (10/15).
+CUSTOMER_EMAIL_FROM = "APGO <orders@shopapgo.com>"   # O8: shopapgo.com verified in Resend (SPF, DKIM, DMARC pass, C5)
+CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
+CUSTOMER_EMAIL_RETRY_CRON = "true"          # the */5 cron retries emails that failed (the outbox)
+ORDER_NOTIFY_EMAIL_TO = "wadeyeh@apgo.com.tw"   # new paid order email to the team (M17, owner 10/15: this address for now)
+ORDER_NOTIFY_EMAIL_FROM = "APGO <orders@shopapgo.com>"
+REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw"   # a refund that failed
 # ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Until ADMIN_ACCESS is on, admin
 # login is ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
