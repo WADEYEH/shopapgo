@@ -540,6 +540,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-14 | 部署 #57 到测试站 | staging | 自动部署因为 GitHub 没有部署金钥（M5）而跳过，从这台电脑 `npm run deploy:staging`（版本 8f1bf7ed），7 个连线全部正常 | 约 3 分钟 |
 | 2026-10-14 | 演练第 10 项（调时间） | staging | 用 `/api/checkout/session` 建一张未付款结账（测试地址）；`UPDATE orders SET created_at = <25 小时前>` → 下一次排程改成 expired、`checkout_payments` 作废；再调到 31 天前 → 下一次排程清掉 email 和地址（只留州别、金额、商品），`purged_at` 有值 | 约 5 分钟 |
 | 2026-10-14 | 演练第 12 项（部分） | staging | 对已出货订单 POST `/cancel` → 409 not_allowed，订单不变，团队通知「a change was refused」已寄出；`team_alerts` 有当天的每日摘要（sent） | 约 2 分钟 |
+| 2026-10-14 | 演练第 12 项：送单失败（C10） | staging | 部署 #60（版本 f462b7e2）后，你刷一张收件人 `Rehearsal REJECT` 的测试卡单；把 `orders.paid_at` 和 `mcf_submission_queue.due_at` 调到 61 分钟前 → 下一次排程送单被拒（invalid），`order_mcf` 状态 failed，`team_alerts` 有 mcf_failed（sent） | 约 5 分钟 |
 
 ---
 
