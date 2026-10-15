@@ -49,6 +49,12 @@ export const CONFIG_MANIFEST = {
       META_DATASET_ID: "2606879866471418",
       GA4_MEASUREMENT_ID: "G-YM10YMKE30",
       CONTACT_EMAIL_TO: "wadeyeh@apgo.com.tw",
+      CUSTOMER_EMAIL_FROM: "APGO <orders@shopapgo.com>",
+      CUSTOMER_EMAIL_REPLY_TO: "services@apgo.com.tw",
+      CUSTOMER_EMAIL_RETRY_CRON: "true",
+      ORDER_NOTIFY_EMAIL_TO: "wadeyeh@apgo.com.tw",
+      ORDER_NOTIFY_EMAIL_FROM: "APGO <orders@shopapgo.com>",
+      REFUND_ALERT_EMAIL_TO: "wadeyeh@apgo.com.tw",
     },
     // 10/12: the live store (landing's) has none of RESEND_*, PAYPAL_WEBHOOK_ID, the Amazon shipping connection or the
     // address check key yet; they are set at the cutover (docs/commerce-plan.md §8.1), and this check says so if not.
