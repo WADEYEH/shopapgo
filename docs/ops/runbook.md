@@ -541,6 +541,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-14 | 演练第 10 项（调时间） | staging | 用 `/api/checkout/session` 建一张未付款结账（测试地址）；`UPDATE orders SET created_at = <25 小时前>` → 下一次排程改成 expired、`checkout_payments` 作废；再调到 31 天前 → 下一次排程清掉 email 和地址（只留州别、金额、商品），`purged_at` 有值 | 约 5 分钟 |
 | 2026-10-14 | 演练第 12 项（部分） | staging | 对已出货订单 POST `/cancel` → 409 not_allowed，订单不变，团队通知「a change was refused」已寄出；`team_alerts` 有当天的每日摘要（sent） | 约 2 分钟 |
 | 2026-10-14 | 演练第 12 项：送单失败（C10） | staging | 部署 #60（版本 f462b7e2）后，你刷一张收件人 `Rehearsal REJECT` 的测试卡单；把 `orders.paid_at` 和 `mcf_submission_queue.due_at` 调到 61 分钟前 → 下一次排程送单被拒（invalid），`order_mcf` 状态 failed，`team_alerts` 有 mcf_failed（sent） | 约 5 分钟 |
+| 2026-10-15 | 旧 store 网址转址（C12） | staging | 部署 #62（版本 08b8706b，自动建好 `store-staging.shopapgo.com`）。网页 301 到 `staging.shopapgo.com` 的同一页，旧商品网址和 `checkout.html` 一次到位、查询参数保留；`/api/*`、`/.well-known/*` 不转址。部署后头几十秒有请求还由旧版本处理（得到 401），约 1 分钟后全部正确 | 约 3 分钟 |
 
 ---
 
@@ -580,7 +581,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 - 路由只剩两条：`www.shopapgo.com/*`、`shopapgo.com/*`。整个 www 由新程序服务；Pages 的 DNS 纪录不动，Worker 路由在它前面（商店路径从 10/6 起就是这样运作的）。
 - `store.shopapgo.com` 和裸网域：网页（GET、HEAD）301 到 www 的同一页，旧商品网址一次就转到新网址（例：`/products/d204` → `https://www.shopapgo.com/products/atomic-colored-glaze`），查询参数保留。`/api/*` 不转址（Airwallex 正式通知现在还打到 `store.shopapgo.com/api/webhooks/airwallex`，通知不会跟着转址走），`/.well-known/*` 不转址（Apple Pay 网域档）。设定是 `SITE_HOST`、`MOVED_HOSTS`（`worker/redirects.js`）。
 
-**切换后马上检查**（每一行都要对）
+**切换后检查**（部署完先等 1 分钟再查：10/15 测试站部署后的头几十秒，有些请求还由旧版本处理。每一行都要对）
 
 | 网址 | 应该得到 |
 |---|---|
@@ -597,5 +598,5 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 - 所以回退是两步：（1）Worker 回到切换前的版本；（2）Cloudflare → shopapgo.com → Workers Routes：删掉 `www.shopapgo.com/*`、`shopapgo.com/*`，加回上面那 24 条商店路径（都指向 `apgo-us-store`）。第 2 步做完，品牌页马上回到 Pages。没有后台登录时，要用 M5 的 Cloudflare 金钥呼叫 API 做同样的事（切换前我会把这一步写成指令并在测试站试过）。
 - Pages 专案保留两周，之后由你删除。
 
-**测试站的演练**：`store-staging.shopapgo.com` 扮演旧的 store 网址（`MOVED_HOSTS`），网页 301 到 `staging.shopapgo.com`，`/api/*` 照常。
+**测试站的演练**：`store-staging.shopapgo.com` 扮演旧的 store 网址（`MOVED_HOSTS`），网页 301 到 `staging.shopapgo.com`，`/api/*` 照常。10/15 部署（版本 08b8706b）后实测：`/`、`/privacy`、`/robots.txt` 301 到同一页；`/products/d204?utm_source=ads` → `/products/atomic-colored-glaze?utm_source=ads`；`/checkout.html?order=…` → `/checkout?order=…`；`/api/health`、`/.well-known/…` 不转址；PayPal 通知网址照常接收（没签名的得到 400）。
 
