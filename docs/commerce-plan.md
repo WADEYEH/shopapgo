@@ -444,7 +444,7 @@ wrangler.toml            Worker 设定（staging / production）
 | M8 | Amazon 出货连线的正式设定：`AMAZON_OUTBOUND_BASE_URL`、`OUTBOUND_INTERNAL_TOKEN`、`MCF_SKU_MAP_JSON` | 正式环境（目前还是 landing 的店）一个都没有：切换后订单不会自动送 Amazon 出货 | 测试站已有这三项；值跟 amazon-spapi-mcp 服务的设定一致，你贴进 `wrangler secret put --env production` | 切换前 | **完成**（10/13）：Amazon 连线密码 `OUTBOUND_INTERNAL_TOKEN` 换新（找不到旧的，你的决定）：同时设到 amazon-spapi-mcp、测试站、正式环境，确认新密码通过、错的被拒；查过其他工具都不用这个密码。正式环境另设 `AMAZON_OUTBOUND_BASE_URL`（https://amazon-mcp.apgo.tw）和 `MCF_SKU_MAP_JSON`（D204→D204、D215→D215，Amazon 上的卖家 SKU 就是这两个）。正式环境旧程序没开自动送单，不会出货 |
 | M9 | 正式环境的 `RESEND_API_KEY`、`RESEND_WEBHOOK_SECRET` | 切换后顾客信、团队信、送达状态都没有 | 跟 M1 一起，切换时建正式用的金钥和 Resend 的通知 | 切换时 | **完成**（10/13）：正式环境 `RESEND_API_KEY`（Resend 金钥 `shopapgo-production`，权限是全部，你决定保留）、`RESEND_WEBHOOK_SECRET`（Resend 通知 `https://www.shopapgo.com/api/webhooks/resend`，7 种寄送状态，**目前暂停**，切换当天打开）。旧程序没有寄件地址，不会寄信 |
 | M10 | healthchecks.io 和 `HEALTHCHECK_PING_URL`（营运手册第 2 节第 6、7 项） | 排程整个停掉时没有人会知道（演练第 12 项的一部分） | 免费方案即可 | 切换前 | 未做 |
-| M11 | Turnstile 金钥 `TURNSTILE_SITE_KEY`、`TURNSTILE_SECRET_KEY`（联络表单防机器人） | 两个环境都没有：只靠限次和隐藏栏位挡垃圾讯息 | Cloudflare → Turnstile | 切换前（建议） | 未做 |
+| M11 | Turnstile 金钥 `TURNSTILE_SITE_KEY`、`TURNSTILE_SECRET_KEY`（联络表单防机器人） | 两个环境都没有：只靠限次和隐藏栏位挡垃圾讯息 | Cloudflare → Turnstile | 切换前（建议） | **完成**（10/15）：你在 Cloudflare 建 Turnstile widget「shopapgo contact form」（网域 shopapgo.com，含 www、staging 等子网域；Managed 模式）。Secret Key 你自己贴进测试站和正式环境（正式环境的旧店不用它，没有影响）；Site Key 是公开值，写进设定档。部署后联络表单会出现机器人检查 |
 | M12 | GA4 Measurement Protocol 密钥 `GA4_API_SECRET`（D58，营运手册第 20 节） | 退款不会从 GA4 的营收扣掉 | 切换当天建 | 切换时 | 未做（按计划） |
 | M13 | 找到 amazon-spapi-mcp 的原始码（在 Mac 上部署的） | 库存显示、库存不足自动停止结账（M6-09、M9-17、演练第 9 项）。10/12 你决定：继续找，演练先跳过第 9 项，上线不等它；没有库存时，Amazon 缺货照现有流程寄延迟信、在后台「取消并退款」 | 请 Mac 的使用者找出来分享（不要附 `.dev.vars`、`.env`） | 找到后补 | 未做 |
 | M14 | 在测试站后台用拥有者登录，自己试一次改商品再恢复（营运手册第 23 节） | 演练第 14 项的改价、改文字和图片（只有拥有者能改；我用来检查的金钥是成员身分，测试站已正确拒绝） | 后台 → 商品与库存 → 修改价格、文字和图片 | 演练第二轮 | 未做 |
@@ -587,6 +587,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/15 | M17 完成（新订单通知寄给 wadeyeh@apgo.com.tw）。发现正式环境的设定档没有任何寄信设定（原本写切换时手动设），一起补进 `commerce/wrangler.toml`，切换部署时生效；不在切换前设到线上旧店，因为旧店会因此开始寄信给真的顾客 |
 | 10/15 | M5 完成：Cloudflare 部署金钥、GitHub 密钥、Production 环境保护（核准人 anpuuuuu，D65；只允许 main）。GitHub 用新金钥部署测试站成功；从此合并到 main 会自动部署测试站，正式环境仍要手动发动加核准 |
 | 10/15 | M4 测试站第 1–7 步：team apgo 和登录方式原本就有；新增名单 apgo-backoffice-members、应用 shopapgo back office (staging)、名单同步金钥（Zero Trust: Edit 是最小权限）。应用一建好，Cloudflare 就挡在测试站后台前面；检查脚本要另建服务金钥才过得去 |
+| 10/15 | #65 合并（测试站后台改用 Cloudflare 登录）；第 8 步登录实测你决定不做（演练第 11 项记为「设定完成、未实测」）。M11 完成：Turnstile 金钥两个环境都设好，Site Key 写进设定档。M10（healthchecks.io）说明过，等你注册 |
 
 ---
 

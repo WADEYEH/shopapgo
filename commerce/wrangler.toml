@@ -163,6 +163,7 @@ CUSTOMER_EMAIL_FROM = "APGO <orders@shopapgo.com>"   # O8: shopapgo.com verified
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"   # worker/contact.js: Contact us messages go to the approved test recipient on staging
+TURNSTILE_SITE_KEY = "0x4AAAAAAFXdvG8hkAH0UWBo"   # M11 (10/15): Turnstile widget "shopapgo contact form" (shopapgo.com and subdomains); the secret TURNSTILE_SECRET_KEY is set
 CUSTOMER_EMAIL_POLICY_NOTE = "TEST EMAIL - Sample order and shipping details only. No payment or shipment took place."
 CUSTOMER_EMAIL_ENABLED = "true"             # staging only: dedicated key configured, exact owner-approved recipient allowlist
 CUSTOMER_EMAIL_RETRY_CRON = "true"          # recovers new payment instructions and outbox rows; no historical backfill
@@ -270,9 +271,10 @@ ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
 META_DATASET_ID = "2606879866471418"
 # Contact us form (worker/contact.js, D28): messages go to the customer-service inbox, sent with the order-email sender
-# (RESEND_API_KEY + CUSTOMER_EMAIL_FROM). Turnstile (bot check) once the owner sets TURNSTILE_SITE_KEY here and the secret
-# TURNSTILE_SECRET_KEY. The receiving inbox is the owner's choice (2026-10-08).
+# (RESEND_API_KEY + CUSTOMER_EMAIL_FROM), with a Turnstile bot check (M11, 10/15: widget "shopapgo contact form"; the
+# secret TURNSTILE_SECRET_KEY is set; the live landing code does not use it). The receiving inbox is the owner's choice (2026-10-08).
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
+TURNSTILE_SITE_KEY = "0x4AAAAAAFXdvG8hkAH0UWBo"
 # Email (worker/customer-email.js, worker/notify.js), with the secret RESEND_API_KEY. Plain vars on purpose: they take
 # effect with the cutover deploy only. The live landing code falls back to ORDER_NOTIFY_EMAIL_FROM for customer mail,
 # so setting these on it before the cutover would start emails to real customers from the old store (10/15).
