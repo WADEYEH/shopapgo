@@ -375,11 +375,11 @@ wrangler.toml            Worker 设定（staging / production）
 - 切换步骤（由 GitHub 的 Deploy 工作执行、你按核准，你在线上待命）：
   1. 记录正式数据库的还原点，套用迁移。迁移只增不改（D45），不影响旧版还在运作的店。
   2. 把 shopapgo 的新版部署到正式环境的 Worker `apgo-us-store`，取代 landing 的代码（沿用正式数据库和 Airwallex 正式帐户）。store 和 admin 的网域本来就绑在这个 Worker 上：store 的网址改为 301 转到 www，webhook 路径照常处理。
-  3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker（先在 staging 网域演练过）。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
+  3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker：同一次部署把路由换成 `www.shopapgo.com/*` 和 `shopapgo.com/*`（Workers 路由在 Pages 前面，DNS 不动，Pages 专案留着）；`store.shopapgo.com` 和裸网域的网页 301 到 www 的同一页，`/api/*`（付款、寄信的通知）和 `/.well-known/*`（Apple Pay）不转址。设定在 10/14 的 PR 已经写好，转址在测试站用 `store-staging.shopapgo.com` 演练；做法、检查和回退在营运手册第 24 节。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
   4. 在 Airwallex 和 Resend 把 webhook 网址改成 www；在 Airwallex 登记 www 网域（Apple Pay 需要）。Resend 的正式通知（`https://www.shopapgo.com/api/webhooks/resend`，10/13 建好、暂停中）在这一步打开。Airwallex 正式通知目前是 `https://store.shopapgo.com/api/webhooks/airwallex`、版本 2024-08-07（全部事件）：改成 `https://www.shopapgo.com/api/webhooks/airwallex`，版本改成 2026-08-21（跟测试站一样，新程序是用这个版本测的）。PayPal 正式通知 10/14 起已经是 www，不用改。
   5. 冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。真钱付款（M18、M19）：用真的信用卡（Airwallex）和真的 PayPal 各买一笔最便宜的商品，确认收得到钱、订单和信都正常后马上退款；也确认 PayPal 视窗里有没有「用信用卡或金融卡付款」。测试站用的是沙盒帐户，正式帐户能不能收款只有这一步能证明。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。在 GA4 建 Measurement Protocol 密钥，设成正式环境的 `GA4_API_SECRET`（D58，营运手册第 20 节）。确认没有收到「Live settings differ from the repo」的团队信（第 21 节）。
   6. 观察 48 小时。Search Console 是用网域验证的，不受影响，重新提交 sitemap 即可。
-- 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒）；Pages 专案保留两周，www 可以在几分钟内改回 Pages。数据库只增不改，旧版可以照常读写。
+- 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒），**但路由不会跟着回去**：版本回退后整个 www 仍然由 Worker（旧程序）服务，旧程序没有品牌页。所以回退要两步：（1）Worker 回到切换前的版本；（2）把路由换回切换前的 24 条商店路径（Cloudflare 后台 Workers Routes，或用 M5 的金钥跑营运手册第 24 节的步骤），www 的品牌页就回到 Pages。Pages 专案保留两周。数据库只增不改，旧版可以照常读写。
 
 **完成条件**：正式环境全部由新版服务；48 小时内没有未处理的错误。
 
@@ -469,6 +469,8 @@ wrangler.toml            Worker 设定（staging / production）
 | C8 | 正式环境 PayPal 用的 App 是当年 Wix 建的 `MyApp_Wix_com_Ltd`（2025/6/4，公司帐号）。上线稳定后考虑另建一个专用的 App：要一起换正式环境的 `PAYPAL_CLIENT_ID`、`PAYPAL_CLIENT_SECRET`，并在新 App 重建通知、换 `PAYPAL_WEBHOOK_ID`；换好后旧 App 不再用（Wix 网站已不用它收款时才能停） | 切换后，你决定 | 未排 |
 | C9 | 演练第二轮发现的问题：PayPal 订单的收件人被换成付款人名字、订单已送 Amazon 才收到拒付时通知写错、PayPal 通知纪录的名称是 undefined | — | **完成**（10/14）：PR #57 修正并部署到测试站；用 PayPal 单 F（收件人 Gift Recipient）确认收件人正确。正式环境的旧程序也有收件人问题，切换后才会修好 |
 | C10 | 测试站的假 Amazon 加一个「收件人名字含 REJECT 就拒收」的情境，用来演练第 12 项的送单失败告警（只在测试站生效） | — | **完成**（10/14）：PR #60 加了拒收情境（只在测试站），部署后用一张测试卡单（APGO-US-83Z1HSD2S3T5）验证：送单被拒、团队收到送单失败通知 |
+| C11 | 回退时把路由换回切换前的 24 条商店路径：写成用 Cloudflare API 执行的指令，先在测试站试一次（营运手册第 24 节）。Worker 版本回退不会改路由 | M5（Cloudflare 金钥） | 等 |
+| C12 | 切换前在测试站验证旧 store 网址的转址：`store-staging.shopapgo.com` 的网页 301 到 `staging.shopapgo.com`，`/api/*` 不转址 | 10/14 的 www 切换设定 PR 合并后部署测试站 | 等 |
 
 ---
 
@@ -491,6 +493,28 @@ wrangler.toml            Worker 设定（staging / production）
 | G13 | 画面 | 截图比对 | 手机、平板、桌面都没有破版；品牌页面跟切换前一致 |
 | G14 | 回退演练 | staging | 能在 10 分钟内切回旧版 |
 | G15 | 送单验证 | 正式环境 | Hold 测试单建立成功并取消；送单后自动比对机制运作（D26） |
+
+### 上线验收进度（10/14 整理，之后照这张表更新）
+
+| # | 状态 | 已有的证据 | 还缺什么 |
+|---|---|---|---|
+| G1 | **通过**（每次都要） | 每个 PR 的检查（品牌站 test；commerce：后端 441 项、端到端）都通过 | 切换那次部署前再看一次 |
+| G2 | 部分 | 测试站 8 张单：小计、运费 $7.99、税 $0、总额在购物车、结账、订单、后台、付款服务都一致 | 税（O1、G12）；切换前请你确认价格、运费、税（正式环境的旧线上店已设 `PRICING_APPROVED`） |
+| G3 | **通过** | 10/14 测试站实测：AK、HI、PR 被拒（只送 48 州和 DC），APO、PO Box 被拒，正常地址 valid；也有自动测试 | — |
+| G4 | 大部分 | 成功（卡 6 次、PayPal 2 次）；没签名的 PayPal 通知被拒（400）；重复通知只记一次（自动测试）；两个分页只扣一次（演练第 1 项） | 被拒的卡（付款失败、重试）在测试站手动试一次：你用 Airwallex 文件里的拒绝测试卡付款 |
+| G5 | **通过** | 部分、全额退款（Airwallex、PayPal）的纪录、冻结、通知、退款信都对（演练第 4、6、8 项）；退款失败有自动测试，10/3 测试站也有一笔 | — |
+| G6 | **通过** | 送单、读回比对、追踪同步、出货信、缺货、送单失败（演练第 5、8、12 项） | — |
+| G7 | **通过** | 确认、出货、退款、取消、改地址、缺货延迟信都送达测试信箱；寄信失败重试有自动测试 | — |
+| G8 | 未做 | 自动测试有（PR 3-2） | M4（Cloudflare 登录）后做演练第 11 项 |
+| G9 | 切换时做 | GTM 第 3 版（含 GA4 电商标签）10/12 已发布 | 切换后用 GTM 预览和 Meta 测试工具看四个电商事件、Purchase 去重 |
+| G10 | 切换时做 | 产品页结构化资料、旧网址 301 都有自动测试；store 和裸网域转址见 #62 | 切换后用 Rich Results Test、提交 sitemap（测试站有密码，Google 的工具进不去） |
+| G11 | 未做 | — | 法务审核（O6） |
+| G12 | 未做 | — | 会计师意见（O1） |
+| G13 | 切换前再做 | 阶段 2 做过（#38） | 切换前在测试站重拍手机、平板、桌面的画面，跟现在 www 的品牌页比对 |
+| G14 | **通过** | 测试站回退 10 秒、回到新版 16 秒（10/12） | 正式环境回退路由的指令（C11） |
+| G15 | 切换时做 | 测试站的 Hold 测试单有自动测试 | 切换后在正式环境建一张 Hold 单再取消（拥有者按） |
+
+另外两件切换前一定要完成、但不在 G 表里的：正式 Airwallex 开通信用卡（M18），部署金钥（M5）。
 
 ---
 
@@ -556,6 +580,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/14 | 演练第二轮（测试站）：你登录测试站和付款服务，我在你的 Chrome 填资料，卡号和 PayPal 登录由你输入。第 1–8 项完成（第 8 项：完成（10/14））。发现 3 个问题（C9），PR #57 修好、已部署测试站；新增缺项 M17（新订单通知收件人）、M18（正式 Airwallex 只开通 Airwallex Pay，信用卡要申请；你决定保留 Airwallex Pay）、M19（PayPal 正式帐户从没收过款，检查暂缓）。真的 Amazon 出货纪录查过：没有任何出货 |
 | 10/14 | 演练第 10、12 项（测试站，我做）：24 小时失效、30 天删除个人资料用调时间验证通过（C2、C3 完成）；不合法转换被拒并通知团队、每日摘要有寄出。送单失败要先加假 Amazon 的拒收情境（C10），排程停掉要 M10 |
 | 10/14 | C10 完成：PR #60（假 Amazon 的拒收情境）合并并部署测试站，送单失败的团队通知验证通过。第 12 项只差排程停掉（M10） |
+| 10/14 | 准备搬 www：发现计划写的「store.shopapgo.com 转址到 www」（D39）程序还没做。补上转址（网页 301 到 www 同一页，`/api/*`、`/.well-known/*` 不转址，裸网域也一样），正式环境的路由改成整个 www 和裸网域（切换那次部署才生效）；测试站加 `store-staging.shopapgo.com` 演练。也更正回退方案：Worker 版本回退不会改路由，要另外把路由换回去（C11） |
 
 ---
 

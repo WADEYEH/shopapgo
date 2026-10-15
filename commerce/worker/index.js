@@ -80,7 +80,7 @@ import { PAYPAL_EVENTS, handleAirwallexDisputeEvent, handlePaypalPaymentEvent, i
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
-import { siteRedirect } from "./redirects.js";
+import { hostRedirect, siteRedirect } from "./redirects.js";
 import { serveProductImage } from "./product-content.js";
 import { serveSite } from "./site-content.js";
 import { handleContact } from "./contact.js";
@@ -609,9 +609,10 @@ async function dispatch(request, env, ctx) {
 }
 
 export default {
+  // The old store host and the bare domain move to SITE_HOST first (worker/redirects.js), before any gate.
   // SITE_ENV=staging adds noindex headers, /robots.txt and the Basic-auth gate (worker/staging.js); otherwise a pass-through.
   fetch(request, env, ctx) {
-    return withStaging(request, env, () => handleRequest(request, env, ctx));
+    return hostRedirect(request, env) || withStaging(request, env, () => handleRequest(request, env, ctx));
   },
   // Cron (worker/cron.js). Three independent jobs, each a no-op unless enabled: Amazon MCF status sync (MCF_SYNC_CRON=true),
   // customer email retries (customer email configured) and the Meta CAPI re-send of failed events (META_DATASET_ID set).

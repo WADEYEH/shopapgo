@@ -37,3 +37,23 @@ export const siteRedirect = (request) => {
   if (!target) return null;
   return Response.redirect(new URL(`${target}${url.search}`, url).href, 301);
 };
+
+// After the cutover the site lives on one host (D37, D39). SITE_HOST is that host; MOVED_HOSTS (comma list: the old
+// store host, the bare domain) answer 301 to the same page there, in one hop that already follows the moved-URL map
+// above. Two kinds of path stay where they are: /api/* (payment and email providers keep calling the old host's webhook
+// URLs until they are switched to www, and a webhook does not follow a redirect) and /.well-known/* (Apple Pay's domain
+// file for the old host). Only GET and HEAD move; anything else carries on.
+const listOf = (value) => String(value ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+
+export const hostRedirect = (request, env = {}) => {
+  const site = String(env.SITE_HOST ?? "").trim().toLowerCase();
+  if (!site || (request.method !== "GET" && request.method !== "HEAD")) return null;
+  const url = new URL(request.url);
+  const host = url.hostname.toLowerCase();
+  if (host === site || !listOf(env.MOVED_HOSTS).includes(host)) return null;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/.well-known/")) return null;
+  const target = new URL(siteRedirect(request)?.headers.get("Location") ?? url.href);
+  target.protocol = "https:";
+  target.host = site;
+  return Response.redirect(target.href, 301);
+};
