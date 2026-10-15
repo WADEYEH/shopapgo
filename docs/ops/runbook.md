@@ -229,6 +229,10 @@ Amazon 出货服务没有测试环境，staging 的订单如果真的送出去�
 
 打开之后，共用帐密和 staging 的网站登录都不再能进后台；`ADMIN_TOKEN` 只给脚本用（角色是成员，不能管理成员）。
 
+**10/15 测试站进度**：第 1、2 步原本就有（team `apgo`，`apgo.cloudflareaccess.com`；登录方式 Google 和 One-time PIN 都已开）。第 3 步名单 `apgo-backoffice-members`（ID `86679123-d156-420e-ad3b-66075645d1ee`）；第 4 步应用「shopapgo back office (staging)」（`admin-staging.shopapgo.com`，24 小时，规则「shopapgo back office members」= Allow、Email List 是这份名单）；第 5 步金钥 `backoffice-member-list`（Cloudflare 没有只能改名单的权限，最小是 Zero Trust: Edit，只限公司帐号）；第 6 步你在终端机贴上；第 7 步设定写进 `commerce/wrangler.toml`。帐号里另有 5 个其他系统的 Access 应用，都没有动。
+
+**脚本怎么过 Cloudflare 那一关**：应用一建好，没登录的请求在 Cloudflare 就被挡下，后台程序收不到，所以只带 `ADMIN_TOKEN` 的脚本也进不来。做法：在 Zero Trust 建一把服务金钥（Service Token），应用加一条 Service Auth 规则只认这把金钥；脚本同时带服务金钥的两个标头和 `ADMIN_TOKEN`。
+
 **技术备注**：Cloudflare 有一个直接把登录身分交给 Worker 的功能（`ctx.access`），但它不支援同时提供网页档案的 Worker（我们就是），所以 Worker 自己验证 Access 送来的登录凭证：用 team 的公开金钥验签章，比对 AUD、发行者和有效时间。这是 Cloudflare 文件建议的标准做法。
 
 **名单同步失败时**：成员页会显示「Cloudflare list not updated」和原因，按「Update Cloudflare list now」重试。就算同步失败，后台本身仍然只认名单上的人（移除的人一样进不来），只是 Cloudflare 那层可能还放他到登录画面。

@@ -148,11 +148,17 @@ MOVED_HOSTS = "store-staging.shopapgo.com"
 ADMIN_ACCEPT_SITE_BASIC = "true"            # staging only: the website Basic login (existing secrets) also opens /admin on ADMIN_HOST
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
 ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
-# Cloudflare Access sign-in (worker/admin-identity.js), switched on once Zero Trust is set up (docs/ops/runbook.md):
-#   ADMIN_ACCESS = "true", ACCESS_TEAM_DOMAIN = "https://<team>.cloudflareaccess.com", ACCESS_AUD = "<application audience tag>"
-# and, to keep Cloudflare's allowed-email list equal to the member list (worker/access-list.js):
-#   CLOUDFLARE_ACCOUNT_ID = "<account id>", ACCESS_LIST_ID = "<Zero Trust email list id>", secret ACCESS_LIST_API_TOKEN
-#   (wrangler secret put ACCESS_LIST_API_TOKEN --env staging; a token that can only edit Zero Trust lists).
+# Cloudflare Access sign-in (worker/admin-identity.js; M4, on since 10/15, docs/ops/runbook.md section 11): team "apgo",
+# application "shopapgo back office (staging)" on admin-staging.shopapgo.com, policy "shopapgo back office members"
+# (emails in the Zero Trust list below). The site Basic login and the shared login no longer open /admin; ADMIN_TOKEN still
+# does, for scripts (role member), which pass Cloudflare with a service token. None of these values is a secret.
+ADMIN_ACCESS = "true"
+ACCESS_TEAM_DOMAIN = "https://apgo.cloudflareaccess.com"
+ACCESS_AUD = "dc006dbb80b89d40c57c502cdde1bf61379a57b6436bbd7ac13cb85825e1c1f6"
+# The member list kept equal to Cloudflare's allowed-email list (worker/access-list.js): Zero Trust list
+# "apgo-backoffice-members"; the secret ACCESS_LIST_API_TOKEN ("backoffice-member-list", Zero Trust: Edit on this account).
+CLOUDFLARE_ACCOUNT_ID = "71eb47531bc5b2d880acc57b74989146"
+ACCESS_LIST_ID = "86679123-d156-420e-ad3b-66075645d1ee"
 CUSTOMER_EMAIL_FROM = "APGO <orders@shopapgo.com>"   # O8: shopapgo.com verified in Resend 10/11 (us-east-1); production switches at the cutover
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_TEST_RECIPIENTS = "wadeyeh@apgo.com.tw" # owner-approved staging recipient; all other recipients are blocked
