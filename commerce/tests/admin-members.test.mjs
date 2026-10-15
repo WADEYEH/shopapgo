@@ -417,14 +417,17 @@ test("Cloudflare list: added and removed emails are copied over in one change; f
   }, { cloudflare });
 });
 
-test("wrangler: the first owner is set for staging and production; Access stays off until it is set up", async () => {
+test("wrangler: the first owner is set for staging and production; Access is on for staging only, until production is set up", async () => {
   const { readFile } = await import("node:fs/promises");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
   const staging = toml.slice(toml.indexOf("[env.staging]"), toml.indexOf("[env.production]"));
   const production = toml.slice(toml.indexOf("[env.production]"));
-  for (const section of [staging, production]) {
-    assert.match(section, /^ADMIN_OWNER_EMAIL = "wadeyeh@apgo\.com\.tw"$/m);
-    assert.doesNotMatch(section, /^\s*ADMIN_ACCESS\s*=/m, "switched on only after Zero Trust is configured (docs/ops/runbook.md)");
-  }
+  for (const section of [staging, production]) assert.match(section, /^ADMIN_OWNER_EMAIL = "wadeyeh@apgo\.com\.tw"$/m);
+  // Staging (M4, 10/15): team apgo, the staging application's audience tag, the Zero Trust member list.
+  assert.match(staging, /^ADMIN_ACCESS = "true"$/m);
+  assert.match(staging, /^ACCESS_TEAM_DOMAIN = "https:\/\/apgo\.cloudflareaccess\.com"$/m);
+  assert.match(staging, /^ACCESS_AUD = "[0-9a-f]{64}"$/m);
+  assert.match(staging, /^ACCESS_LIST_ID = "[0-9a-f-]{36}"$/m);
+  assert.doesNotMatch(production, /^\s*ADMIN_ACCESS\s*=/m, "production: switched on only after its own Access application exists (docs/ops/runbook.md)");
   assert.doesNotMatch(toml, /^\s*ACCESS_LIST_API_TOKEN\s*=/m, "the list token is a secret");
 });
