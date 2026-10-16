@@ -10,7 +10,7 @@
 import { DEFAULT_PRICING, computeTax, pricingApproved, resolvePricing, storeReadiness, taxStatus } from "./pricing.js";
 import { SHIP_STATES } from "../../lib/shop/address-rules.mjs";
 import { US_STATES } from "./states.js";
-import { walletConfig } from "./wallets.js";
+import { cardPaymentsEnabled, walletConfig } from "./wallets.js";
 
 export { SHIP_STATES, US_STATES };
 
@@ -102,6 +102,7 @@ export function quote(items, { state, method } = {}, pricing = DEFAULT_PRICING) 
 // button the device or Airwallex cannot actually offer (see worker/wallets.js).
 // `paypal` exposes only the public client id + env for the JS SDK.
 // `airwallexPay.enabled` is the Airwallex Pay radio on the payment step (default on).
+// `cards.enabled` is the Card option (CARD_PAYMENTS_ENABLED, default on; off also hides Apple Pay / Google Pay).
 export function publicConfig(env = {}, pricing = resolvePricing(env)) {
   const enabled = (name) => String(env[name] ?? "true").toLowerCase() !== "false";
   return {
@@ -126,12 +127,12 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
     // "[TO CONFIRM]" (they show nothing extra once approved).
     pricingApproved: pricingApproved(env),
     estimate: !pricingApproved(env),
+    cards: { enabled: cardPaymentsEnabled(env) },
     wallets: walletConfig(env),
     // Contact us form (worker/contact.js): the Turnstile widget key, only once both Turnstile keys are set.
     contact: { turnstileSiteKey: env.TURNSTILE_SECRET_KEY && env.TURNSTILE_SITE_KEY ? String(env.TURNSTILE_SITE_KEY) : null },
-    // Airwallex Pay (e-wallet) on the payment step. Default on — production Cards
-    // are not enabled yet, so this is the working Airwallex method. Set
-    // AIRWALLEX_PAY_ENABLED=false to hide the option; the card UI stays.
+    // Airwallex Pay (e-wallet) on the payment step. Default on. Set
+    // AIRWALLEX_PAY_ENABLED=false to hide the option; cards are CARD_PAYMENTS_ENABLED.
     airwallexPay: {
       enabled: String(env.AIRWALLEX_PAY_ENABLED ?? "true").toLowerCase() !== "false",
     },

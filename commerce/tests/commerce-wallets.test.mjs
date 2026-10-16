@@ -6,8 +6,8 @@ import test from "node:test";
 
 import worker from "../worker/index.js";
 import { publicConfig } from "../worker/catalog.js";
-import { APPLE_PAY_ASSET_PATH, autoCaptureEnabled, paymentMethodOptions, walletConfig } from "../worker/wallets.js";
-import { candidateWallets, detectApplePay, detectGooglePay, walletAmount, walletOptions, walletUpdate } from "../../lib/shop/wallets.mjs";
+import { APPLE_PAY_ASSET_PATH, autoCaptureEnabled, cardPaymentsEnabled, paymentMethodOptions, walletConfig } from "../worker/wallets.js";
+import { candidateWallets, cardPaymentsEnabled as pageCardsEnabled, detectApplePay, detectGooglePay, walletAmount, walletOptions, walletUpdate } from "../../lib/shop/wallets.mjs";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
 
 globalThis.fetch = async (url) => { throw new Error(`unexpected real network call: ${url}`); };
@@ -79,6 +79,22 @@ test("payment_method_options and wallet flags come from env with safe defaults",
   assert.equal(off.applePay, false);
   assert.equal(off.googlePay, false);
   assert.equal(off.merchantName, "APGO Labs");
+});
+
+test("CARD_PAYMENTS_ENABLED=false hides the Card option and both wallets; Airwallex Pay and PayPal are not cards (D70)", () => {
+  assert.equal(cardPaymentsEnabled({}), true);
+  assert.deepEqual(publicConfig({}).cards, { enabled: true });
+  const config = publicConfig({ CARD_PAYMENTS_ENABLED: "false", PAYPAL_CLIENT_ID: "client" });
+  assert.deepEqual(config.cards, { enabled: false });
+  assert.equal(config.wallets.applePay, false, "Apple Pay is a card payment");
+  assert.equal(config.wallets.googlePay, false, "Google Pay is a card payment");
+  assert.equal(config.airwallexPay.enabled, true);
+  assert.equal(config.paypal.enabled, true);
+  assert.equal(walletConfig({ CARD_PAYMENTS_ENABLED: "false", APPLE_PAY_ENABLED: "true" }).applePay, false, "a wallet flag cannot bring a wallet back without cards");
+  // The page: on unless the config says otherwise (an older Worker without the field still offers cards).
+  assert.equal(pageCardsEnabled(config), false);
+  assert.equal(pageCardsEnabled(publicConfig({})), true);
+  assert.equal(pageCardsEnabled({}), true);
 });
 
 // ---------- Worker integration ----------

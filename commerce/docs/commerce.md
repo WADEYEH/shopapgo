@@ -403,6 +403,9 @@ radios. Selecting one hides the others. Apple Pay and Google Pay stay in the
 express block above the chooser.
 
 **Operator flag.** `AIRWALLEX_PAY_ENABLED=false` hides the option (default on).
+`CARD_PAYMENTS_ENABLED=false` hides the Card option and Apple Pay / Google Pay (Airwallex charges
+wallets as cards); Airwallex Pay and PayPal stay, PayPal listed first and selected (D70: production
+until Airwallex enables cards, M18 / C14). `GET /api/store/config` includes `cards: { enabled }`.
 `GET /api/store/config` includes `airwallexPay: { enabled }`. Honour `storeReady`.
 
 Code: `lib/shop/airwallex-pay.mjs`, wiring in

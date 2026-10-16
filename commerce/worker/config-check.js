@@ -56,6 +56,7 @@ export const CONFIG_MANIFEST = {
       GA4_MEASUREMENT_ID: "G-YM10YMKE30",
       CONTACT_EMAIL_TO: "wadeyeh@apgo.com.tw",
       TURNSTILE_SITE_KEY: "0x4AAAAAAFXdvG8hkAH0UWBo",
+      CARD_PAYMENTS_ENABLED: "false",
       CUSTOMER_EMAIL_FROM: "APGO <orders@shopapgo.com>",
       CUSTOMER_EMAIL_REPLY_TO: "services@apgo.com.tw",
       CUSTOMER_EMAIL_RETRY_CRON: "true",

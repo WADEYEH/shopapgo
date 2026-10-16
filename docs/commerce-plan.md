@@ -118,6 +118,7 @@
 | D67 | 10/15 | 瑋瑄科技全年营收没有超过 2,662.5 万美元，加州隐私法（CCPA）不适用：不加「Your Privacy Choices」连结，维持尊重 GPC 的保守做法（D46）。资料保存：订单 7 年、客服纪录 2 年 | 回答 O7（你的判断，没有请律师） |
 | D68 | 10/15 | **销售税先用 $0 上线**，之后再处理：你知道风险（之后若州政府追缴，税金要从营收自己付，可能加罚金；订单少时金额不大）。上线后定期检视（C13） | 回答 O1（你的决定，没有请会计师） |
 | D69 | 10/15 | 政策页不请律师，用 Claude 依常见做法补齐的版本上线：准据法台湾（不影响顾客所在州的消费者保护）、赔偿上限是该笔订单金额、包裹送达才转移风险（跟补寄规则一致）、拿掉「草稿、待法务审核」。Claude 不是律师，营业额变大后建议再请专业人士看一次 | 回答 O6 |
+| D70 | 10/16 | **不等 Airwallex 信用卡就可以上线**：正式环境先关掉 Airwallex 信用卡（`CARD_PAYMENTS_ENABLED = "false"`），结帐页只有 PayPal（排第一、预设选它；没有 PayPal 帐户也能在 PayPal 视窗刷卡）和 Airwallex Pay（你选直接显示，不先测）；Card、Apple Pay、Google Pay 都不显示。代价：没有页面上的刷卡栏和 Apple Pay，手机结帐多一步；PayPal 手续费较高；Airwallex Pay 美国顾客多半没有帐户，而且在 www 收美元没实测过。Airwallex 开通后把开关改回来（C14） | M18 不再挡上线 |
 
 ---
 
@@ -382,7 +383,7 @@ wrangler.toml            Worker 设定（staging / production）
   2. 把 shopapgo 的新版部署到正式环境的 Worker `apgo-us-store`，取代 landing 的代码（沿用正式数据库和 Airwallex 正式帐户）。store 和 admin 的网域本来就绑在这个 Worker 上：store 的网址改为 301 转到 www，webhook 路径照常处理。
   3. 把 `www.shopapgo.com` 从 Pages 移到这个 Worker：同一次部署把路由换成 `www.shopapgo.com/*` 和 `shopapgo.com/*`（Workers 路由在 Pages 前面，DNS 不动，Pages 专案留着）；`store.shopapgo.com` 和裸网域的网页 301 到 www 的同一页，`/api/*`（付款、寄信的通知）和 `/.well-known/*`（Apple Pay）不转址。设定在 10/14 的 PR 已经写好，转址在测试站用 `store-staging.shopapgo.com` 演练；做法、检查和回退在营运手册第 24 节。第 2、3 步要在同一次部署完成：商品页已经是 Next.js 页面（D41），要跟品牌页同一份网站档案才能运作，所以在这之前不能把 `main` 部署到正式环境（`commerce/wrangler.toml` 有注明）。
   4. 在 Airwallex 和 Resend 把 webhook 网址改成 www；在 Airwallex 登记 www 网域（Apple Pay 需要）。Resend 的正式通知（`https://www.shopapgo.com/api/webhooks/resend`，10/13 建好、暂停中）在这一步打开。Airwallex 正式通知目前是 `https://store.shopapgo.com/api/webhooks/airwallex`、版本 2024-08-07（全部事件）：改成 `https://www.shopapgo.com/api/webhooks/airwallex`，版本改成 2026-08-21（跟测试站一样，新程序是用这个版本测的）。PayPal 正式通知 10/14 起已经是 www，不用改。
-  5. 在四份政策页（`docs/legal/`）把「Effective date」填上切换日期。冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。真钱付款（M18、M19）：用真的信用卡（Airwallex）和真的 PayPal 各买一笔最便宜的商品，确认收得到钱、订单和信都正常后马上退款；也确认 PayPal 视窗里有没有「用信用卡或金融卡付款」。测试站用的是沙盒帐户，正式帐户能不能收款只有这一步能证明。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。在 GA4 建 Measurement Protocol 密钥，设成正式环境的 `GA4_API_SECRET`（D58，营运手册第 20 节）。确认没有收到「Live settings differ from the repo」的团队信（第 21 节）。
+  5. 在四份政策页（`docs/legal/`）把「Effective date」填上切换日期。冒烟测试：页面、购物车、后台、邮件、Pixel/GA4。真钱付款（M19；Airwallex 信用卡开通前不测卡，D70）：用真的 PayPal 买一笔最便宜的商品，确认收得到钱、订单和信都正常后马上退款；再确认 PayPal 视窗里有「用信用卡或金融卡付款」（Debit or Credit Card），没有 PayPal 帐户的顾客要靠它刷卡，看不到的话先告诉你再决定要不要继续切换。结帐页确认没有 Card、Apple Pay、Google Pay。测试站用的是沙盒帐户，正式帐户能不能收款只有这一步能证明。送单验证（D26）：在正式环境建一张 Hold 出货单，确认 Amazon 接受后取消。在 GA4 建 Measurement Protocol 密钥，设成正式环境的 `GA4_API_SECRET`（D58，营运手册第 20 节）。确认没有收到「Live settings differ from the repo」的团队信（第 21 节）。
   6. 观察 48 小时。Search Console 是用网域验证的，不受影响，重新提交 sitemap 即可。
 - 回退方案：Worker 可以直接回到切换前的版本（staging 演练 17 秒），**但路由不会跟着回去**：版本回退后整个 www 仍然由 Worker（旧程序）服务，旧程序没有品牌页。所以回退要两步：（1）Worker 回到切换前的版本；（2）把路由换回切换前的 24 条商店路径（Cloudflare 后台 Workers Routes，或用 M5 的金钥跑营运手册第 24 节的步骤），www 的品牌页就回到 Pages。Pages 专案保留两周。数据库只增不改，旧版可以照常读写。
 
@@ -455,7 +456,7 @@ wrangler.toml            Worker 设定（staging / production）
 | M15 | 从 Airwallex、PayPal 后台下载同一段期间的交易报表 | 演练第 14 项「汇出的 CSV 跟付款服务的报表对得上」 | 你下载给我，或让我在你的 Chrome 只看金额 | 演练第二轮 | 未做 |
 | M16 | 销售税（O1，会计师）、政策法务审核（O6）、CCPA 选项（O7） | 能不能上线、结账金额、政策页内容 | 你和会计师、法务 | 阶段 4 前 | **已决定，不请专业人士**（10/15）：销售税 $0 上线（D68）、加州隐私法不适用（D67）、政策页用 Claude 补齐的版本（D69）。只剩登记地址和生效日期 |
 | M17 | 新订单通知的收件人：`ORDER_NOTIFY_EMAIL_TO`（谁收）和 `ORDER_NOTIFY_EMAIL_FROM`（寄件人，`APGO <orders@shopapgo.com>`）。10/14 演练才发现两个环境都没设，之前漏记 | 正式环境有新订单时团队收不到信（只能看后台） | 你决定收件人（可以多个，用逗号分开），我设定；正式环境要你同意 | 切换前 | **完成**（10/15）：你决定先寄给 wadeyeh@apgo.com.tw，之后要换再说。测试站 10/14 已设；正式环境写进设定档（`ORDER_NOTIFY_EMAIL_TO`、`ORDER_NOTIFY_EMAIL_FROM`），切换那次部署时生效。没有现在就设到线上：旧店的顾客信会改用这个寄件人，会开始寄信给真的顾客。顺便补上切换后才需要的顾客信寄件人、回信地址、寄信重试和退款失败收件人（原本写「切换时手动设」） |
-| M18 | 正式 Airwallex 开通信用卡收款：Visa、Mastercard、American Express（Apple Pay、Google Pay 也靠它），把 www.shopapgo.com 加进已批准网站，以美元收款 | **没开通就切换的话，结帐页的 Card、Apple Pay、Google Pay 在正式环境都刷不过**，只剩 PayPal 和 Airwallex Pay。测试站用沙盒帐户（信用卡预设开通），演练测不出来 | 你向 Airwallex 客服或客户经理申请（中英文申请内容 10/14 我写好了）；开通后切换当天用真卡买一笔再退款 | 切换前（一定要） | **申请中**（10/15）：你已向 Airwallex 送出开通申请（卖家用瑋瑄科技，D66）。等 Airwallex 回覆；开通后切换当天用真卡测一笔再退款 |
+| M18 | 正式 Airwallex 开通信用卡收款：Visa、Mastercard、American Express（Apple Pay、Google Pay 也靠它），把 www.shopapgo.com 加进已批准网站，以美元收款 | **没开通就切换的话，结帐页的 Card、Apple Pay、Google Pay 在正式环境都刷不过**，只剩 PayPal 和 Airwallex Pay。测试站用沙盒帐户（信用卡预设开通），演练测不出来 | 你向 Airwallex 客服或客户经理申请（中英文申请内容 10/14 我写好了）；开通后切换当天用真卡买一笔再退款 | 上线不用等（D70）；开通后做 C14 | **申请中，不再挡上线**（10/16，D70）：你已向 Airwallex 送出开通申请（卖家用瑋瑄科技，D66）。在开通之前，正式环境的结帐页不显示 Card、Apple Pay、Google Pay，靠 PayPal（含刷卡）和 Airwallex Pay 收款。开通后做 C14 |
 | M19 | 确认 PayPal 正式帐户能收款：帐户有没有被限制，切换当天用真钱付一笔再退款；顺便确认 PayPal 视窗里有没有「用信用卡或金融卡付款」 | 公司 PayPal 帐户（WEI SYUAN TECHNOLOGY CO., LTD.）的交易纪录查不到任何交易，从没正式收过款；有问题要到切换当天才会发现 | 你登录 paypal.com（帐户首页要再验证一次），我看帐户首页的提醒；切换当天的真钱测试写在切换步骤里 | 切换前看限制；切换当天测 | **查过、可以收款**（10/15）：你登录正式 PayPal 后我看了（只看不改）：帐户首页没有受限或待处理的提醒；收款限额每日无上限、余额无上限；提领每笔、每日 $59,517.61，寄款每年 $3,897.12（新帐户的初始限额，跟收款无关，要调高在 Limits 页按 Lift Limits）；网站偏好设置的「PayPal account optional」开着（没有 PayPal 帐户的顾客也能在 PayPal 视窗刷卡，由 PayPal 判断要不要显示）；还没有任何交易。剩下：切换当天真钱付一笔再退款（切换步骤第 5 步） |
 | M20 | 美国网站由哪一家公司卖：网站页尾写「光世代科技有限公司」（统编 24705400，9/9 从 apgo.tw 页尾抄来），但 Airwallex、PayPal 的收款帐户都是「瑋瑄科技有限公司」（WEI SYUAN TECHNOLOGY CO., LTD.） | 政策页的公司名（现在是 [TO CONFIRM]）、信用卡帐单上的商家名、Airwallex 开通信用卡（M18）和 PayPal 的审核都要跟实际卖东西的公司一致；不一致可能被付款服务质疑，也会让顾客困惑 | 你决定（可能要问会计师、律师）；决定后我改页尾和政策页 | 切换前、送 M18 申请前 | **完成**（10/16）：瑋瑄科技（D66），统编 94071421，登记地址 新北市新庄区龙安路 66 之 28 号 10 楼（经济部商工登记公示资料，核准设立）。页尾、联络页、销售条款、隐私权政策都改成瑋瑄科技和这个地址（英文 10F., No. 66-28, Long'an Rd., Xinzhuang Dist., New Taipei City, Taiwan）。客服信箱、电话、营业时间照 apgo.tw（你决定暂时继续用） |
 
@@ -478,6 +479,7 @@ wrangler.toml            Worker 设定（staging / production）
 | C11 | 回退时把路由换回切换前的 24 条商店路径：写成用 Cloudflare API 执行的指令，先在测试站试一次（营运手册第 24 节）。Worker 版本回退不会改路由 | M5（Cloudflare 金钥） | 等 |
 | C12 | 切换前在测试站验证旧 store 网址的转址：`store-staging.shopapgo.com` 的网页 301 到 `staging.shopapgo.com`，`/api/*` 不转址 | 10/14 的 www 切换设定 PR 合并后部署测试站 | **完成**（10/15）：#62 部署测试站后实测，转址全部正确，`/api/*` 不转址；部署后约 1 分钟才全部换成新版本（营运手册第 24 节已注明） |
 | C13 | 销售税检视（D68）：上线后每季看一次网站在各州的销售额和笔数（后台报表），同时从 Amazon 下载 FBA 库存报表看货放在哪些州；网站美国营收明显成长、或任何一州接近经济门槛时，提醒你决定是否注册、接计税服务 | 上线后每季 | 等 |
+| C14 | Airwallex 开通信用卡后（M18）：把 `commerce/wrangler.toml` 正式环境的 `CARD_PAYMENTS_ENABLED` 改成 `"true"`（同时改 `worker/config-check.js` 的清单），合并后部署正式环境；Card、Apple Pay、Google Pay 就会出现。部署后用真卡买一笔最便宜的商品再退款，Apple Pay 也试一次 | Airwallex 通知开通后 | 等 |
 
 ---
 
@@ -521,7 +523,7 @@ wrangler.toml            Worker 设定（staging / production）
 | G14 | **通过** | 测试站回退 10 秒、回到新版 16 秒（10/12） | 正式环境回退路由的指令（C11） |
 | G15 | 切换时做 | 测试站的 Hold 测试单有自动测试 | 切换后在正式环境建一张 Hold 单再取消（拥有者按） |
 
-另外两件切换前一定要完成、但不在 G 表里的：正式 Airwallex 开通信用卡（M18），部署金钥（M5）。
+另外切换前一定要完成、但不在 G 表里的：部署金钥（M5，10/15 完成）。正式 Airwallex 开通信用卡（M18）10/16 起不再挡上线（D70），开通后做 C14。
 
 ---
 
@@ -598,6 +600,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/15 | M10 完成（healthchecks.io，两个检查，测试站已在报平安）；G4 通过（拒绝测试卡 → 清楚的失败讯息、不成立订单；换卡重试 → 同一张结帐成立、信件和通知都正常） |
 | 10/15 | 你决定：卖家瑋瑄科技（D66）；CCPA 不适用（D67）；销售税先 $0（D68）；政策页不请律师、用补齐的版本（D69）。M18 已送出申请。政策页补齐，只剩登记地址（等你给）和生效日期（切换当天） |
 | 10/16 | #67、#68、#69 合并；测试站因部署顺序停在 #68，手动部署补上并修正流程（#70）。M20 完成：网站改成瑋瑄科技（统编 94071421、登记地址），信箱电话照 apgo.tw。政策页只剩生效日期 |
+| 10/16 | 你决定不等 Airwallex 信用卡就上线（D70）：加了信用卡开关，正式环境先关（Card、Apple Pay、Google Pay 不显示），结帐页 PayPal 排第一、Airwallex Pay 直接显示。M18 不再挡上线；开通后做 C14 |
 
 ---
 
