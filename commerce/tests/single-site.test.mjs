@@ -170,3 +170,29 @@ test("'/' is the site's home page from the export: the v3 home override is gone"
   assert.equal((await worker.fetch(new Request("https://shop.example/"), env, {})).status, 200);
   assert.deepEqual(seen, ["/"]);
 });
+
+test("/go/* QR short links answer 302 to their guide with the insert-card UTM tags (docs/marketing/go-links.md)", () => {
+  const utm = "utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides";
+  const links = {
+    "/go/apply": "/us/guides/how-to-apply-glaze-coating",
+    "/go/wet-or-dry": "/us/guides/wet-or-dry-application",
+    "/go/streaks": "/us/guides/ceramic-spray-streaks-high-spots",
+    "/go/wash-wait": "/us/guides/how-long-to-wait-to-wash-after-ceramic-spray",
+    "/go/colored": "/us/guides/how-to-apply-colored-glaze",
+    "/go/guides": "/us/guides",
+  };
+  for (const [from, to] of Object.entries(links)) {
+    for (const path of [from, `${from}/`, from.toUpperCase(), `${from}?x=1`]) {
+      for (const method of ["GET", "HEAD"]) {
+        const response = siteRedirect(new Request(`https://shop.example${path}`, { method }));
+        assert.equal(response?.status, 302, path);
+        assert.equal(response.headers.get("Location"), `https://shop.example${to}?${utm}`, path);
+      }
+    }
+  }
+  for (const pathname of ["/go", "/go/", "/go/unknown", "/go/apply/x", "/us/go/apply"]) {
+    assert.equal(siteRedirect(new Request(`https://shop.example${pathname}`)), null, pathname);
+  }
+  assert.equal(siteRedirect(new Request("https://shop.example/go/apply", { method: "POST" })), null);
+  assert.deepEqual(unsafeRedirectRules(Object.keys(links).map((from) => `${from} ${links[from]}?${utm} 302`).join("\n")), []);
+});

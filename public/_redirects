@@ -9,3 +9,12 @@
 # /us/guides and /us/assets must keep serving at their current paths.
 /us https://www.shopapgo.com/ 301
 /us/ https://www.shopapgo.com/ 301
+
+# /go/* package-insert QR short links (docs/marketing/go-links.md). The store Worker answers these first
+# (commerce/worker/redirects.js); listed here for Cloudflare Pages too. 302 so targets can change without reprinting.
+/go/apply /us/guides/how-to-apply-glaze-coating?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
+/go/wet-or-dry /us/guides/wet-or-dry-application?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
+/go/streaks /us/guides/ceramic-spray-streaks-high-spots?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
+/go/wash-wait /us/guides/how-long-to-wait-to-wash-after-ceramic-spray?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
+/go/colored /us/guides/how-to-apply-colored-glaze?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
+/go/guides /us/guides?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
