@@ -13,7 +13,7 @@ import { refundDuplicate } from "../worker/checkouts.js";
 import { sendNotice } from "../worker/customer-email.js";
 import { alertTeam } from "../worker/team-alerts.js";
 import { addMember, setTeamAlerts } from "../worker/members.js";
-import { digestSections, scheduledDigest } from "../worker/team-digest.js";
+import { digestSections, scheduledDigest, waitingLists } from "../worker/team-digest.js";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
 
 globalThis.fetch = async (url) => { throw new Error(`unexpected real network call: ${url}`); };
@@ -110,7 +110,7 @@ async function paidOrder(env, world) {
 
 // ---------- M8-01, M8-04: the new customer emails ----------
 
-test("M8-01: a cancelled order gets one cancellation email saying why and that the payment is refunded; none after a chargeback", { skip }, async () => {
+test("M8-01: a cancelled order gets one cancellation email saying why and how the payment comes back; none after a chargeback", { skip }, async () => {
   const db = await createD1();
   const env = env0(db);
   await withWorld({}, async (world) => {
@@ -120,12 +120,24 @@ test("M8-01: a cancelled order gets one cancellation email saying why and that t
     const mails = customerMails(world.calls, /has been cancelled/);
     assert.equal(mails.length, 1);
     assert.equal(mails[0].subject, `Your APGO order ${orderId} has been cancelled`);
-    assert.match(mails[0].text, /As you asked, we've cancelled your order\. It will not ship\. Your payment is refunded in full/);
+    // The plain Cancel does not refund (owner, 10/16): the email says the refund follows, never that it was made.
+    assert.match(mails[0].text, /As you asked, we've cancelled your order\. It will not ship\. We'll refund your payment in full to your original payment method shortly/);
+    assert.doesNotMatch(mails[0].text, /Your payment is refunded in full/);
+    // Until it is refunded, the dashboard and the daily summary list it.
+    const waiting = (await waitingLists(env)).find((list) => list.key === "unrefunded").rows.map((item) => item.order_id);
+    assert.ok(waiting.includes(orderId), "cancelled without a refund is listed");
     assert.match(mails[0].text, new RegExp(`Order number: ${orderId}`));
     assert.equal((await sendNotice(env, orderId, "cancelled", { reason: "customer_request" })).status, "duplicate", "once per order");
     assert.equal(customerMails(world.calls, /has been cancelled/).length, 1);
     const view = await (await call(env, `/admin/api/orders/${orderId}`, { headers: bearer })).json();
     assert.ok(view.emails.some((email) => email.kind === "cancelled"));
+
+    // Cancelled because of a refund (or with Cancel and refund): the refund is under way.
+    const refunded = await paidOrder(env, world);
+    await cancelOrder(env, refunded.orderId, { actor: SYSTEM, reasonCode: "full_refund" });
+    const refundedMail = customerMails(world.calls, new RegExp(`${refunded.orderId} has been cancelled`));
+    assert.equal(refundedMail.length, 1);
+    assert.match(refundedMail[0].text, /Your payment is refunded in full/);
 
     const other = await paidOrder(env, world);
     await cancelOrder(env, other.orderId, { actor: SYSTEM, reasonCode: "chargeback" });

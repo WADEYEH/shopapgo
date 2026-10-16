@@ -45,6 +45,8 @@ function createProviders() {
   const paypalRefunds = new Map();
   const paypalDisputes = new Map();
   const calls = { creates: [], refunds: [], paypalCreates: 0, captures: [], mails: [], down: false };
+  // The next PayPal captures are held by PayPal (status PENDING with this reason) until a test changes captureStatus.
+  let holdReason = "";
   let n = 0;
   const shipping = { name: { full_name: "Ada Lee" }, address: { address_line_1: "100 Example Ave", admin_area_2: "Austin", admin_area_1: "TX", postal_code: "78701", country_code: "US" } };
   const paypalView = (id) => {
@@ -52,7 +54,8 @@ function createProviders() {
     return {
       id, status: row.status,
       purchase_units: [{ custom_id: row.storeOrderId, amount: { currency_code: "USD", value: row.value }, shipping,
-        payments: row.status === "COMPLETED" ? { captures: [{ id: `CAP-${id}`, status: "COMPLETED", amount: { currency_code: "USD", value: row.value } }] } : undefined }],
+        payments: row.status === "COMPLETED" ? { captures: [{ id: `CAP-${id}`, status: row.captureStatus ?? "COMPLETED", amount: { currency_code: "USD", value: row.value },
+          ...(row.pendingReason ? { status_details: { reason: row.pendingReason } } : {}) }] } : undefined }],
     };
   };
   const captureView = (captureId) => {
@@ -105,7 +108,7 @@ function createProviders() {
     const capture = href.match(/\/v2\/checkout\/orders\/([^/]+)\/capture$/);
     if (capture) {
       calls.captures.push(capture[1]);
-      Object.assign(paypal.get(capture[1]), { status: "COMPLETED", capturedAt: new Date().toISOString() });
+      Object.assign(paypal.get(capture[1]), { status: "COMPLETED", capturedAt: new Date().toISOString(), ...(holdReason ? { captureStatus: "PENDING", pendingReason: holdReason } : {}) });
       return json(201, paypalView(capture[1]));
     }
     const paypalGet = href.match(/\/v2\/checkout\/orders\/([^/?]+)$/);
@@ -124,6 +127,9 @@ function createProviders() {
   return {
     intents, paypal, disputes, paypalRefunds, paypalDisputes, calls, handler,
     succeed: (id) => { intents.get(id).status = "SUCCEEDED"; },
+    holdCaptures: (reason) => { holdReason = reason; },
+    // PayPal finishes a capture it was holding: COMPLETED, or DECLINED (the PAYMENT.CAPTURE.DENIED event).
+    settleCapture: (id, status) => { Object.assign(paypal.get(id), { captureStatus: status, pendingReason: "" }); },
     // A PayPal refund object as GET /v2/payments/refunds/{id} returns it.
     paypalRefund(id, captureId, { value, status = "COMPLETED", at = new Date().toISOString() }) {
       paypalRefunds.set(id, {
@@ -267,6 +273,47 @@ test("M5-10: a PayPal reversal takes the whole payment back: recorded as a full 
     assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", paid.orderId).status, "cancelled");
     assert.equal(alerts(providers.calls, /PayPal reversed the payment/).length, 1);
     assert.ok(rows(db, "SELECT action FROM order_audit WHERE order_id = ?", paid.orderId).some((a) => a.action === "order.payment_reversed"));
+  });
+});
+
+test("PayPal: a capture PayPal is still holding is no payment: no order, no email, the team told once; it becomes an order when PayPal completes it, and stays unpaid when denied", { skip }, async () => {
+  const db = await createD1();
+  const env = (globalThis.__env = env0(db));
+  await withProviders(async (providers) => {
+    providers.holdCaptures("RECEIVING_PREFERENCE_MANDATES_MANUAL_ACTION");
+    const created = await paypalOrder(env, cart());
+    const captured = await (await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: created.paypal.id }))).json();
+    assert.deepEqual([captured.status, captured.paypal.status], ["pending", "PENDING"]);
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", created.orderId).status, "pending", "still a checkout, not an order");
+    assert.deepEqual(row(db, "SELECT status, detail FROM checkout_payments WHERE ref = ?", created.paypal.id), { status: "pending", detail: "RECEIVING_PREFERENCE_MANDATES_MANUAL_ACTION" });
+    assert.equal(customerMails(providers.calls, /We received your APGO order/).length, 0, "no confirmation while PayPal holds the money");
+    const held = alerts(providers.calls, /PayPal is holding the payment/);
+    assert.equal(held.length, 1);
+    assert.match(held[0].text, /accept payments in this currency by hand/);
+
+    // The order page asks again: still pending, never captured twice, the team not told twice.
+    const view = await (await call(env, `/api/orders/${created.orderId}`)).json();
+    assert.deepEqual([view.status, view.paymentProvider, view.paymentStatus], ["pending", "paypal", "PENDING"]);
+    assert.equal(providers.calls.captures.length, 1);
+    assert.equal(alerts(providers.calls, /PayPal is holding the payment/).length, 1);
+
+    // PayPal completes it: an order like any other.
+    providers.settleCapture(created.paypal.id, "COMPLETED");
+    const completed = { id: `CAP-${created.paypal.id}`, custom_id: created.orderId, supplementary_data: { related_ids: { order_id: created.paypal.id } } };
+    assert.equal((await paypalHook("PAYMENT.CAPTURE.COMPLETED", completed)).status, 200);
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", created.orderId).status, "paid");
+    assert.equal(customerMails(providers.calls, /We received your APGO order/).length, 1);
+
+    // Another checkout PayPal holds and then denies: nothing taken, still unpaid, its page says so, the team is told.
+    const second = await paypalOrder(env, cart());
+    await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: second.paypal.id }));
+    providers.settleCapture(second.paypal.id, "DECLINED");
+    assert.equal((await paypalHook("PAYMENT.CAPTURE.DENIED", { id: `CAP-${second.paypal.id}` })).status, 200);
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", second.orderId).status, "pending");
+    assert.equal(row(db, "SELECT status FROM checkout_payments WHERE ref = ?", second.paypal.id).status, "denied");
+    assert.equal(alerts(providers.calls, /denied the payment that was pending/).length, 1);
+    assert.equal((await (await call(env, `/api/orders/${second.orderId}`)).json()).paymentStatus, "DENIED");
+    assert.equal(customerMails(providers.calls, /We received your APGO order/).length, 1, "no confirmation for the denied one");
   });
 });
 

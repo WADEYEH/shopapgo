@@ -51,6 +51,7 @@ function ProductJsonLd({ sku, content, config }) {
     approved: config?.estimate === false,
     // Stopped by an owner (commerce/worker/products.js).
     onSale: onSale(config, sku),
+    shippingCents: config?.shippingMethods?.find((method) => method.id === config.defaultShippingMethod)?.amountCents ?? null,
   });
   return <script type="application/ld+json" id="pdp-jsonld" dangerouslySetInnerHTML={{ __html: jsonLdText(data) }} />;
 }

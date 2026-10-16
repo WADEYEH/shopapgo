@@ -47,6 +47,17 @@ const pages = [
   { path: routes.clayBarFirst, lastModified: "2026-10-06" },
   { path: routes.detailingSteps, lastModified: "2026-10-06" },
   { path: routes.windshieldCoating, lastModified: "2026-10-06" },
+  // The store pages (Worker routes, open to search engines since the cutover on 2026-10-16). Literal paths: on a
+  // non-single-site build routes.shop and the policies are "#". The product slugs are lib/shop/product-data.mjs
+  // PRODUCT_SLUGS; tests/us-sitemap.test.cjs checks both lists against the pages on disk.
+  { path: "/products", lastModified: "2026-10-16" },
+  { path: "/products/atomic-colored-glaze", lastModified: "2026-10-16" },
+  { path: "/products/atomic-glaze-coating", lastModified: "2026-10-16" },
+  { path: "/privacy", lastModified: "2026-10-16" },
+  { path: "/terms", lastModified: "2026-10-16" },
+  { path: "/returns", lastModified: "2026-10-16" },
+  { path: "/shipping", lastModified: "2026-10-16" },
+  { path: "/contact", lastModified: "2026-10-16" },
 ];
 
 export default function sitemap() {

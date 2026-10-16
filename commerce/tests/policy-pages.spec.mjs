@@ -16,7 +16,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
 const axe = async (page) => (await new AxeBuilder({ page }).analyze()).violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`);
 
 for (const [slug, title] of POLICIES) {
-  test(`/${slug}: the draft from docs/legal in the site's header and footer, with its effective date, accessible, no overflow`, async ({ page }) => {
+  test(`/${slug}: the policy from docs/legal in the site's header and footer, with its effective date, accessible, no overflow`, async ({ page }) => {
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/${slug}`);
@@ -24,7 +24,8 @@ for (const [slug, title] of POLICIES) {
       expect(await overflow(page), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
     }
     await expect(page).toHaveTitle(`${title} · APGO`);
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+    await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /^.{40,}$/);
     await expect(page.locator("[data-policy-draft]")).toContainText("Effective date");
     await expect(page.locator("main")).not.toContainText("Draft for internal review");
     await expect(page.locator(".us-site-header")).toBeVisible();

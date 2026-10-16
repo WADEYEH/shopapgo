@@ -328,13 +328,18 @@ export function inspectPaypalOrder(paypalOrder) {
   const captures = unit.payments?.captures ?? [];
   const capture = captures.find((item) => item?.status === "COMPLETED") ?? captures[0];
   const amount = capture?.amount ?? unit.amount ?? {};
-  const captured = paypalOrder?.status === "COMPLETED" || capture?.status === "COMPLETED";
+  // Paid only when the capture itself is COMPLETED. PayPal can call the order COMPLETED while its capture is still
+  // PENDING (a payment under review, an eCheck, or a currency the account must accept by hand): no money yet, so no
+  // order and no shipping until it completes (owner, 10/16). status is then "PENDING"; a denied capture "DENIED".
+  const captureStatus = String(capture?.status ?? "");
+  const captured = captureStatus === "COMPLETED";
   return {
     paypalOrderId: paypalOrder?.id ?? "",
     captureId: capture?.id ?? "",
     storeOrderId: unit.custom_id || unit.invoice_id || "",
-    status: captured ? "COMPLETED" : String(paypalOrder?.status ?? ""),
-    captureStatus: capture?.status ?? "",
+    status: captured ? "COMPLETED" : ["PENDING", "DECLINED", "FAILED"].includes(captureStatus) ? (captureStatus === "PENDING" ? "PENDING" : "DENIED") : String(paypalOrder?.status ?? ""),
+    captureStatus,
+    pendingReason: captureStatus === "PENDING" ? String(capture?.status_details?.reason ?? "") : "",
     amountValue: amount.value,
     currency: amount.currency_code,
     shipping: shippingFromPaypalOrder(paypalOrder),

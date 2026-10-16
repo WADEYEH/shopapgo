@@ -49,7 +49,7 @@ test("named product URLs (D39): one exported page per product, the overview at /
   assert.equal(existsSync(join(repo, "scripts/build-product-pages.mjs")), false);
 });
 
-test("each page: its own title, description, canonical and og tags, not indexable until launch, and a price-free Product JSON-LD", () => {
+test("each page: its own title, description, canonical and og tags, indexable since the cutover, and a price-free Product JSON-LD", () => {
   for (const key of [...SKUS, "shop"]) {
     const seo = SEO[key];
     assert.ok(seo.title.endsWith("| APGO"), `${key}: title`);
@@ -59,9 +59,10 @@ test("each page: its own title, description, canonical and og tags, not indexabl
   assert.equal(SEO.default, undefined, "the one-page-for-both /product is gone (301 to /products)");
   for (const file of [OVERVIEW, PRODUCT]) {
     const source = read(file);
-    for (const field of ["title: { absolute: seo.title }", "description: seo.description", "alternates: { canonical: seo.path }", "robots: { index: false, follow: false }", "openGraph: { title: seo.title, description: seo.description, url: seo.path, images: [seo.image], type: \"website\" }"]) {
+    for (const field of ["title: { absolute: seo.title }", "description: seo.description", "alternates: { canonical: seo.path }", "openGraph: { title: seo.title, description: seo.description, url: seo.path, images: [seo.image], type: \"website\" }"]) {
       assert.ok(source.includes(field), `${file}: ${field}`);
     }
+    assert.equal(/robots:\s*\{\s*index:\s*false/.test(source), false, `${file}: open to search engines since the cutover`);
   }
   assert.match(read(OVERVIEW), /const seo = SEO\.shop;/);
   assert.match(read(PRODUCT), /const seo = SEO\[skuFor\(slug\)\];/);

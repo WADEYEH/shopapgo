@@ -123,6 +123,8 @@ test("the checkout persists the draft in sessionStorage and treats PayPal vs car
   assert.ok(source.includes('s.payMethod !== "paypal"'));
   assert.ok(source.includes('s.payMethod !== "card"'));
   assert.ok(source.includes('data-pay-panel="card" hidden={payMethod !== "card"}'));
-  assert.ok(source.includes('data-pay-panel="paypal" hidden={payMethod !== "paypal" || !paypalShown}'));
+  assert.ok(source.includes('data-pay-panel="paypal" hidden={payMethod !== "paypal" || (!paypalShown && !paypalFailed)}'));
+  // PayPal's script not loading is said, with a button to try again (owner, 10/16), never a blank payment step.
+  assert.ok(source.includes('data-paypal-failed=""') && source.includes('data-paypal-retry=""'));
   assert.ok(source.includes('data-pay-methods="" hidden={choices.length < 2}'));
 });

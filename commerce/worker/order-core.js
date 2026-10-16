@@ -203,7 +203,8 @@ export const CANCEL_REASONS = {
 };
 
 // notify: false = the customer is not emailed (a refund from the order page with "don't email the customer", D55).
-export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }, { nowMs = Date.now(), adminUrl = null, notify = true } = {}) {
+// refundFollows: the plain Cancel in the back office, which does not refund (the email then says the refund follows).
+export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }, { nowMs = Date.now(), adminUrl = null, notify = true, refundFollows = false } = {}) {
   if (!Object.hasOwn(CANCEL_REASONS, reasonCode)) throw new OrderError(400, "invalid_reason", "Choose why the order is cancelled.");
   const detail = clip(note, NOTE_MAX);
   if (reasonCode === "other" && !detail) throw new OrderError(400, "note_required", "Write why the order is cancelled.");
@@ -262,8 +263,11 @@ export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }
   const transition = transitionFor(stage, "cancelled");
   await recordAudit(db, { orderId, action: "order.cancelled", actor: actor.id, detail: { transition: transition.id, from: stage, reason: reasonCode, note: detail || undefined, amazonCancel: amazonCancel || undefined } });
   // The customer is told (M8 §2), except after a chargeback: the bank already returned the money.
-  if (reasonCode !== "chargeback" && notify) await sendNotice(env, orderId, "cancelled", { reason: reasonCode });
   const order = await getOrder(db, orderId);
+  if (reasonCode !== "chargeback" && notify) {
+    const refunded = refundFollows && (await refundView(db, order)).status === "fully_refunded";
+    await sendNotice(env, orderId, "cancelled", { reason: reasonCode, ...(refundFollows && !refunded ? { refund: "follows" } : {}) });
+  }
   return { changed: true, order, payment: await paymentFacts(env, order) };
 }
 
