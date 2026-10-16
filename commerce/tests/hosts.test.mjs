@@ -192,7 +192,8 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");
   }
-  assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|MCF_AUTO_SUBMIT|SITE_ENV|MCF_FAKE)\s*=/m.test(production), "no flag that would open payments, ship, fake Amazon or add the staging gate in production");
+  // MCF_AUTO_SUBMIT is on in production since 10/16 (after the Hold test passed; commerce-mcf.test.mjs checks it).
+  assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|SITE_ENV|MCF_FAKE)\s*=/m.test(production), "no flag that would open payments, fake Amazon or add the staging gate in production");
   assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production),"production has no website Basic login; admin uses ADMIN_LOGIN_* + ADMIN_TOKEN");
 });
 

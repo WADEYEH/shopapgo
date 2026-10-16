@@ -63,6 +63,8 @@ export const CONFIG_MANIFEST = {
       ORDER_NOTIFY_EMAIL_TO: "wadeyeh@apgo.com.tw",
       ORDER_NOTIFY_EMAIL_FROM: "APGO <orders@shopapgo.com>",
       REFUND_ALERT_EMAIL_TO: "wadeyeh@apgo.com.tw",
+      MCF_AUTO_SUBMIT: "true",
+      MCF_SYNC_CRON: "true",
     },
     // 10/12: the live store (landing's) has none of RESEND_*, PAYPAL_WEBHOOK_ID, the Amazon shipping connection or the
     // address check key yet; they are set at the cutover (docs/commerce-plan.md §8.1), and this check says so if not.

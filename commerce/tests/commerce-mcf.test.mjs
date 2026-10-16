@@ -782,10 +782,16 @@ test("hygiene: the MCF modules hold no credentials and the example env documents
   assert.ok(!/^SPAPI_/m.test(example), "no SP-API credential names in the example any more");
   assert.ok(!/^MCF_AUTO_SUBMIT=\S/m.test(example), "auto-submit is never on in the example");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
-  // Real MCF stays off everywhere: only staging turns auto-submit and the sync on, and there every call goes to the fake.
+  // Staging sends to the fake Amazon. Production sends to the real one only since the owner turned it on after the
+  // cutover's Hold test passed (10/16); local dev never sends.
   const staging = toml.slice(toml.indexOf("[env.staging]"), toml.indexOf("[env.production]"));
-  const elsewhere = toml.replace(staging, "");
-  assert.ok(!/MCF_AUTO_SUBMIT\s*=\s*"true"/i.test(elsewhere) && !/MCF_SYNC_CRON\s*=\s*"true"/i.test(elsewhere) && !/^\s*MCF_FAKE\s*=/m.test(elsewhere), "MCF auto-submit and cron sync stay off outside staging");
+  const production = toml.slice(toml.indexOf("[env.production]"));
+  const local = toml.slice(0, toml.indexOf("[env."));
+  assert.ok(!/MCF_AUTO_SUBMIT\s*=\s*"true"/i.test(local) && !/MCF_SYNC_CRON\s*=\s*"true"/i.test(local) && !/^\s*MCF_FAKE\s*=/m.test(local), "local dev never sends to Amazon");
+  assert.match(production, /^MCF_AUTO_SUBMIT = "true"$/m);
+  assert.match(production, /^MCF_SYNC_CRON = "true"$/m);
+  assert.match(production, /Hold test order passed/, "turned on only after the Hold test (runbook section 15)");
+  assert.ok(!/^\s*MCF_FAKE\s*=/m.test(production), "production never uses the fake Amazon");
   assert.match(staging, /^MCF_FAKE = "true"$/m);
   assert.match(staging, /^SITE_ENV = "staging"/m);
   // Crons exist only for production and staging; local dev has none.
