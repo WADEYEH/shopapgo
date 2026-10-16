@@ -99,5 +99,5 @@ If we update this policy, we will post the new version here and change the effec
 ## Contact us
 
 WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司)
-[registered address]
+10F., No. 66-28, Long'an Rd., Xinzhuang Dist., New Taipei City, Taiwan
 Email: [services@apgo.com.tw](mailto:services@apgo.com.tw)

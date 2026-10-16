@@ -54,7 +54,7 @@ test("the contact page: the form, the support details from lib/us/company.js, th
   const page = read("app/(us)/(shop)/contact/page.js");
   assert.ok(page.includes("<ContactForm />"));
   assert.ok(page.includes("We reply within 2 business days."));
-  for (const field of ["company.email", "company.phoneHref", "company.hours", "company.name", "company.businessId", "company.address"]) assert.ok(page.includes(field), field);
+  for (const field of ["company.email", "company.phoneHref", "company.hours", "company.legalName", "company.name", "company.businessId", "company.address"]) assert.ok(page.includes(field), field);
   const form = read("components/shop/ContactForm.js");
   assert.ok(form.includes('api("/api/contact"'), "posts to the Worker");
   assert.ok(form.includes("checkContactMessage"), "the shared field rules");

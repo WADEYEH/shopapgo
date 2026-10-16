@@ -4,8 +4,8 @@ import { inlineText, parseMarkdown } from "@/lib/shop/markdown";
 
 // The policy pages (/privacy, /terms, /returns, /shipping) show the texts in docs/legal as they are (M11): the owner
 // edits those files, the site follows at the next build. Read at build time; nothing runs in the browser. The owner
-// settled the texts without counsel on 10/15 (D66–D68); the open points left ("[registered address]", the effective
-// date) are marked [TO CONFIRM] until they are filled in.
+// settled the texts without counsel on 10/15 (D66–D69); the one open point left, the effective date, is marked
+// [TO CONFIRM] until it is filled in at the cutover.
 
 export function loadPolicy(file) {
   const blocks = parseMarkdown(readFileSync(path.join(process.cwd(), "docs", "legal", file), "utf8"));

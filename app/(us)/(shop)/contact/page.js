@@ -29,6 +29,8 @@ export default function Page() {
           <div>
             <dt>Operated by</dt>
             <dd>
+              {company.legalName}
+              <br />
               <span lang="zh-Hant">{company.name}</span>
               <br />
               {`Taiwan Business ID ${company.businessId}`}

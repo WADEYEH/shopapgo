@@ -55,6 +55,7 @@ export default function SiteFooter() {
             <p>Professional finish care, made simple.</p>
             <div className="us-footer-company">
               <span className="us-footer-detail-label">Operated by</span>
+              <span className="us-footer-company-name">{company.legalName}</span>
               <span lang="zh-Hant">{company.name}</span>
               <span>Taiwan Business ID: {company.businessId}</span>
               <address>{company.address}</address>
