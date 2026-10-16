@@ -2,15 +2,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { inlineText, parseMarkdown } from "@/lib/shop/markdown";
 
-// The policy pages (/privacy, /terms, /returns, /shipping) show the drafts in docs/legal as they are (M11): the owner
-// and counsel edit those files, the site follows at the next build. Read at build time; nothing runs in the browser.
-// Open points in the drafts ("[legal entity name]") are marked [TO CONFIRM] until counsel settles them.
+// The policy pages (/privacy, /terms, /returns, /shipping) show the texts in docs/legal as they are (M11): the owner
+// edits those files, the site follows at the next build. Read at build time; nothing runs in the browser. The owner
+// settled the texts without counsel on 10/15 (D66–D68); the open points left ("[registered address]", the effective
+// date) are marked [TO CONFIRM] until they are filled in.
 
 export function loadPolicy(file) {
   const blocks = parseMarkdown(readFileSync(path.join(process.cwd(), "docs", "legal", file), "utf8"));
   const heading = blocks.find((block) => block.type === "heading" && block.level === 1);
   const rest = blocks.filter((block) => block !== heading);
-  // The draft's own first line ("*Draft for internal review …*") becomes the draft notice.
+  // The text's own first line ("*Effective date: …*") becomes the notice under the title.
   const note = rest[0]?.type === "paragraph" && rest[0].children.length === 1 && rest[0].children[0].type === "em" ? rest[0] : null;
   return { title: inlineText(heading.children), note, blocks: rest.filter((block) => block !== note) };
 }
@@ -73,8 +74,8 @@ export default function PolicyPage({ policy }) {
       )}
       {placeholders && (
         <p className="legal__confirm-note" data-confirm-legend="">
-          Highlighted items marked <mark data-to-confirm="">[TO CONFIRM]</mark> are open points to settle with counsel before
-          launch. They are placeholders, not commitments.
+          Highlighted items marked <mark data-to-confirm="">[TO CONFIRM]</mark> are details we fill in before launch. They are
+          placeholders, not commitments.
         </p>
       )}
       {sections.map((blocks, i) => (
