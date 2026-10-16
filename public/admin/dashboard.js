@@ -6,7 +6,7 @@ import { paymentBadge, shippingBadge } from "./orders.js";
 import { EMAIL_KIND } from "./order.js";
 
 // What each waiting kind says and what to do (worker/team-digest.js waitingLists keys).
-const ATTENTION_TONE = { review: "warn", not_sent: "bad", stockout: "bad", no_tracking: "warn", disputes: "bad", refunds: "warn", emails: "warn", addresses: "warn", returned: "bad" };
+const ATTENTION_TONE = { review: "warn", not_sent: "bad", stockout: "bad", no_tracking: "warn", disputes: "bad", refunds: "warn", unrefunded: "bad", emails: "warn", addresses: "warn", returned: "bad" };
 
 function attentionDetail(item) {
   const d = item.detail ?? {};
@@ -14,6 +14,7 @@ function attentionDetail(item) {
   if (item.kind === "returned") return `${d.carrier ?? ""} ${d.tracking_number ?? ""} · ${d.status ?? ""}`.trim();
   if (item.kind === "disputes") return d.due_at ? t("attention.replyBy", { date: formatDate(d.due_at, { time: false }) }) : t("attention.replySoon");
   if (item.kind === "no_tracking") return t("attention.sentOn", { date: formatDate(d.submitted_at, { time: false }) });
+  if (item.kind === "unrefunded") return t("attention.cancelledOn", { date: formatDate(d.cancelled_at, { time: false }) });
   if (item.kind === "emails") return t("attention.emailStatus", { kind: EMAIL_KIND(String(d.kind ?? "")), status: t(`email.delivery.${d.status}`) });
   if (item.kind === "not_sent" && d.mcf_status) return d.mcf_status;
   return "";
@@ -37,7 +38,7 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
   if (!isCurrent()) return;
   const { numbers, pipeline, attention, health, products, latest } = data;
   const privacy = data.privacy ?? [];
-  setOrdersBadge(attention.items.filter((item) => ["review", "not_sent", "stockout", "disputes", "refunds"].includes(item.kind)).length);
+  setOrdersBadge(attention.items.filter((item) => ["review", "not_sent", "stockout", "disputes", "refunds", "unrefunded"].includes(item.kind)).length);
 
   const search = el("form", { class: "search", role: "search", "data-dashboard-search": true },
     icon("search", 18),

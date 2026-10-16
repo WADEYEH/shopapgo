@@ -210,7 +210,8 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         return reply(200, {
           orderId: ORDER_ID,
           status: paypalCaptureStatus,
-          paypal: { id: body.paypalOrderId || PAYPAL_ID, status: "COMPLETED" },
+          // "pending": PayPal holds the money (worker/paypal.js inspectPaypalOrder status PENDING).
+          paypal: { id: body.paypalOrderId || PAYPAL_ID, status: paypalCaptureStatus === "pending" ? "PENDING" : "COMPLETED" },
           eventIds: { initiateCheckout: `ic_${ORDER_ID}`, purchase: `purchase_${ORDER_ID}` },
         });
       }
@@ -223,10 +224,12 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         const paidWithPaypal = calls.paypalCapture.length > 0;
         const status = orderStatus ?? (paidWithPaypal ? paypalCaptureStatus : "paid");
         // PayPal orders report the capture state; Airwallex orders report the PaymentIntent state.
+        // PayPal: PENDING only while PayPal holds a captured payment (paypalCaptureStatus "pending"); an order not approved
+        // or captured yet reports APPROVED, as worker/paypal.js inspectPaypalOrder does.
         const paymentStatus = paidWithPaypal
-          ? (status === "pending" ? "PENDING" : "COMPLETED")
+          ? (paypalCaptureStatus === "pending" ? "PENDING" : status === "pending" ? "APPROVED" : "COMPLETED")
           : (status === "paid" ? "SUCCEEDED" : "REQUIRES_PAYMENT_METHOD");
-        return reply(200, { id: ORDER_ID, status, email: "t••••@example.com", ...priced, lines, paymentStatus, paymentFailure });
+        return reply(200, { id: ORDER_ID, status, email: "t••••@example.com", ...priced, lines, ...(paidWithPaypal ? { paymentProvider: "paypal" } : {}), paymentStatus, paymentFailure });
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {

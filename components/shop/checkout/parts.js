@@ -124,7 +124,7 @@ export function OrderSummary({ source, estimate, note }) {
   );
 }
 
-// The order page (/checkout?order=…). state.kind: pending | error | paid | review | failed | processing.
+// The order page (/checkout?order=…). state.kind: pending | error | paid | review | paypal_pending | failed | processing.
 export function OrderStatus({ state }) {
   const home = (
     <a className="btn" href="/">
@@ -148,6 +148,16 @@ export function OrderStatus({ state }) {
     return (
       <>
         <Notice tone="info" title="Order received">{`Order ${order.id} · We're verifying the payment. No action is needed.`}</Notice>
+        <div className="actions">{home}</div>
+      </>
+    );
+  }
+  if (kind === "paypal_pending") {
+    return (
+      <>
+        <Notice tone="info" title="Payment being confirmed">
+          {`Order ${order.id} · PayPal is still confirming your payment. We'll email ${order.email} as soon as it's confirmed, and your order ships after that. You don't need to keep this page open.`}
+        </Notice>
         <div className="actions">{home}</div>
       </>
     );
