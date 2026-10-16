@@ -1,12 +1,12 @@
 import PolicyPage, { loadPolicy } from "@/components/shop/PolicyPage";
 
-// /terms: docs/legal/terms-of-sale.md, a draft until counsel approves it (M11). Not indexed until launch.
+// /terms: docs/legal/terms-of-sale.md (M11; in effect since the cutover on 2026-10-16, D69). Indexable.
 const policy = loadPolicy("terms-of-sale.md");
 
 export const metadata = {
   title: { absolute: `${policy.title} · APGO` },
+  description: "The terms that apply when you buy APGO products at shopapgo.com: orders, prices, payment, shipping and liability.",
   alternates: { canonical: "/terms" },
-  robots: { index: false, follow: false },
 };
 
 export default function Page() {

@@ -62,7 +62,7 @@ for (const sku of SKUS) {
       await expect(page).toHaveTitle(`${WORD[sku]} · ${NAME[sku]} (${sku.toUpperCase()}) | APGO`);
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `${SITE}${pathOf(sku)}`);
       await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", `${SITE}/us/assets/products/${sku}-packshot.webp`);
-      await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+      await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
       await expect(page.locator("[data-gallery-main]")).toHaveAttribute("src", `/us/assets/products/${sku}-packshot.webp`);
       await expect(page.locator(".us-site-header")).toBeVisible();
       await expect(page.locator(".us-site-footer")).toBeVisible();
@@ -279,6 +279,12 @@ test.describe("structured data", () => {
     await open(page, pathOf("d215"), { env: { ...PRICES, ...APPROVED } });
     await expect.poll(async () => JSON.parse(await page.locator("#pdp-jsonld").textContent()).offers).toMatchObject({
       "@type": "Offer", priceCurrency: "USD", price: "29.99", url: `${SITE}${pathOf("d215")}`,
+      availability: "https://schema.org/InStock",
+      shippingDetails: [
+        { shippingRate: { value: "7.99", currency: "USD" }, deliveryTime: { transitTime: { minValue: 3, maxValue: 5 } } },
+        { doesNotShip: true, shippingDestination: { addressRegion: ["AK", "HI"] } },
+      ],
+      hasMerchantReturnPolicy: { merchantReturnDays: 30, merchantReturnLink: `${SITE}/returns` },
     });
     await expect(page.locator("[data-price-note]")).toHaveCount(0);
   });
@@ -422,7 +428,7 @@ test.describe("/products overview", () => {
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page).toHaveTitle("Shop APGO Atomic Glaze · DRY and WET | APGO");
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `${SITE}/products`);
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+    await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
     await expect(page.locator(".us-site-header")).toBeVisible();
     await expect(page.locator('[data-price-sku="d204"]')).toHaveText("$59.99");
     await expect(page.locator('[data-price-sku="d215"]')).toHaveText("$29.99");

@@ -11,9 +11,12 @@ const SITE = "https://www.shopapgo.com";
 
 // Every page.js under app/, converted to the URL it is actually served at.
 // Route groups are parenthesised, so they contribute nothing to the path.
-// Pages that tell search engines not to index them (robots index: false) stay out of the sitemap: the store pages
-// until indexing opens at the cutover (docs/commerce-plan.md, M1). Once they turn indexing on they must be listed.
+// Pages that tell search engines not to index them (robots index: false) stay out of the sitemap: the cart and the
+// checkout. Every other page must be listed. A [slug] folder stands for each product page (PRODUCT_SLUGS).
 const NOINDEX = /robots:\s*\{\s*index:\s*false\b/;
+const PRODUCT_SLUGS = Object.values(JSON.parse(
+  /PRODUCT_SLUGS = (\{[^}]*\})/.exec(fs.readFileSync(path.join(ROOT, "lib/shop/product-data.mjs"), "utf8"))[1].replace(/(\w+):/g, '"$1":'),
+));
 function routesOnDisk(dir = path.join(ROOT, "app"), segments = []) {
   const found = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -21,7 +24,9 @@ function routesOnDisk(dir = path.join(ROOT, "app"), segments = []) {
       const isGroup = entry.name.startsWith("(") && entry.name.endsWith(")");
       found.push(...routesOnDisk(path.join(dir, entry.name), isGroup ? segments : [...segments, entry.name]));
     } else if (entry.name === "page.js" && !NOINDEX.test(fs.readFileSync(path.join(dir, entry.name), "utf8"))) {
-      found.push("/" + segments.join("/"));
+      const route = "/" + segments.join("/");
+      if (route.endsWith("/[slug]")) found.push(...PRODUCT_SLUGS.map((slug) => route.replace("[slug]", slug)));
+      else found.push(route);
     }
   }
   return found;
@@ -87,4 +92,12 @@ test("robots.txt allows everything and points at the sitemap", () => {
   assert.equal(result.sitemap, SITE + "/sitemap.xml");
   assert.deepEqual(result.rules, [{ userAgent: "*", allow: "/" }]);
   assert.doesNotMatch(JSON.stringify(result).toLowerCase(), /disallow/);
+});
+
+test("the store pages are listed; the cart and the checkout never are", () => {
+  const listed = new Set(sitemapEntries().map((e) => new URL(e.url).pathname));
+  for (const page of ["/products", ...PRODUCT_SLUGS.map((slug) => `/products/${slug}`), "/privacy", "/terms", "/returns", "/shipping", "/contact"]) {
+    assert.ok(listed.has(page), page);
+  }
+  assert.equal(listed.has("/cart") || listed.has("/checkout"), false);
 });
