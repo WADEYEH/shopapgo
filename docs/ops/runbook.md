@@ -66,7 +66,7 @@ flowchart LR
 
 ## 3. 部署 staging
 
-**自动**：PR 合并到 `main` → CI 全部通过 → 「Deploy」工作自动部署**CI 测过的那个版本**：
+**自动**：PR 合并到 `main` → CI 全部通过 → 「Deploy」工作自动部署**CI 测过的那个版本**。连续合并好几个 PR 时，每个都会跑一次 CI，完成顺序不一定；只有测的是 `main` 最新版本的那一次会部署，较旧的会跳过（Deploy 摘要写「main is now at …」），所以不会把较旧的版本盖上去（10/16 #68 盖掉 #69 后加的）：
 
 1. 建置网站（测试设定：不载入任何追踪）
 2. `wrangler d1 migrations apply DB --env staging --remote`：只套用还没套用过的迁移档
@@ -548,6 +548,7 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 | 2026-10-14 | 演练第 12 项（部分） | staging | 对已出货订单 POST `/cancel` → 409 not_allowed，订单不变，团队通知「a change was refused」已寄出；`team_alerts` 有当天的每日摘要（sent） | 约 2 分钟 |
 | 2026-10-14 | 演练第 12 项：送单失败（C10） | staging | 部署 #60（版本 f462b7e2）后，你刷一张收件人 `Rehearsal REJECT` 的测试卡单；把 `orders.paid_at` 和 `mcf_submission_queue.due_at` 调到 61 分钟前 → 下一次排程送单被拒（invalid），`order_mcf` 状态 failed，`team_alerts` 有 mcf_failed（sent） | 约 5 分钟 |
 | 2026-10-15 | 旧 store 网址转址（C12） | staging | 部署 #62（版本 08b8706b，自动建好 `store-staging.shopapgo.com`）。网页 301 到 `staging.shopapgo.com` 的同一页，旧商品网址和 `checkout.html` 一次到位、查询参数保留；`/api/*`、`/.well-known/*` 不转址。部署后头几十秒有请求还由旧版本处理（得到 401），约 1 分钟后全部正确 | 约 3 分钟 |
+| 2026-10-16 | 合并 #67、#68、#69 后测试站停在 #68 | staging | 三个 CI 几乎同时跑完，#69 的部署在排队时被 #68 的部署挤掉（排队中的部署会被后来的取消），测试站的政策页还是旧版。手动 Run workflow → staging 部署 `main`（cedcd4e）补上；Deploy 工作加了「只部署 main 最新版本」的检查 | 约 5 分钟 |
 
 ---
 
