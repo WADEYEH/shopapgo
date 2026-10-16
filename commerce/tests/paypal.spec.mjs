@@ -52,6 +52,33 @@ test.describe("PayPal checkout button", () => {
     await expect(page.locator("[data-paypal]")).toBeHidden();
   });
 
+  test("without Airwallex cards (CARD_PAYMENTS_ENABLED=false, D70): PayPal first and chosen, Airwallex Pay second, no card form or wallets", async ({ page }) => {
+    // A device where both wallets could pay: they still stay off, they are card payments.
+    await page.addInitScript(() => {
+      window.__awxWalletReady = { applePayButton: true, googlePayButton: true };
+      window.ApplePaySession = { canMakePayments: () => true };
+    });
+    const calls = await mockStore(page, { env: { CARD_PAYMENTS_ENABLED: "false" }, paypal: ENABLED_PAYPAL });
+    await toPaypalPayment(page);
+
+    expect(await page.locator('input[name="payMethod"]').evaluateAll((inputs) => inputs.map((input) => input.value))).toEqual(["paypal", "airwallex_pay"]);
+    await expect(page.locator('input[name="payMethod"][value="paypal"]')).toBeChecked();
+    await expect(page.locator("[data-stub-paypal]")).toBeVisible();
+    await expect(page.locator("[data-pay-panel=\"card\"]")).toBeHidden();
+    await expect(page.locator("[data-place-order]")).toBeHidden();
+    await expect(page.locator("[data-stub-card]")).toHaveCount(0);
+    expect(await page.evaluate(() => window.__awxWalletCreates ?? [])).toEqual([]);
+    await expect(page.locator("[data-payment-intro]")).toHaveText("Pay with PayPal or Airwallex Pay. PayPal also takes debit and credit cards.");
+    await expect(page.locator("[data-summary-note]")).toContainText("Airwallex and PayPal");
+
+    await selectPayMethod(page, "airwallex_pay");
+    await expect(page.locator("[data-stub-drop-in]")).toBeVisible();
+    await choosePaypal(page);
+    await page.locator("[data-stub-paypal]").click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
+    expect(calls.paypalCapture).toHaveLength(1);
+  });
+
   test("shown when paypal.enabled and storeReady, then pays without sending browser prices", async ({ page }) => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL });
     await toPaypalPayment(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]);

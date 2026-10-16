@@ -55,6 +55,7 @@ AIRWALLEX_ENV = "demo"
 #   PRICING_APPROVED  must be "true" before AIRWALLEX_ENV="prod" will take payments
 #   APPLE_PAY_ENABLED / GOOGLE_PAY_ENABLED   "false" hides that wallet button (default on)
 #   AIRWALLEX_PAY_ENABLED                    "false" hides Airwallex Pay (default on)
+#   CARD_PAYMENTS_ENABLED                    "false" hides the Card option and Apple Pay / Google Pay (default on)
 #   PAYMENT_AUTO_CAPTURE                     "false" = authorize only (default capture)
 #   WALLET_MERCHANT_NAME                     label shown on the wallet sheet (default "APGO")
 
@@ -275,6 +276,10 @@ META_DATASET_ID = "2606879866471418"
 # secret TURNSTILE_SECRET_KEY is set; the live landing code does not use it). The receiving inbox is the owner's choice (2026-10-08).
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
 TURNSTILE_SITE_KEY = "0x4AAAAAAFXdvG8hkAH0UWBo"
+# Payment methods (D70, owner 10/16): the production Airwallex account cannot take cards yet (M18), so the site opens
+# with PayPal (which also takes cards as a guest checkout) and Airwallex Pay. Once Airwallex enables cards, set this to
+# "true" (or delete the line) and deploy: the Card option, Apple Pay and Google Pay come back.
+CARD_PAYMENTS_ENABLED = "false"
 # Email (worker/customer-email.js, worker/notify.js), with the secret RESEND_API_KEY. Plain vars on purpose: they take
 # effect with the cutover deploy only. The live landing code falls back to ORDER_NOTIFY_EMAIL_FROM for customer mail,
 # so setting these on it before the cutover would start emails to real customers from the old store (10/15).

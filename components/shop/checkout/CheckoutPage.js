@@ -10,6 +10,7 @@ import {
   WALLETS,
   airwallexPayEnabled,
   candidateWallets,
+  cardPaymentsEnabled,
   checkContact,
   checkShipping,
   clearCheckoutDraft,
@@ -75,19 +76,39 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // GA4-style item list; prices are the server's (quote line unit price).
 const analyticsItems = quoteItems;
 
+const AIRWALLEX_PAY_CHOICE = { id: "airwallex_pay", label: "Airwallex Pay", description: "Pay with your Airwallex balance. No card details stay on this page." };
+
 function payMethodChoices(config) {
-  const choices = [];
-  if (airwallexPayEnabled(config)) {
-    choices.push({ id: "airwallex_pay", label: "Airwallex Pay", description: "Pay with your Airwallex balance. No card details stay on this page." });
+  const pay = airwallexPayEnabled(config) ? [AIRWALLEX_PAY_CHOICE] : [];
+  if (!cardPaymentsEnabled(config)) {
+    // No Airwallex cards (D70): PayPal first, the way most shoppers pay, and it takes cards too.
+    const paypal = paypalEnabled(config) ? [{ id: "paypal", label: "PayPal", description: "Your PayPal account, or a debit or credit card through PayPal." }] : [];
+    return [...paypal, ...pay];
   }
+  const choices = [...pay];
   choices.push({ id: "card", label: "Card", description: "Visa, Mastercard and other cards, encrypted by Airwallex." });
   if (paypalEnabled(config)) choices.push({ id: "paypal", label: "PayPal", description: "Check out with your PayPal account." });
   return choices;
 }
 
+// The method selected when the payment step opens: the card form where there is one, otherwise PayPal.
+function defaultPayMethod(config) {
+  const ids = payMethodChoices(config).map((choice) => choice.id);
+  return ["card", "paypal"].find((id) => ids.includes(id)) ?? ids[0] ?? "card";
+}
+
 function paymentCopy(config) {
   const pay = airwallexPayEnabled(config);
   const paypal = paypalEnabled(config);
+  if (!cardPaymentsEnabled(config)) {
+    const takesCards = "PayPal also takes debit and credit cards.";
+    let intro = "Payment is unavailable right now. Please contact us.";
+    if (pay && paypal) intro = `Pay with PayPal or Airwallex Pay. ${takesCards}`;
+    else if (paypal) intro = `Pay with PayPal. ${takesCards}`;
+    else if (pay) intro = "Pay with Airwallex Pay.";
+    const by = [pay && "Airwallex", paypal && "PayPal"].filter(Boolean).join(" and ");
+    return { intro, note: by ? `Secure checkout · Payments by ${by}` : "Secure checkout" };
+  }
   const card = "Card details are encrypted by Airwallex and never stored by APGO.";
   let intro = card;
   if (pay && paypal) intro = `Choose Airwallex Pay, PayPal, or a card. ${card}`;
@@ -575,8 +596,8 @@ export default function CheckoutPage() {
       s.airwallexPay.mounted = false;
       s.airwallexPay.element = null;
       if (returnToFix(error)) return;
-      showPaymentMessage("warning", "Airwallex Pay unavailable", "We couldn't load Airwallex Pay. Choose card or another method.");
-      setPayMethod("card");
+      showPaymentMessage("warning", "Airwallex Pay unavailable", cardPaymentsEnabled(s.config) ? "We couldn't load Airwallex Pay. Choose card or another method." : "We couldn't load Airwallex Pay. Choose another method.");
+      setPayMethod(defaultPayMethod(s.config));
     }
   }
 
@@ -838,10 +859,10 @@ export default function CheckoutPage() {
     s.config = loaded;
     setConfig(loaded);
     setMethod(loaded.defaultShippingMethod);
-    setPayMethod("card");
+    setPayMethod(defaultPayMethod(loaded));
     setView("flow");
     const restored = restoreDraft(loaded);
-    if (paypalCancelled) showMessage("info", "PayPal checkout cancelled", "No payment was taken. Continue below or pay by card.");
+    if (paypalCancelled) showMessage("info", "PayPal checkout cancelled", cardPaymentsEnabled(loaded) ? "No payment was taken. Continue below or pay by card." : "No payment was taken. Continue below or choose another payment method.");
 
     const quote = await refreshQuote();
     if (quote) track("begin_checkout", { value: quote.subtotalCents / 100, currency: quote.currency, items: analyticsItems(quote.lines) });
@@ -858,8 +879,8 @@ export default function CheckoutPage() {
   // providers mount into visible containers.
   useEffect(() => {
     if (view !== "flow" || step !== "payment") return;
-    mountCardElements();
-    if (!payMethodChoices(s.config).some((choice) => choice.id === s.payMethod)) setPayMethod("card");
+    if (cardPaymentsEnabled(s.config)) mountCardElements();
+    if (!payMethodChoices(s.config).some((choice) => choice.id === s.payMethod)) setPayMethod(defaultPayMethod(s.config));
     syncWallets();
   }, [view, step]); // eslint-disable-line react-hooks/exhaustive-deps
 

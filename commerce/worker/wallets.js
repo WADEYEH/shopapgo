@@ -25,12 +25,18 @@ export function paymentMethodOptions(env = {}) {
   return { card: { auto_capture: autoCaptureEnabled(env) } };
 }
 
+// Airwallex card payments: the Card option on the payment step, and Apple Pay / Google Pay, which Airwallex charges as
+// cards. CARD_PAYMENTS_ENABLED=false turns all three off while the production account cannot take cards (M18, D70);
+// Airwallex Pay and PayPal are not cards and stay.
+export const cardPaymentsEnabled = (env = {}) => isOn(env.CARD_PAYMENTS_ENABLED, true);
+
 // What the browser is told. `applePay` / `googlePay` only say "the operator allows
 // it"; the page still hides a button the device or Airwallex cannot offer.
 export function walletConfig(env = {}) {
+  const cards = cardPaymentsEnabled(env);
   return {
-    applePay: isOn(env.APPLE_PAY_ENABLED, true),
-    googlePay: isOn(env.GOOGLE_PAY_ENABLED, true),
+    applePay: cards && isOn(env.APPLE_PAY_ENABLED, true),
+    googlePay: cards && isOn(env.GOOGLE_PAY_ENABLED, true),
     countryCode: "US",
     merchantName: String(env.WALLET_MERCHANT_NAME || "APGO").trim().slice(0, 60) || "APGO",
     autoCapture: autoCaptureEnabled(env),
