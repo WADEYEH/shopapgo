@@ -30,9 +30,30 @@ const MOVED = new Map([
 
 const OLD_ASSETS = /^\/assets\/[A-Za-z0-9._/-]+$/;
 
+// /go/* short links printed as QR codes on package insert cards (docs/marketing/go-links.md). 302, not 301, so a target
+// can change without reprinting; /go/apply is already printed and must never be renamed. Each target carries its own
+// UTM tags, so the incoming query string is dropped. A trailing slash and any letter case answer the same.
+const QR_UTM = "utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides";
+export const GO_LINKS = new Map([
+  ["/go/apply", "/us/guides/how-to-apply-glaze-coating"],
+  ["/go/wet-or-dry", "/us/guides/wet-or-dry-application"],
+  ["/go/streaks", "/us/guides/ceramic-spray-streaks-high-spots"],
+  ["/go/wash-wait", "/us/guides/how-long-to-wait-to-wash-after-ceramic-spray"],
+  ["/go/colored", "/us/guides/how-to-apply-colored-glaze"],
+  ["/go/guides", "/us/guides"],
+]);
+
+const goLink = (pathname) => {
+  const key = pathname.toLowerCase().replace(/\/+$/, "");
+  const target = GO_LINKS.get(key);
+  return target ? `${target}?${QR_UTM}` : null;
+};
+
 export const siteRedirect = (request) => {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   const url = new URL(request.url);
+  const go = goLink(url.pathname);
+  if (go) return new Response(null, { status: 302, headers: { Location: new URL(go, url).href, "Cache-Control": "no-store" } });
   const target = MOVED.get(url.pathname.toLowerCase()) || (OLD_ASSETS.test(url.pathname) && !url.pathname.includes("..") ? `/us${url.pathname}` : null);
   if (!target) return null;
   return Response.redirect(new URL(`${target}${url.search}`, url).href, 301);
