@@ -34,9 +34,10 @@ for (const [slug, title] of POLICIES) {
   });
 }
 
-test("the seller and its address, the effective date still [TO CONFIRM]; the shipping policy states the checkout's terms", async ({ page }) => {
+test("the seller and its address, the effective date, nothing left [TO CONFIRM]; the shipping policy states the checkout's terms", async ({ page }) => {
   await page.goto("/privacy");
-  await expect(page.locator("[data-policy-draft] mark[data-to-confirm]")).toHaveText("[TO CONFIRM: to be set at launch]");
+  await expect(page.locator("[data-policy-draft]")).toHaveText("Effective date: October 16, 2026.");
+  await expect(page.locator("mark[data-to-confirm]")).toHaveCount(0);
   await expect(page.locator("main")).toContainText("WEI SYUAN TECHNOLOGY CO., LTD.");
   await expect(page.locator("main")).toContainText("No. 66-28, Long'an Rd.");
   await expect(page.locator(".legal__section mark[data-to-confirm]")).toHaveCount(0);
