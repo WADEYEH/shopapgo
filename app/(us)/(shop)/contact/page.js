@@ -1,11 +1,11 @@
 import ContactForm from "@/components/shop/ContactForm";
 import { company } from "@/lib/us/company";
 
-// /contact (D27, D28): the form, the support details and what to include. Not indexed until launch.
+// /contact (D27, D28): the form, the support details and what to include. Indexable.
 export const metadata = {
   title: { absolute: "Contact · APGO" },
+  description: "Contact APGO customer support by email, phone or the form on this page. We reply within 2 business days.",
   alternates: { canonical: "/contact" },
-  robots: { index: false, follow: false },
 };
 
 export default function Page() {

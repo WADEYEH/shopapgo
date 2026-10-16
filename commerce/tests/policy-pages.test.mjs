@@ -6,17 +6,19 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { SHIP_STATES } from "../../lib/shop/address-rules.mjs";
+import { DELIVERY_DAYS, RETURN_DAYS } from "../../lib/shop/product-content.mjs";
 import { DEFAULT_PRICING } from "../worker/pricing.js";
 
 const root = new URL("../../", import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), "utf8");
 const POLICIES = { privacy: "privacy-policy.md", terms: "terms-of-sale.md", returns: "returns-and-refunds.md", shipping: "shipping-policy.md" };
 
-test("each policy page reads its draft in docs/legal, is not indexed, and the plain HTML pages and their generator are gone", () => {
+test("each policy page reads its text in docs/legal, is open to search engines with a description, and the plain HTML pages and their generator are gone", () => {
   for (const [slug, file] of Object.entries(POLICIES)) {
     const page = read(`app/(us)/(shop)/${slug}/page.js`);
     assert.ok(page.includes(`loadPolicy("${file}")`), `${slug} reads ${file}`);
-    assert.ok(page.includes("robots: { index: false, follow: false }"), `${slug} is noindex until launch`);
+    assert.equal(page.includes("index: false"), false, `${slug} is indexable since the cutover`);
+    assert.match(page, /description: "[^"]{40,}"/, `${slug} has a description`);
     assert.ok(page.includes(`canonical: "/${slug}"`), slug);
     assert.ok(existsSync(new URL(`docs/legal/${file}`, root)), file);
     assert.ok(read(`docs/legal/${file}`).startsWith("# "), `${file} starts with its title`);
@@ -43,6 +45,11 @@ test("the drafts agree with the store's rules: shipping cost, where we ship, del
   assert.ok(shipping.includes("Alaska, Hawaii") && shipping.includes("P.O. boxes") && shipping.includes("APO, FPO, DPO"));
   const returns = read("docs/legal/returns-and-refunds.md");
   assert.ok(returns.includes("**30 days of delivery**") && returns.includes("**one hour**"));
+  // What search engines are told (the product pages' schema.org offer, the policy pages' descriptions) says the same.
+  assert.equal(RETURN_DAYS, 30, "the return window in the product data");
+  assert.deepEqual(DELIVERY_DAYS.transit, [3, 5], "the delivery time in the product data");
+  assert.ok(read("app/(us)/(shop)/shipping/page.js").includes(`${(standard.amountCents / 100).toFixed(2)} per order`), "the shipping page's description");
+  assert.ok(read("app/(us)/(shop)/returns/page.js").includes("within 30 days of delivery"), "the returns page's description");
   assert.ok(returns.includes(`($${(standard.amountCents / 100).toFixed(2)})`), "the non-refundable shipping fee matches");
   for (const file of Object.values(POLICIES)) {
     const text = read(`docs/legal/${file}`);

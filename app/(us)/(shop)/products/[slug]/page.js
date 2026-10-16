@@ -12,7 +12,7 @@ export function generateStaticParams() {
   return SKUS.map((sku) => ({ slug: PRODUCT_SLUGS[sku] }));
 }
 
-// Not indexable until launch, like every store page (M1: indexing opens at the cutover).
+// Indexable since the cutover (M1).
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const seo = SEO[skuFor(slug)];
@@ -21,7 +21,6 @@ export async function generateMetadata({ params }) {
     title: { absolute: seo.title },
     description: seo.description,
     alternates: { canonical: seo.path },
-    robots: { index: false, follow: false },
     openGraph: { title: seo.title, description: seo.description, url: seo.path, images: [seo.image], type: "website" },
     twitter: { card: "summary" },
   };
