@@ -452,6 +452,10 @@ test("Amazon gateway: its code and config are in the repo, CI dry-runs it, deplo
   assert.ok(deploy.includes("if: github.ref == 'refs/heads/main' && inputs.confirm == 'deploy amazon gateway'"));
   assert.match(deploy, /environment: production/, "a reviewer approves");
   assert.ok(deploy.includes("secrets.AMAZON_GATEWAY_DEPLOY_TOKEN"));
+  // The store's read-only stock endpoint (docs/design/amazon-mcp-inventory.md), and /health says which version is live.
+  const code = await readFile(new URL("amazon-spapi-mcp/src/worker.js", root), "utf8");
+  assert.match(code, /seg\.length === 1 && seg\[0\] === "inventory"\) \{[\s\S]{0,400}?if \(method !== "GET"\)/);
+  assert.ok(code.includes("fulfillable: count(d2.fulfillableQuantity)"), "the sellable stock");
   assert.match(deploy, /deployments status[\s\S]*GITHUB_STEP_SUMMARY[\s\S]*deploy\n[\s\S]*amazon-mcp\.apgo\.tw\/health/, "records the version before, deploys, checks the new one answers");
 });
 

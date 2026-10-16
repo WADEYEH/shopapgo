@@ -7,6 +7,15 @@
 | 这份原始码怎么来的 | 原本的原始码找不到（10/6 直接从一台电脑上传部署，没有放在 GitHub）。2026-10-16 从 Cloudflare 下载当时线上的版本（`ce267b34`，10/13 换金钥后的版本，程序码是 10/6 那版）放进来。`src/worker.js` 就是当时线上的程序，没有改过；`wrangler.toml` 照 Cloudflare 上的设定写，用 `wrangler deploy --dry-run` 比对过，打包出来的程序跟线上一个字都不差 |
 | 金钥 | 都存在 Cloudflare，**不在这里**：`AMAZON_SP_API_CLIENT_ID`、`AMAZON_SP_API_CLIENT_SECRET`、`AMAZON_SP_API_REFRESH_TOKEN`、`MCP_API_KEY`、`OUTBOUND_INTERNAL_TOKEN`、`SHORTLINKS_INTERNAL_TOKEN`。重新部署不会动到它们 |
 
+## 网站用的入口（`/internal/outbound`，金钥 `OUTBOUND_INTERNAL_TOKEN`）
+
+| 入口 | 做什么 |
+|---|---|
+| `POST /preview` | 出货试算（地址能不能送、预计送达） |
+| `POST /orders`、`GET /orders`、`GET /orders/{id}`、`POST /orders/{id}/cancel` | 建立、列出、读取、取消出货单 |
+| `GET /tracking/{包裹编号}` | 包裹追踪 |
+| `GET /inventory?skus=D204,D215` | **10/16 加**：每个 SKU 的可售、入库中、保留数量（只读，1–50 个 SKU），规格见 `docs/design/amazon-mcp-inventory.md` |
+
 ## 怎么改
 
 `src/worker.js` 是打包好的程序（约 9 万行，没有压缩，看得懂）。要改就直接改这个档，照 `/internal/outbound` 那一段的写法，改完：
