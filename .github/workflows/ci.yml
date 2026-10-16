@@ -47,3 +47,16 @@ jobs:
       - run: npm run verify:bundle
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  amazon-gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: amazon-spapi-mcp
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # The Amazon gateway Worker (amazon-spapi-mcp/README.md): its config and code still build. No login, nothing uploaded.
+      - run: npx --yes wrangler@4.144.0 deploy --dry-run --outdir dist

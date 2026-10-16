@@ -616,3 +616,26 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 **测试站的演练**：`store-staging.shopapgo.com` 扮演旧的 store 网址（`MOVED_HOSTS`），网页 301 到 `staging.shopapgo.com`，`/api/*` 照常。10/15 部署（版本 08b8706b）后实测：`/`、`/privacy`、`/robots.txt` 301 到同一页；`/products/d204?utm_source=ads` → `/products/atomic-colored-glaze?utm_source=ads`；`/checkout.html?order=…` → `/checkout?order=…`；`/api/health`、`/.well-known/…` 不转址；PayPal 通知网址照常接收（没签名的得到 400）。
 
+---
+
+## 25. Amazon 转接程序（amazon-spapi-mcp）
+
+**它是什么**：`https://amazon-mcp.apgo.tw` 上的 Cloudflare Worker。网站送单、读回、取消、追踪都经过它（`/internal/outbound/*`），Amazon 工具（MCP）和自动请 Amazon 顾客留评论的排程也在里面。Amazon 的授权只放在它身上。
+
+**原始码**：repo 的 `amazon-spapi-mcp/`。原本的原始码找不到，10/16 从 Cloudflare 下载当时线上的版本放进来（`amazon-spapi-mcp/README.md`），dry-run 比对过跟线上一模一样。
+
+**部署**（只从 GitHub）：
+1. 改动合并到 `main`（CI 的 amazon-gateway 会先 dry-run 确认能打包）。
+2. Actions → **Deploy Amazon gateway** → Run workflow（分支 `main`），确认栏输入 `deploy amazon gateway`。
+3. Production 环境的核准人按核准。
+4. 执行摘要会记下部署前线上的版本号；部署后自动检查 `/health` 回报的是新版本。
+5. 部署后在网站后台订单页「Amazon 工具」按「检查 Amazon 连线」，确认送单这条路正常。
+
+**第一次设定**（只做一次）：
+1. Cloudflare → 右上角头像 → My Profile → API Tokens → Create Token → 用「Edit Cloudflare Workers」范本。
+2. Account Resources：只选公司帐号；Zone Resources：只选 `apgo.tw`。
+3. 建好后复制金钥，到 GitHub → Settings → Environments → **Production** → Add environment secret，名称 `AMAZON_GATEWAY_DEPLOY_TOKEN`，贴上。只有通过核准的部署才拿得到它。
+
+**回退**：`cd amazon-spapi-mcp && npx --yes wrangler@4.144.0 rollback <版本号>`。版本号在部署执行摘要；10/16 改版前是 `ce267b34-956c-4821-8cce-c14a3cc42fda`。
+
+**金钥**（都在 Cloudflare，repo 里没有）：`AMAZON_SP_API_CLIENT_ID`、`AMAZON_SP_API_CLIENT_SECRET`、`AMAZON_SP_API_REFRESH_TOKEN`、`MCP_API_KEY`、`OUTBOUND_INTERNAL_TOKEN`（网站也有一份，换的话两边要一起换，见 M8）、`SHORTLINKS_INTERNAL_TOKEN`。
