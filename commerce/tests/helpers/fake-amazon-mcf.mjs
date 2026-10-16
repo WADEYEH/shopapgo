@@ -16,6 +16,7 @@
 //   status        initial fulfillmentOrderStatus (default RECEIVED)
 //   listPages     list endpoint pages: how many empty pages (each with a nextToken) come before the real one
 //   failCancel    number of cancel calls answered 400 (Amazon already picking it)
+//   busyCancel    number of cancel calls answered 400 "System is busy" (a cancel right after the create, 10/16)
 //   ignoreHold    store every order as "Ship" even when "Hold" was asked for (a connection that drops the flag)
 //
 //   amazon.editCopy(orderId, (view) => view)   change what getOrder returns (Amazon's copy) for the read-back check
@@ -43,6 +44,7 @@ export function createFakeAmazon(options = {}) {
   const calls = [];
   let emptyPagesLeft = options.listPages ?? 0;
   let failCancel = options.failCancel ?? 0;
+  let busyCancel = options.busyCancel ?? 0;
   const copyEdits = new Map();
 
   const failure = (e) => reply(e.status, { error: e.error ?? "error", ...(e.spapiStatus ? { spapiStatus: e.spapiStatus } : {}), ...(e.details ? { details: e.details } : {}), ...(e.issues ? { issues: e.issues } : {}) });
@@ -129,6 +131,10 @@ export function createFakeAmazon(options = {}) {
       if (method === "POST" && orderMatch[2]) {
         record("cancel");
         if (!stored) return reply(404, { error: "Order not found", spapiStatus: 404 });
+        if (busyCancel > 0) {
+          busyCancel -= 1;
+          return reply(400, { error: "SP-API error", spapiStatus: 400, details: JSON.stringify({ errors: [{ code: "InvalidInput", message: "System is busy, another request for the same order is being processed. Please try again in a few minutes." }] }) });
+        }
         if (failCancel > 0) { failCancel -= 1; return reply(400, { error: "Order cannot be cancelled", spapiStatus: 400, details: "PICKING" }); }
         if (!["RECEIVED", "PLANNING", "PROCESSING"].includes(stored.status)) return reply(400, { error: "Order cannot be cancelled", spapiStatus: 400, details: stored.status });
         stored.status = "CANCELLED";

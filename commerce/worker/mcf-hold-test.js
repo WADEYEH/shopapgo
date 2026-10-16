@@ -5,7 +5,9 @@
 //               on hold (stock reserved, nothing picked) until it is released in Seller Central, which nobody does;
 //   2. check    read it back and compare items and address with what was sent (the same check as every order, M6-16),
 //               and that Amazon really has it on hold;
-//   3. cancel   cancel it, then read it again.
+//   3. cancel   cancel it, then read it again. Amazon refuses a cancel sent a moment after the create ("System is busy,
+//               another request for the same order is being processed", the cutover on 2026-10-16), so the test waits
+//               first and tries again while Amazon says it is busy.
 //
 // Works whether or not automatic sending (MCF_AUTO_SUBMIT) is on: this is the check before turning it on. On staging the
 // fake Amazon answers (worker/fake-amazon.js). If the cancel does not go through, the team is told to cancel it in Seller
@@ -21,6 +23,23 @@ const iso = (ms = Date.now()) => new Date(ms).toISOString();
 const clip = (value, max) => String(value ?? "").slice(0, max);
 const adminUrlOf = (env) => `${adminHost(env) ? `https://${adminHost(env)}` : "https://www.shopapgo.com"}/admin/`;
 const reason = (error) => clip(error instanceof McfError ? error.message : error?.message ?? "unknown error", 200);
+
+// Waits around the cancel (tests set them to 0).
+export const HOLD_TEST_CANCEL = { firstWaitMs: 5000, retryWaitMs: 10000, attempts: 3 };
+const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
+const amazonBusy = (error) => /system is busy|another request for the same order/i.test(`${error?.message ?? ""} ${error?.details ?? ""}`);
+
+async function cancelWhenAmazonIsFree(env, id) {
+  await sleep(HOLD_TEST_CANCEL.firstWaitMs);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await cancelFulfillmentOrder(env, id);
+    } catch (error) {
+      if (!amazonBusy(error) || attempt >= HOLD_TEST_CANCEL.attempts) throw error;
+      await sleep(HOLD_TEST_CANCEL.retryWaitMs);
+    }
+  }
+}
 
 async function save(db, id, outcome, steps, actor, at) {
   await db
@@ -78,7 +97,7 @@ export async function runHoldTest(env, { actor = "admin", nowMs = Date.now() } =
 
   let cancelOk = false;
   try {
-    await cancelFulfillmentOrder(env, id);
+    await cancelWhenAmazonIsFree(env, id);
     const after = await getFulfillmentOrder(env, id).catch(() => null);
     cancelOk = true;
     steps.push({ step: "cancel", ok: true, detail: `Cancelled; Amazon now shows ${after?.status || "the cancellation pending"}.` });

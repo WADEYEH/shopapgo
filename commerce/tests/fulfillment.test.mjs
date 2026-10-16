@@ -12,6 +12,7 @@ import { resetPaypalTokenCache } from "../worker/paypal.js";
 import { compareAmazonCopy, submitDueOrders, syncMcfOrder } from "../worker/mcf.js";
 import { addWorkingDays, scheduledFulfillmentChecks } from "../worker/fulfillment-checks.js";
 import { fakeOutbound } from "../worker/fake-amazon.js";
+import { HOLD_TEST_CANCEL } from "../worker/mcf-hold-test.js";
 import { normalizeMcfOrder } from "../worker/amazon-mcf.js";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
 import { FAKE_AMAZON_ENV, FAKE_BASE_URL, createFakeAmazon } from "./helpers/fake-amazon-mcf.mjs";
@@ -360,6 +361,9 @@ test("M6-08: with Amazon for 2 working days without tracking: the team is told o
 
 // ---------- M6-15: the Hold test order ----------
 
+HOLD_TEST_CANCEL.firstWaitMs = 0;
+HOLD_TEST_CANCEL.retryWaitMs = 0;
+
 test("M6-15: an owner creates a Hold test order: Amazon accepts it on hold, the copy matches, it is cancelled", { skip }, async () => {
   const db = await createD1();
   const env = env0(db, { MCF_AUTO_SUBMIT: "false" });
@@ -396,6 +400,19 @@ test("M6-15: a connection that drops the hold flag, or a cancel Amazon refuses, 
     assert.equal(result.outcome, "failed");
     assert.equal(result.steps.find((s) => s.step === "cancel").ok, false);
     assert.equal(alerts(world.calls, /is still open at Amazon/).length, 1);
+    assert.equal(world.amazon.count("cancel"), 1, "a refusal that is not \"busy\" is not tried again");
+  });
+  // 10/16 cutover: Amazon answered "System is busy" to a cancel sent right after the create. It is tried again.
+  await withWorld({ busyCancel: 2 }, async (world) => {
+    const { result } = await (await adminPost(env, "/admin/api/mcf/hold-test", {}, ownerLogin)).json();
+    assert.equal(result.outcome, "passed");
+    assert.equal(world.amazon.count("cancel"), 3);
+  });
+  await withWorld({ busyCancel: 3 }, async (world) => {
+    const { result } = await (await adminPost(env, "/admin/api/mcf/hold-test", {}, ownerLogin)).json();
+    assert.equal(result.outcome, "failed", "three tries at most");
+    assert.equal(world.amazon.count("cancel"), 3);
+    assert.match(result.steps.find((s) => s.step === "cancel").detail, /System is busy/);
   });
   const unconfigured = env0(db, { AMAZON_OUTBOUND_BASE_URL: "", OUTBOUND_INTERNAL_TOKEN: "" });
   await withWorld({}, async (world) => {
