@@ -16,7 +16,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
 const axe = async (page) => (await new AxeBuilder({ page }).analyze()).violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`);
 
 for (const [slug, title] of POLICIES) {
-  test(`/${slug}: the draft from docs/legal in the site's header and footer, marked as a draft, accessible, no overflow`, async ({ page }) => {
+  test(`/${slug}: the draft from docs/legal in the site's header and footer, with its effective date, accessible, no overflow`, async ({ page }) => {
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/${slug}`);
@@ -25,7 +25,8 @@ for (const [slug, title] of POLICIES) {
     }
     await expect(page).toHaveTitle(`${title} · APGO`);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
-    await expect(page.locator("[data-policy-draft]")).toContainText("Draft for internal review");
+    await expect(page.locator("[data-policy-draft]")).toContainText("Effective date");
+    await expect(page.locator("main")).not.toContainText("Draft for internal review");
     await expect(page.locator(".us-site-header")).toBeVisible();
     await expect(page.locator(".legal__section h2").first()).toBeVisible();
     expect(await page.locator("main").innerText()).not.toMatch(/\*\*|\]\(/);
@@ -35,7 +36,8 @@ for (const [slug, title] of POLICIES) {
 
 test("open points in a draft are marked [TO CONFIRM] and explained; the shipping policy states the checkout's terms", async ({ page }) => {
   await page.goto("/privacy");
-  await expect(page.locator("mark[data-to-confirm]").filter({ hasText: "legal entity name" }).first()).toHaveText("[TO CONFIRM: legal entity name]");
+  await expect(page.locator("mark[data-to-confirm]").filter({ hasText: "registered address" }).first()).toHaveText("[TO CONFIRM: registered address]");
+  await expect(page.locator("main")).toContainText("WEI SYUAN TECHNOLOGY CO., LTD.");
   await expect(page.locator("[data-confirm-legend]")).toBeVisible();
   await expect(page.locator(".legal__table")).toContainText("Airwallex, PayPal");
   await page.goto("/shipping");

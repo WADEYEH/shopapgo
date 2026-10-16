@@ -1,8 +1,8 @@
 # Terms of Sale
 
-*Draft for internal review — not yet reviewed by counsel. Effective date: [to be set at launch].*
+*Effective date: [to be set at launch].*
 
-These terms apply to purchases you make on shopapgo.com from [legal entity name] ("APGO," "we," "us"). By placing an order, you agree to these terms.
+These terms apply to purchases you make on shopapgo.com from WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司) ("APGO," "we," "us"), a company registered in Taiwan. By placing an order, you agree to these terms.
 
 ## Who can order
 
@@ -19,7 +19,7 @@ We sell to customers with a shipping address in the 48 contiguous United States 
 - All prices are in U.S. dollars.
 - The price shown at checkout when you place your order is the price you pay. Prices may change at any time, but changes do not affect orders already placed.
 - Shipping is a flat $7.99 per order.
-- [Sales tax: to be completed after the tax review. If tax applies, it is calculated from your shipping address and shown at checkout before you pay.]
+- Prices do not include sales tax. Where we are required to collect sales tax, it is calculated from your shipping address and shown at checkout before you pay.
 
 ## Payment
 
@@ -27,7 +27,7 @@ We accept credit and debit cards, Apple Pay, Google Pay, and Airwallex Pay (proc
 
 ## Shipping and delivery
 
-Orders are fulfilled by our fulfillment partner from U.S. fulfillment centers. Delivery times are estimates. Risk of loss passes to you when the package is delivered to the carrier, [to be confirmed by counsel]. Our Shipping Policy explains delivery, tracking, and what happens if a package is lost or returned.
+Orders are fulfilled by our fulfillment partner from U.S. fulfillment centers. Delivery times are estimates. Title and risk of loss pass to you when the package is delivered to your shipping address; until then, we replace or refund a package that is lost or damaged in transit. Our Shipping Policy explains delivery, tracking, and what happens if a package is lost or returned.
 
 ## Returns and refunds
 
@@ -39,11 +39,17 @@ Follow the directions and safety warnings on the product label. Keep products ou
 
 ## Limitation of liability
 
-[To be drafted by counsel. Should cover the disclaimer of implied warranties and the limits on damages to the extent permitted by law, while keeping the defect remedies in our Returns & Refunds Policy.]
+To the fullest extent permitted by law:
+
+- Apart from the remedies in our Returns & Refunds Policy, our products are provided as described on their labels and product pages, and we disclaim implied warranties, including merchantability and fitness for a particular purpose.
+- We are not liable for indirect, incidental, special, or consequential damages, including damage caused by using a product in a way that does not follow its label directions.
+- Our total liability for any claim related to an order is limited to the amount you paid for that order.
+
+Some states do not allow these exclusions or limits, so they may not apply to you. Nothing in these terms limits any liability that cannot be limited by law.
 
 ## Governing law
 
-[To be confirmed by counsel.]
+These terms are governed by the laws of Taiwan (Republic of China), without regard to conflict-of-law rules. This does not take away any protection you have under the consumer protection laws of the state where you live. If you have a concern, please contact us first; most issues can be resolved quickly by email.
 
 ## Changes to these terms
 
@@ -51,5 +57,6 @@ We may update these terms. The version posted when you place an order applies to
 
 ## Contact us
 
-[legal entity name], [address]
+WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司)
+[registered address]
 Email: [services@apgo.com.tw](mailto:services@apgo.com.tw)

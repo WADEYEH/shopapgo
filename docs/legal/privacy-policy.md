@@ -1,8 +1,8 @@
 # Privacy Policy
 
-*Draft for internal review — not yet reviewed by counsel. Effective date: [to be set at launch].*
+*Effective date: [to be set at launch].*
 
-This policy explains how [legal entity name] ("APGO," "we," "us") collects, uses, and shares personal information when you visit shopapgo.com or buy from us.
+This policy explains how WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司) ("APGO," "we," "us") collects, uses, and shares personal information when you visit shopapgo.com or buy from us.
 
 ## Information we collect
 
@@ -55,12 +55,10 @@ We may also disclose information when required by law, to protect our rights or 
 
 ## Your choices
 
-- **Global Privacy Control.** If your browser sends a Global Privacy Control signal, we do not load the Meta Pixel or send your information to Meta. [Keep this line only if we adopt the GPC handling recommended in privacy-choices.md.]
+- **Global Privacy Control.** If your browser sends a Global Privacy Control signal, we do not load the Meta Pixel or send your information to Meta.
 - **Google Analytics.** You can install the [Google Analytics opt-out browser add-on](https://tools.google.com/dlpage/gaoptout).
 - **Meta.** You can manage ad preferences in your Meta account settings.
 - **Cookies.** Most browsers let you block or delete cookies.
-
-[If the California Consumer Privacy Act applies: add a "Your Privacy Choices" link on every page that lets you opt out of the sharing described above.]
 
 ## Your rights
 
@@ -77,8 +75,8 @@ When you ask us to delete your information, we keep the order records that tax a
 
 ## How long we keep information
 
-- Order and payment records: as long as required for tax and accounting purposes, generally up to [7] years
-- Customer service messages and return photos: up to [2] years after your last order or message
+- Order and payment records: as long as required for tax and accounting purposes, generally up to 7 years
+- Customer service messages and return photos: up to 2 years after your last order or message
 - Checkouts you started but did not pay for: deleted after 30 days
 - Analytics data: according to our analytics settings, for a limited period
 
@@ -92,7 +90,7 @@ Our site is not directed to children under 13, and we do not knowingly collect t
 
 ## International processing
 
-We are based in [country]. Your information may be processed in the United States and other countries where we or our service providers operate.
+We are based in Taiwan. Your information may be processed in the United States and other countries where we or our service providers operate.
 
 ## Changes to this policy
 
@@ -100,5 +98,6 @@ If we update this policy, we will post the new version here and change the effec
 
 ## Contact us
 
-[legal entity name], [address]
+WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司)
+[registered address]
 Email: [services@apgo.com.tw](mailto:services@apgo.com.tw)

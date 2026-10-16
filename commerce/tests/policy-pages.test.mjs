@@ -25,7 +25,7 @@ test("each policy page reads its draft in docs/legal, is not indexed, and the pl
     assert.equal(existsSync(new URL(gone, root)), false, `${gone} is gone`);
   }
   const component = read("components/shop/PolicyPage.js");
-  assert.ok(component.includes('data-policy-draft=""'), "the draft notice stays until counsel approves");
+  assert.ok(component.includes('data-policy-draft=""'), "the effective-date line shows under the title");
   assert.ok(component.includes('data-to-confirm="">{`[TO CONFIRM: ${node.text}]`}</mark>'), "open points are marked");
   assert.equal(component.includes("dangerouslySetInnerHTML"), false, "no HTML string from the drafts is injected");
 });

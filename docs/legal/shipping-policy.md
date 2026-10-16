@@ -1,6 +1,6 @@
 # Shipping Policy
 
-*Draft for internal review — not yet reviewed by counsel. Effective date: [to be set at launch].*
+*Effective date: [to be set at launch].*
 
 ## Where we ship
 
