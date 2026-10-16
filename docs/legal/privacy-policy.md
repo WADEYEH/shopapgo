@@ -1,6 +1,6 @@
 # Privacy Policy
 
-*Effective date: [to be set at launch].*
+*Effective date: October 16, 2026.*
 
 This policy explains how WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司) ("APGO," "we," "us") collects, uses, and shares personal information when you visit shopapgo.com or buy from us.
 

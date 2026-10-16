@@ -1,6 +1,6 @@
 # Terms of Sale
 
-*Effective date: [to be set at launch].*
+*Effective date: October 16, 2026.*
 
 These terms apply to purchases you make on shopapgo.com from WEI SYUAN TECHNOLOGY CO., LTD. (瑋瑄科技有限公司) ("APGO," "we," "us"), a company registered in Taiwan. By placing an order, you agree to these terms.
 

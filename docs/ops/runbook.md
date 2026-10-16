@@ -602,7 +602,16 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 **回退**
 - Worker 版本回退（后台 Deployments → Rollback，或 `wrangler rollback`）**不会改路由**。只回退版本的话，整个 www 会由旧程序服务，而旧程序没有品牌页。
-- 所以回退是两步：（1）Worker 回到切换前的版本；（2）Cloudflare → shopapgo.com → Workers Routes：删掉 `www.shopapgo.com/*`、`shopapgo.com/*`，加回上面那 24 条商店路径（都指向 `apgo-us-store`）。第 2 步做完，品牌页马上回到 Pages。没有后台登录时，要用 M5 的 Cloudflare 金钥呼叫 API 做同样的事（切换前我会把这一步写成指令并在测试站试过）。
+- 所以回退是两步：（1）Worker 回到切换前的版本；（2）Cloudflare → shopapgo.com → Workers Routes：删掉 `www.shopapgo.com/*`、`shopapgo.com/*`，加回上面那 24 条商店路径（都指向 `apgo-us-store`）。第 2 步做完，品牌页马上回到 Pages。指令（C11，10/16 写好）：
+
+  ```bash
+  cd commerce
+  npx wrangler rollback f62194a4-cb09-498f-9a4f-32899e7fd95e --env production   # (1) 切换前最后的版本（10/15 12:04 UTC，设 Turnstile 金钥那次）
+  npm run rollback:routes                                                      # (2) 先看：现在的路由、会加哪些、会删哪些（不改任何东西）
+  npm run rollback:routes -- --apply                                           # (2) 真的改：先加回 24 条，再删两条整站路由
+  ```
+
+  `scripts/restore-store-routes.mjs` 用 `CLOUDFLARE_API_TOKEN`（有的话）或这台电脑的 `wrangler login`，不会印出金钥。10/16 切换前对正式环境跑过「先看」：读到的正好是那 24 条、没有要改的。`--apply` 只能在真的回退时用（测试站没有这种路由可以试）。没有电脑时，也可以在 Cloudflare 后台照上面手动做。
 - Pages 专案保留两周，之后由你删除。
 
 **测试站的演练**：`store-staging.shopapgo.com` 扮演旧的 store 网址（`MOVED_HOSTS`），网页 301 到 `staging.shopapgo.com`，`/api/*` 照常。10/15 部署（版本 08b8706b）后实测：`/`、`/privacy`、`/robots.txt` 301 到同一页；`/products/d204?utm_source=ads` → `/products/atomic-colored-glaze?utm_source=ads`；`/checkout.html?order=…` → `/checkout?order=…`；`/api/health`、`/.well-known/…` 不转址；PayPal 通知网址照常接收（没签名的得到 400）。

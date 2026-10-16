@@ -1,6 +1,6 @@
 # Shipping Policy
 
-*Effective date: [to be set at launch].*
+*Effective date: October 16, 2026.*
 
 ## Where we ship
 
