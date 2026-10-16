@@ -443,7 +443,7 @@ wrangler.toml            Worker 设定（staging / production）
 | M7 | Google 地址验证金钥 `GOOGLE_ADDRESS_VALIDATION_KEY`（D18 规定结账要验证地址） | 测试站和正式环境都没有：每张订单的地址都记「未验证」，打错地址不会被挡下；演练第 3 项「改地址要重新验证」做不了 | Google Cloud → 建 API 金钥（只开 Address Validation API），你贴进 `wrangler secret put` | 测试站：演练第二轮前；正式：切换前 | **完成**（10/13）：测试站和正式环境共用同一把金钥 `shopapgo-worker-address-validation`（你的决定），只能用地址验证，Google 专案 `shopapgo` 每天上限 150 次（两边合计）。正式环境的旧程序不用它，切换后新程序才会用 |
 | M8 | Amazon 出货连线的正式设定：`AMAZON_OUTBOUND_BASE_URL`、`OUTBOUND_INTERNAL_TOKEN`、`MCF_SKU_MAP_JSON` | 正式环境（目前还是 landing 的店）一个都没有：切换后订单不会自动送 Amazon 出货 | 测试站已有这三项；值跟 amazon-spapi-mcp 服务的设定一致，你贴进 `wrangler secret put --env production` | 切换前 | **完成**（10/13）：Amazon 连线密码 `OUTBOUND_INTERNAL_TOKEN` 换新（找不到旧的，你的决定）：同时设到 amazon-spapi-mcp、测试站、正式环境，确认新密码通过、错的被拒；查过其他工具都不用这个密码。正式环境另设 `AMAZON_OUTBOUND_BASE_URL`（https://amazon-mcp.apgo.tw）和 `MCF_SKU_MAP_JSON`（D204→D204、D215→D215，Amazon 上的卖家 SKU 就是这两个）。正式环境旧程序没开自动送单，不会出货 |
 | M9 | 正式环境的 `RESEND_API_KEY`、`RESEND_WEBHOOK_SECRET` | 切换后顾客信、团队信、送达状态都没有 | 跟 M1 一起，切换时建正式用的金钥和 Resend 的通知 | 切换时 | **完成**（10/13）：正式环境 `RESEND_API_KEY`（Resend 金钥 `shopapgo-production`，权限是全部，你决定保留）、`RESEND_WEBHOOK_SECRET`（Resend 通知 `https://www.shopapgo.com/api/webhooks/resend`，7 种寄送状态，**目前暂停**，切换当天打开）。旧程序没有寄件地址，不会寄信 |
-| M10 | healthchecks.io 和 `HEALTHCHECK_PING_URL`（营运手册第 2 节第 6、7 项） | 排程整个停掉时没有人会知道（演练第 12 项的一部分） | 免费方案即可 | 切换前 | 未做 |
+| M10 | healthchecks.io 和 `HEALTHCHECK_PING_URL`（营运手册第 2 节第 6、7 项） | 排程整个停掉时没有人会知道（演练第 12 项的一部分） | 免费方案即可 | 切换前 | **完成**（10/15）：你注册 healthchecks.io（免费，帐号 dev01@apgo.com.my，通知寄到这个信箱），我在你的 Chrome 建了两个检查「shopapgo production」「shopapgo staging」（每 5 分钟、宽限 10 分钟）；Ping URL 由你贴进两个环境的 `HEALTHCHECK_PING_URL`。测试站几分钟内就开始报平安；正式环境的旧程序不用它，检查会停在「还没收到」、不发警报，切换后新程序开始报。你选只用 healthchecks.io（不另外加网站监测） |
 | M11 | Turnstile 金钥 `TURNSTILE_SITE_KEY`、`TURNSTILE_SECRET_KEY`（联络表单防机器人） | 两个环境都没有：只靠限次和隐藏栏位挡垃圾讯息 | Cloudflare → Turnstile | 切换前（建议） | **完成**（10/15）：你在 Cloudflare 建 Turnstile widget「shopapgo contact form」（网域 shopapgo.com，含 www、staging 等子网域；Managed 模式）。Secret Key 你自己贴进测试站和正式环境（正式环境的旧店不用它，没有影响）；Site Key 是公开值，写进设定档。部署后联络表单会出现机器人检查 |
 | M12 | GA4 Measurement Protocol 密钥 `GA4_API_SECRET`（D58，营运手册第 20 节） | 退款不会从 GA4 的营收扣掉 | 切换当天建 | 切换时 | 未做（按计划） |
 | M13 | 找到 amazon-spapi-mcp 的原始码（在 Mac 上部署的） | 库存显示、库存不足自动停止结账（M6-09、M9-17、演练第 9 项）。10/12 你决定：继续找，演练先跳过第 9 项，上线不等它；没有库存时，Amazon 缺货照现有流程寄延迟信、在后台「取消并退款」 | 请 Mac 的使用者找出来分享（不要附 `.dev.vars`、`.env`） | 找到后补 | 未做 |
@@ -503,7 +503,7 @@ wrangler.toml            Worker 设定（staging / production）
 | G1 | **通过**（每次都要） | 每个 PR 的检查（品牌站 test；commerce：后端 441 项、端到端）都通过 | 切换那次部署前再看一次 |
 | G2 | 部分 | 测试站 8 张单：小计、运费 $7.99、税 $0、总额在购物车、结账、订单、后台、付款服务都一致 | 税（O1、G12）；切换前请你确认价格、运费、税（正式环境的旧线上店已设 `PRICING_APPROVED`） |
 | G3 | **通过** | 10/14 测试站实测：AK、HI、PR 被拒（只送 48 州和 DC），APO、PO Box 被拒，正常地址 valid；也有自动测试 | — |
-| G4 | 大部分 | 成功（卡 6 次、PayPal 2 次）；没签名的 PayPal 通知被拒（400）；重复通知只记一次（自动测试）；两个分页只扣一次（演练第 1 项） | 被拒的卡（付款失败、重试）在测试站手动试一次：你用 Airwallex 文件里的拒绝测试卡付款 |
+| G4 | **通过**（10/15） | 成功（卡 6 次、PayPal 2 次）；没签名的 PayPal 通知被拒；重复通知只记一次（自动测试）；两个分页只扣一次。10/15 失败与重试：用 Airwallex 拒绝测试卡（4012 0003 0000 0013）付款 → 页面显示「Payment not completed…」停在付款页，结帐维持未付款、不寄信，失败纪录 authentication_failed；同一页换成功测试卡重试 → 同一张结帐（APGO-US-54TFTJPJ5FHQ）变成已付款、确认信送达、新订单通知寄出、失败纪录保留 | — |
 | G5 | **通过** | 部分、全额退款（Airwallex、PayPal）的纪录、冻结、通知、退款信都对（演练第 4、6、8 项）；退款失败有自动测试，10/3 测试站也有一笔 | — |
 | G6 | **通过** | 送单、读回比对、追踪同步、出货信、缺货、送单失败（演练第 5、8、12 项） | — |
 | G7 | **通过** | 确认、出货、退款、取消、改地址、缺货延迟信都送达测试信箱；寄信失败重试有自动测试 | — |
@@ -590,6 +590,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/15 | M4 测试站第 1–7 步：team apgo 和登录方式原本就有；新增名单 apgo-backoffice-members、应用 shopapgo back office (staging)、名单同步金钥（Zero Trust: Edit 是最小权限）。应用一建好，Cloudflare 就挡在测试站后台前面；检查脚本要另建服务金钥才过得去 |
 | 10/15 | #65 合并（测试站后台改用 Cloudflare 登录）；第 8 步登录实测你决定不做（演练第 11 项记为「设定完成、未实测」）。M11 完成：Turnstile 金钥两个环境都设好，Site Key 写进设定档。M10（healthchecks.io）说明过，等你注册 |
 | 10/15 | #66 合并（Turnstile）。G13 画面检查在测试站通过（14 页 × 4 种宽度没有破版、坏图、程序错误；品牌页跟 www 几乎一样）。发现 M20：网站写的公司（光世代）跟收款帐户的公司（瑋瑄）不同，要你决定 |
+| 10/15 | M10 完成（healthchecks.io，两个检查，测试站已在报平安）；G4 通过（拒绝测试卡 → 清楚的失败讯息、不成立订单；换卡重试 → 同一张结帐成立、信件和通知都正常） |
 
 ---
 
