@@ -4,7 +4,7 @@ import ArticleHead from "@/components/us/guides/ArticleHead";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
-import { routes, asset } from "@/lib/us/routes";
+import { routes, asset, productPathFor } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { h2, h2Balance, section, lead, body, strong } from "@/components/us/guides/styles";
 
@@ -236,7 +236,7 @@ export default function DiyVsProPage() {
               Durability is where DIY and pro marketing tend to talk past each other, so keep the claims honest.
             </p>
             <p style={body}>
-              <strong style={strong}>DIY spray coating.</strong> Consumer sprays are usually rated in months, not years, and the number on the label is a ceiling, not a promise that every car reaches it regardless of how it is washed or stored. If you would rather use a silicone-based spray glaze than a ceramic product, APGO's spray glaze option (see <Link href={routes.compare} className="us-text-link">compare the options</Link>) is rated up to about 6 months on the U.S. product page, under the same ceiling logic. When water beading and gloss fade, reassess; our guide on <Link href={routes.howOftenReapply} className="us-text-link">how often to apply ceramic spray coating</Link> covers the signals to watch.
+              <strong style={strong}>DIY spray coating.</strong> Consumer sprays are usually rated in months, not years, and the number on the label is a ceiling, not a promise that every car reaches it regardless of how it is washed or stored. If you would rather use a silicone-based spray glaze than a ceramic product, APGO Atomic Colored Glaze (D204) (see <Link href={productPathFor("d204")} className="us-text-link">the product page</Link>) is rated up to about 6 months on the U.S. product page, under the same ceiling logic. When water beading and gloss fade, reassess; our guide on <Link href={routes.howOftenReapply} className="us-text-link">how often to apply ceramic spray coating</Link> covers the signals to watch.
             </p>
             <p style={body}>
               <strong style={strong}>Professional shop ceramic.</strong> Shop coatings are usually sold on a years-scale expectation that depends on the package, the paint prep, and how you maintain the car afterward. This article does not quote a specific year count; ask the shop what the package includes and what maintenance it requires.
