@@ -9,7 +9,7 @@ import GuideLinkCard from "@/components/us/guides/GuideLinkCard";
 import EndCtaBand from "@/components/us/guides/EndCtaBand";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd, faqLd } from "@/components/us/guides/JsonLd";
-import { routes, asset } from "@/lib/us/routes";
+import { routes, asset, productPathFor } from "@/lib/us/routes";
 import { color } from "@/lib/us/tokens";
 import { h2, h2Faq, section, lead, body, strong, finePrint, chip, label } from "@/components/us/guides/styles";
 
@@ -317,14 +317,14 @@ export default function ColoredGlazePage() {
               sku: "d204",
               title: "DRY",
               body: <span style={{ fontSize: 13, color: color.tertiary }}>Atomic Colored Glaze · after drying</span>,
-              href: routes.compare,
+              href: productPathFor("d204"),
               cta: "View product details →",
             },
             {
               sku: "d215",
               title: "WET",
               body: <span style={{ fontSize: 13, color: color.tertiary }}>Atomic Glaze Coating · before final drying</span>,
-              href: routes.compare,
+              href: productPathFor("d215"),
               cta: "View product details →",
             },
           ]}

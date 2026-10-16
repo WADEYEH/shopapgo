@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { routes, asset } from "@/lib/us/routes";
+import { asset, productPathFor } from "@/lib/us/routes";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
 
 // Product card inside an article: 110px packshot, accent top border, "View product details" CTA.
@@ -28,7 +28,7 @@ export default function ProductAside({ sku, alt, meta }) {
         </div>
         <span style={{ fontSize: 13, color: color.tertiary }}>{meta}</span>
         <Link
-          href={routes.compare}
+          href={productPathFor(sku)}
           className="us-btn"
           style={{
             alignSelf: "flex-start",

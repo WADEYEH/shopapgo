@@ -4,7 +4,7 @@ import ArticleHead from "@/components/us/guides/ArticleHead";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
-import { routes, asset } from "@/lib/us/routes";
+import { routes, asset, productPathFor } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { h2, h2Balance, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
 
@@ -135,7 +135,7 @@ export default function HowOftenReapplyPage() {
               Product pages often cite a best-case window. That figure is a ceiling, not an alarm clock. For reference, APGO's
               dry-surface option is a silicone-based spray glaze rather than a ceramic spray: Atomic Colored Glaze (D204), applied to
               dry paint, is rated on the U.S. product page to last <strong style={strong}>up to about 6 months (180 days)</strong>{" "}
-              under good conditions (see <Link href={routes.compare} className="us-text-link">compare the options</Link>).
+              under good conditions (see <Link href={productPathFor("d204")} className="us-text-link">the Atomic Colored Glaze product page</Link>).
             </p>
             <p style={body}>
               Climate, wash style, and how the paint was prepared all move the real date. Treat the label's figure as the upper bound
