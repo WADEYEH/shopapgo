@@ -447,6 +447,11 @@ test("deploy workflow: staging after CI on main; production only by hand, from m
     assert.ok(staging.includes(guard), `staging: ${guard}`);
   }
   assert.match(staging, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/, "deploys the commit CI tested");
+  // An older commit whose CI finishes last must not replace a newer one on staging (10/16).
+  assert.ok(staging.includes("needs.newest.outputs.deploy == 'true'"), "staging: only the newest commit deploys");
+  const newest = job("newest");
+  assert.match(newest, /commits\/main/, "newest: compares with the tip of main");
+  assert.ok(!newest.includes("concurrency"), "newest: decides before the deploy-staging queue");
 
   const production = job("production");
   for (const guard of ["github.event_name == 'workflow_dispatch'", "inputs.target == 'production'", "inputs.confirm == 'deploy production'", "github.ref == 'refs/heads/main'", "vars.PRODUCTION_DEPLOY_ENABLED == 'true'", "needs.credentials.outputs.ready == 'true'"]) {
