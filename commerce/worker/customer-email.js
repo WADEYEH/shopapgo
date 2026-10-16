@@ -185,7 +185,10 @@ const CANCEL_INTRO = {
 };
 export function buildCancellationEmail(order, notice = {}, { policyNote } = {}) {
   const subject = `Your APGO order ${order.id} has been cancelled`;
-  const refund = "It will not ship. Your payment is refunded in full to your original payment method; you'll get a separate email when the refund is accepted. When the credit appears depends on your bank or payment method.";
+  // Cancelled with "Cancel" only (the refund is made separately, owner 10/16): the refund follows. Otherwise it is under way.
+  const refund = notice.refund === "follows"
+    ? "It will not ship. We'll refund your payment in full to your original payment method shortly; you'll get a separate email when the refund is made. When the credit appears depends on your bank or payment method."
+    : "It will not ship. Your payment is refunded in full to your original payment method; you'll get a separate email when the refund is accepted. When the credit appears depends on your bank or payment method.";
   const body = render({ heading: "Your order has been cancelled", intro: `${CANCEL_INTRO[notice.reason] ?? CANCEL_INTRO.other} ${refund}`, order, policyNote });
   return { subject, ...body };
 }

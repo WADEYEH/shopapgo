@@ -7,7 +7,7 @@
 import { AirwallexError, retrievePaymentDispute } from "./airwallex.js";
 import { PaypalError, retrievePaypalCapture, retrievePaypalDispute, retrievePaypalRefund } from "./paypal.js";
 import { getOrder } from "./orders.js";
-import { paymentBelongsTo } from "./checkouts.js";
+import { markPayment, paymentBelongsTo } from "./checkouts.js";
 import { recordRefund } from "./refunds.js";
 import { applyRefundsToOrder } from "./order-core.js";
 import { processMessageJob } from "./customer-email.js";
@@ -93,11 +93,50 @@ async function paypalRefundEvent(env, event, { adminUrl }) {
   return { outcome: "recorded" };
 }
 
-// A capture that was pending and then denied: if it ever made an order paid, the team must look; otherwise nothing was
-// taken and the checkout simply stays unpaid.
+// PayPal's reasons for holding a capture, in words the team can act on.
+const PENDING_ADVICE = {
+  RECEIVING_PREFERENCE_MANDATES_MANUAL_ACTION: "Your PayPal account asks you to accept payments in this currency by hand: accept it in PayPal (Activity), and in Payment preferences allow payments in currencies you don't hold so it does not happen again.",
+  PENDING_REVIEW: "PayPal is reviewing the payment, usually within 24 hours.",
+  ECHECK: "It is an eCheck, which clears in about 3–5 business days.",
+  UNILATERAL: "The PayPal account receiving the money is not confirmed: check the business account in PayPal.",
+  VERIFICATION_REQUIRED: "PayPal needs the business account verified: check PayPal's notices.",
+};
+
+// A capture PayPal is still holding (inspectPaypalOrder status "PENDING"): no money yet, so the checkout stays unpaid,
+// nothing is confirmed to the customer and nothing ships. PAYMENT.CAPTURE.COMPLETED (or the daily payment check) makes
+// it an order later; PAYMENT.CAPTURE.DENIED below closes it. The team is told once per capture.
+export async function paypalPaymentPending(env, order, inspected, { adminUrl } = {}) {
+  await markPayment(env.DB, "paypal", inspected.paypalOrderId, "pending", inspected.pendingReason);
+  const amount = Number.isFinite(Number(inspected.amountValue)) ? `${Number(inspected.amountValue).toFixed(2)} ${inspected.currency ?? ""}`.trim() : "the payment";
+  await alertTeam(env, {
+    key: `pending:paypal:${inspected.captureId || inspected.paypalOrderId}`, kind: "payment_pending", orderId: order.id, adminUrl,
+    subject: `Checkout ${order.id}: PayPal is holding the payment`,
+    lines: [
+      `PayPal has not released ${amount} for checkout ${order.id} yet (${inspected.pendingReason || "no reason given"}).`,
+      PENDING_ADVICE[inspected.pendingReason] ?? "Check the payment in PayPal (Activity).",
+      "Nothing is confirmed to the customer or sent to Amazon until PayPal completes it; then the order continues by itself. If PayPal denies it, no money was taken.",
+    ],
+  });
+}
+
+// A capture that was pending and then denied. If it ever made an order paid, the team must look. If it was still
+// pending (the customer saw "payment being confirmed"), nothing was taken: the checkout stays unpaid, its order page
+// now says the payment did not go through, and the team is told so they can contact the customer.
 async function paypalDeniedEvent(env, event, { adminUrl }) {
   const found = await orderForCapture(env, event.resource?.id);
-  if (!found || !["paid", "review"].includes(found.order.status) || found.order.payment_intent_id !== found.paypalOrderId) return { outcome: "ignored" };
+  if (!found) return { outcome: "ignored" };
+  if (["pending", "expired"].includes(found.order.status)) {
+    const payment = await env.DB.prepare("SELECT status FROM checkout_payments WHERE provider = 'paypal' AND ref = ?").bind(found.paypalOrderId).first();
+    if (payment?.status !== "pending") return { outcome: "ignored" };
+    await markPayment(env.DB, "paypal", found.paypalOrderId, "denied");
+    await alertTeam(env, {
+      key: `denied:paypal:${found.capture.id}`, kind: "payment_denied", orderId: found.order.id, adminUrl,
+      subject: `Checkout ${found.order.id}: PayPal denied the payment that was pending`,
+      lines: ["PayPal denied the payment it was holding, so no money was taken and nothing ships. The customer was told the payment was being confirmed: email them (Checkouts in the back office) so they can pay again."],
+    });
+    return { outcome: "alerted" };
+  }
+  if (!["paid", "review"].includes(found.order.status) || found.order.payment_intent_id !== found.paypalOrderId) return { outcome: "ignored" };
   await recordAudit(env.DB, { orderId: found.order.id, action: "order.payment_denied", actor: "system", detail: { provider: "paypal", captureId: found.capture.id } });
   await alertTeam(env, {
     key: `denied:paypal:${found.capture.id}`, kind: "payment_denied", orderId: found.order.id, adminUrl,

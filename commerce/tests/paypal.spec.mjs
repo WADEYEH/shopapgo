@@ -79,6 +79,33 @@ test.describe("PayPal checkout button", () => {
     expect(calls.paypalCapture).toHaveLength(1);
   });
 
+  test("PayPal holding the payment: the order page says it is being confirmed, no Purchase, the cart is kept", async ({ page }) => {
+    await mockStore(page, { env: { CARD_PAYMENTS_ENABLED: "false" }, paypal: ENABLED_PAYPAL, paypalCaptureStatus: "pending" });
+    await toPaypalPayment(page);
+    await page.locator("[data-stub-paypal]").click();
+    await expect(page.locator("[data-confirmation]")).toContainText("Payment being confirmed");
+    await expect(page.locator("[data-confirmation]")).toContainText("We'll email t••••@example.com as soon as it's confirmed");
+    const browser = await page.evaluate(() => ({ cart: localStorage.getItem("apgo_us_cart_v1"), events: (window.dataLayer || []).map((e) => e.event) }));
+    expect(browser.events).not.toContain("purchase");
+    expect(browser.cart).not.toBe("[]");
+  });
+
+  test("PayPal's script does not load: a message and Try again, never a blank payment step", async ({ page }) => {
+    await mockStore(page, { env: { CARD_PAYMENTS_ENABLED: "false" }, paypal: ENABLED_PAYPAL });
+    const blocked = (route) => route.abort();
+    await page.route("https://www.paypal.com/sdk/js**", blocked);
+    await toPaypalPayment(page);
+    await expect(page.locator("[data-paypal-failed]")).toBeVisible();
+    await expect(page.locator("[data-paypal-failed]")).toContainText("PayPal didn't load");
+    await expect(page.locator("[data-paypal-failed]")).toContainText("or choose Airwallex Pay above");
+    await expect(page.locator("[data-stub-paypal]")).toHaveCount(0);
+
+    await page.unroute("https://www.paypal.com/sdk/js**", blocked);
+    await page.locator("[data-paypal-retry]").click();
+    await expect(page.locator("[data-stub-paypal]")).toBeVisible();
+    await expect(page.locator("[data-paypal-failed]")).toHaveCount(0);
+  });
+
   test("shown when paypal.enabled and storeReady, then pays without sending browser prices", async ({ page }) => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL });
     await toPaypalPayment(page, [{ sku: "d204", qty: 1 }, { sku: "d215", qty: 2 }]);

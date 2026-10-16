@@ -78,6 +78,7 @@ export async function recordPayment(db, { provider, ref, checkoutId, amountCents
     .run();
 }
 
+// status: open | voided | succeeded | pending (PayPal holding the capture) | denied | duplicate_refunded | duplicate_refund_failed.
 export async function markPayment(db, provider, ref, status, detail = "") {
   await db.prepare("UPDATE checkout_payments SET status = ?, detail = ?, updated_at = ? WHERE provider = ? AND ref = ?").bind(status, clip(detail, 300), new Date().toISOString(), provider, ref).run();
 }

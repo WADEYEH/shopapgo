@@ -76,7 +76,7 @@ import { gpcRequested, honorsGpc, recordGpc } from "./privacy.js";
 import { saveGaClient } from "./ga4.js";
 import { runMetaEvent, settleFollowUps } from "./after-payment.js";
 import { applyRefundsToOrder } from "./order-core.js";
-import { PAYPAL_EVENTS, handleAirwallexDisputeEvent, handlePaypalPaymentEvent, isAirwallexDisputeEvent } from "./payment-events.js";
+import { PAYPAL_EVENTS, handleAirwallexDisputeEvent, handlePaypalPaymentEvent, isAirwallexDisputeEvent, paypalPaymentPending } from "./payment-events.js";
 import { handleAdmin, isAdminPath } from "./admin.js";
 import { fail, json } from "./http.js";
 import { withStaging } from "./staging.js";
@@ -299,13 +299,16 @@ async function captureAndSettle(env, storeOrder, paypalOrderId, services) {
   let paypalOrder = await retrievePaypalOrder(env, paypalOrderId);
   let inspected = inspectPaypalOrder(paypalOrder);
 
-  if (inspected.status !== "COMPLETED") {
+  // Captured once: an order PayPal already captured (completed, still pending or denied) is never captured again.
+  if (inspected.status !== "COMPLETED" && !inspected.captureId) {
     if (!isUsableUsShipping(inspected.shipping)) {
       return { error: fail(400, "missing_shipping_address", "PayPal did not return a usable US shipping address."), inspected, order: storeOrder };
     }
     paypalOrder = await capturePaypalOrder(env, paypalOrderId, `${storeOrder.id}-capture`);
     inspected = inspectPaypalOrder(paypalOrder);
   }
+  // Still pending at PayPal: the checkout stays unpaid and the team is told why (once).
+  if (inspected.status === "PENDING") await paypalPaymentPending(env, storeOrder, inspected, { adminUrl: `${services.adminOrigin}/admin/` });
 
   await settleFromPaypalSnapshot(env, env.DB, paypalOrder, services);
   const order = await getOrder(env.DB, storeOrder.id);
@@ -412,7 +415,7 @@ async function handleOrder(orderId, env, services) {
       try {
         const result = await captureAndSettle(env, order, order.payment_intent_id, services);
         if (!result.error && result.order) order = result.order;
-        return json({ ...publicOrder(order), paymentStatus: result.inspected?.status || order.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
+        return json({ ...publicOrder(order), paymentProvider: "paypal", paymentStatus: result.inspected?.status || order.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
       } catch (error) {
         if (!(error instanceof PaypalError)) throw error;
         console.error("paypal_retrieve_failed", { orderId, status: error.status, code: error.code });

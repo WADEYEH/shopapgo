@@ -311,7 +311,8 @@ async function handleOrderAction(request, env, orderId, action, actor) {
       // The same follow-ups as a payment that matched: notification, confirmation email, Purchase, Amazon queue.
       if (result.changed) await runAfterPaid(env, result.order, { adminOrigin });
     } else if (action === "cancel") {
-      result = await cancelOrder(env, orderId, { actor, reasonCode: body.reason, note: body.note }, { adminUrl: `${adminOrigin}/admin/` });
+      // Cancel only: no refund here (the owner refunds separately); the customer is told the refund follows.
+      result = await cancelOrder(env, orderId, { actor, reasonCode: body.reason, note: body.note }, { adminUrl: `${adminOrigin}/admin/`, refundFollows: true });
     } else if (action === "cancel-refund") {
       // Out of stock at Amazon (M6-06): cancel and refund in one step; pressed again it only retries a failed refund.
       const cancellation = await env.DB.prepare("SELECT reason_code FROM order_cancellations WHERE order_id = ?").bind(orderId).first();

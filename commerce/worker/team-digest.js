@@ -8,6 +8,7 @@
 //   no tracking     with Amazon for 2 working days or more without shipping
 //   disputes        open, with the response deadline
 //   refunds         failed refunds, and refunds the store asked for that did not go through
+//   unrefunded      cancelled after payment (last 60 days) with no refund made or asked for: the customer was told one follows
 //   emails          customer emails in the last day that bounced, were marked as spam, were blocked or failed
 //   addresses       paid in the last day with the address unchecked because the check service was down
 //   returned        packages going back to the sender in the last 14 days (worker/package-tracking.js, F9)
@@ -51,6 +52,13 @@ export async function waitingLists(env, { nowMs = Date.now() } = {}) {
     { key: "refunds", rows: await all(db,
       `SELECT order_id FROM order_refunds WHERE status = 'FAILED' AND provider_updated_at >= ?
        UNION SELECT order_id FROM order_refund_requests WHERE status = 'failed'`, iso(nowMs - 30 * DAY_MS)) },
+    { key: "unrefunded", rows: await all(db,
+      `SELECT o.id AS order_id, c.created_at AS cancelled_at FROM orders o JOIN order_cancellations c ON c.order_id = o.id
+        WHERE o.status = 'cancelled' AND o.paid_at IS NOT NULL AND c.reason_code != 'chargeback' AND c.created_at >= ?
+          AND NOT EXISTS (SELECT 1 FROM order_refunds r WHERE r.order_id = o.id AND r.status != 'FAILED')
+          AND NOT EXISTS (SELECT 1 FROM order_refund_requests q WHERE q.order_id = o.id AND q.status != 'failed')
+          AND NOT EXISTS (SELECT 1 FROM admin_refunds a WHERE a.order_id = o.id AND a.status != 'failed')
+        ORDER BY c.created_at`, iso(nowMs - 60 * DAY_MS)) },
     { key: "returned", rows: await returnedPackages(db, { nowMs }) },
     { key: "emails", rows: await all(db,
       "SELECT order_id, kind, status FROM order_email_delivery WHERE status IN ('bounced', 'complained', 'suppressed', 'failed', 'review') AND updated_at >= ? ORDER BY updated_at", since) },
@@ -73,6 +81,7 @@ const SECTIONS = {
   disputes: ["Open disputes: respond in the provider's dashboard",
     (row) => `${row.order_id} (${row.provider === "paypal" ? "PayPal" : "Airwallex"}${row.due_at ? `, respond by ${day(Date.parse(row.due_at))}` : ""})`],
   refunds: ["Refunds that did not go through"],
+  unrefunded: ["Cancelled without a refund yet (the customer was told it follows): refund on the order page", (row) => `${row.order_id} (cancelled ${day(Date.parse(row.cancelled_at))})`],
   returned: ["Packages going back to the sender: contact the customer, then ship again or refund",
     (row) => `${row.order_id} (${row.carrier || "carrier"} ${row.tracking_number}, ${row.status})`],
   emails: ["Customer emails not delivered in the last day", (row) => `${row.order_id} ${row.kind} (${row.status})`],

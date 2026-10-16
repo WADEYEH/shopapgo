@@ -40,7 +40,7 @@ export async function reconcilePayments(env, { nowMs = Date.now() } = {}) {
 
   // 1) Paid at the provider, not known as paid here.
   const { results: payments } = await db
-    .prepare("SELECT * FROM checkout_payments WHERE created_at >= ? AND status IN ('open', 'voided') ORDER BY created_at LIMIT ?")
+    .prepare("SELECT * FROM checkout_payments WHERE created_at >= ? AND status IN ('open', 'voided', 'pending') ORDER BY created_at LIMIT ?")
     .bind(since, LIMIT)
     .all();
   for (const payment of payments) {

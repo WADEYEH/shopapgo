@@ -91,6 +91,13 @@ function payMethodChoices(config) {
   return choices;
 }
 
+// "…or <this>" in payment messages: the card form where there is one, otherwise Airwallex Pay, otherwise later.
+function otherWayToPay(config) {
+  if (cardPaymentsEnabled(config)) return "pay by card";
+  if (airwallexPayEnabled(config)) return "choose Airwallex Pay";
+  return "try again in a few minutes";
+}
+
 // The method selected when the payment step opens: the card form where there is one, otherwise PayPal.
 function defaultPayMethod(config) {
   const ids = payMethodChoices(config).map((choice) => choice.id);
@@ -136,6 +143,7 @@ export default function CheckoutPage() {
   const [placing, setPlacingState] = useState(false);
   const [walletsShown, setWalletsShown] = useState(() => new Set());
   const [paypalShown, setPaypalShown] = useState(false);
+  const [paypalFailed, setPaypalFailed] = useState(false);
   const [order, setOrder] = useState(null);
   const [focusTick, setFocusTick] = useState(0);
 
@@ -653,7 +661,8 @@ export default function CheckoutPage() {
       await showOrder(result.orderId);
       return;
     }
-    if (result.status === "review" && result.orderId) {
+    // review: captured but unverified. PENDING: PayPal is still holding the money. Both: the order page, never a Purchase.
+    if ((result.status === "review" || result.paypal?.status === "PENDING") && result.orderId) {
       window.history.replaceState(null, "", orderUrl(result.orderId));
       await showOrder(result.orderId);
       return;
@@ -671,6 +680,7 @@ export default function CheckoutPage() {
       return;
     }
     if (!document.getElementById("paypal-button")) return;
+    setPaypalFailed(false);
     try {
       setPaypalShown(true);
       const paypal = await loadPaypal(paypalSdkUrl(s.config.paypal.clientId));
@@ -710,19 +720,21 @@ export default function CheckoutPage() {
           },
           onCancel: () => {
             setPlacing(false);
-            showPaymentMessage("info", "PayPal checkout cancelled", "No payment was taken. You can try PayPal again or pay by card.");
+            showPaymentMessage("info", "PayPal checkout cancelled", `No payment was taken. You can try PayPal again or ${otherWayToPay(s.config)}.`);
           },
           onError: () => {
             setPlacing(false);
-            showPaymentMessage("warning", "PayPal unavailable", "PayPal couldn't complete checkout. Try again or pay by card.");
+            showPaymentMessage("warning", "PayPal unavailable", `PayPal couldn't complete checkout. Try again or ${otherWayToPay(s.config)}.`);
           },
         })
         .render("#paypal-button");
       s.paypal.mounted = true;
       setPaypalShown(s.payMethod === "paypal");
     } catch {
+      // The PayPal script did not load (network, blocker): say so, with a button to try again (owner, 10/16).
       s.paypal.mounted = false;
       setPaypalShown(false);
+      if (s.payMethod === "paypal") setPaypalFailed(true);
     }
   }
 
@@ -775,7 +787,9 @@ export default function CheckoutPage() {
     let result = null;
     for (let attempt = 0; attempt < ORDER_POLL_ATTEMPTS; attempt += 1) {
       result = await api(`/api/orders/${encodeURIComponent(orderId)}`);
-      const failedAttempt = (result.paymentStatus === "REQUIRES_PAYMENT_METHOD" && attempt > 0) || result.paymentStatus === "CANCELLED";
+      const failedAttempt = (result.paymentStatus === "REQUIRES_PAYMENT_METHOD" && attempt > 0) || ["CANCELLED", "DENIED"].includes(result.paymentStatus);
+      // PayPal holding the money can take hours or days: no point asking again now.
+      if (result.paymentProvider === "paypal" && result.paymentStatus === "PENDING") return result;
       if (result.status !== "pending" || failedAttempt) return result;
       await sleep(ORDER_POLL_INTERVAL_MS);
     }
@@ -821,7 +835,10 @@ export default function CheckoutPage() {
       clearCheckoutDraft();
       clearCheckoutId();
       setOrder({ kind: "review", order: result });
-    } else if (["cancelled", "expired"].includes(result.status) || ["REQUIRES_PAYMENT_METHOD", "CANCELLED"].includes(result.paymentStatus)) {
+    } else if (result.paymentProvider === "paypal" && result.paymentStatus === "PENDING") {
+      setTitle("Payment being confirmed.");
+      setOrder({ kind: "paypal_pending", order: result });
+    } else if (["cancelled", "expired"].includes(result.status) || ["REQUIRES_PAYMENT_METHOD", "CANCELLED", "DENIED"].includes(result.paymentStatus)) {
       setTitle("Payment not completed.");
       setOrder({ kind: "failed", order: result });
     } else {
@@ -1127,10 +1144,18 @@ export default function CheckoutPage() {
             <div data-pay-panel="airwallex_pay" hidden={payMethod !== "airwallex_pay"}>
               <div className="airwallex-pay" id={AIRWALLEX_PAY_CONTAINER_ID} />
             </div>
-            <div data-pay-panel="paypal" hidden={payMethod !== "paypal" || !paypalShown}>
+            <div data-pay-panel="paypal" hidden={payMethod !== "paypal" || (!paypalShown && !paypalFailed)}>
               <div className="paypal" data-paypal="" hidden={!paypalShown}>
                 <div id="paypal-button" />
               </div>
+              {paypalFailed && (
+                <div className="stack" data-paypal-failed="">
+                  <Notice tone="warning" title="PayPal didn't load">
+                    {`Check your connection and try again${airwallexPayEnabled(config) ? ", or choose Airwallex Pay above" : ""}. Still stuck? Contact us and we'll help you order.`}
+                  </Notice>
+                  <button className="btn btn--md" type="button" data-paypal-retry="" onClick={() => mountPaypalButtons()}>Try again</button>
+                </div>
+              )}
             </div>
             <div data-pay-panel="card" hidden={payMethod !== "card"}>
               <CardField name="cardNumber" label="Card number" containerId="card-number" error={errors.cardNumber || ""} />
