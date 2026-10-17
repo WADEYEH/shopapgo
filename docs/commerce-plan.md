@@ -119,6 +119,10 @@
 | D68 | 10/15 | **销售税先用 $0 上线**，之后再处理：你知道风险（之后若州政府追缴，税金要从营收自己付，可能加罚金；订单少时金额不大）。上线后定期检视（C13） | 回答 O1（你的决定，没有请会计师） |
 | D69 | 10/15 | 政策页不请律师，用 Claude 依常见做法补齐的版本上线：准据法台湾（不影响顾客所在州的消费者保护）、赔偿上限是该笔订单金额、包裹送达才转移风险（跟补寄规则一致）、拿掉「草稿、待法务审核」。Claude 不是律师，营业额变大后建议再请专业人士看一次 | 回答 O6 |
 | D70 | 10/16 | **不等 Airwallex 信用卡就可以上线**：正式环境先关掉 Airwallex 信用卡（`CARD_PAYMENTS_ENABLED = "false"`），结帐页只有 PayPal（排第一、预设选它；没有 PayPal 帐户也能在 PayPal 视窗刷卡）和 Airwallex Pay（你选直接显示，不先测）；Card、Apple Pay、Google Pay 都不显示。代价：没有页面上的刷卡栏和 Apple Pay，手机结帐多一步；PayPal 手续费较高；Airwallex Pay 美国顾客多半没有帐户，而且在 www 收美元没实测过。Airwallex 开通后把开关改回来（C14） | M18 不再挡上线 |
+| D71 | 10/16 | 商品总览、两个商品页、四份政策、联络页开放给搜寻引擎并列进网站地图（共 37 页）；购物车和结账不开放。商品资料给 Google 的内容加上有货（停售时缺货）、运费 $7.99（不寄 AK、HI）、3–5 天送达、30 天退货（#77） | 检查报告第 1 项 |
+| D72 | 10/16 | PayPal 只有真的放行（capture COMPLETED）才算付款。还在待处理时：不成立订单、不寄确认信、不出货，顾客页面显示「付款确认中」，你收到写明原因的通知；放行后照常成立订单；拒绝时维持未付款、页面显示付款没成功、通知你去联络顾客（系统不自动寄信给顾客）（#78） | 检查报告第 3 项 |
+| D73 | 10/16 | 后台保留「只取消」（不退款）；这时寄给顾客的信改成「我们会尽快全额退款」，后台首页和每日摘要列出「已取消、还没退款」（60 天内）提醒你退款（#78） | 检查报告第 4 项 |
+| D74 | 10/16 | PayPal 载入失败时显示讯息和「Try again」按钮（不自动重试），建议改用 Airwallex Pay 或联络我们；PayPal 讯息在没有刷卡时不再写「pay by card」（#78） | 检查报告第 5 项 |
 
 ---
 
@@ -429,7 +433,7 @@ wrangler.toml            Worker 设定（staging / production）
 | O7 | CCPA「不出售或分享」选项与 cookie 同意（暂定 D46：尊重 GPC，等法务定案） | 你和法务 | M10、M11 | 已决定（D67）：不适用，维持 GPC |
 | O8 | 已解决（D43）：改用 shopapgo.com | — | M8 | — |
 | O9 | 第一批组合包的内容与价格 | 你 | M2 | 有需要时 |
-| O10 | 正式环境里没在用的密钥（例如 `META_TEST_EVENT_CODE`）是否删除 | 你 | M12 | 阶段 5 |
+| O10 | 正式环境里没在用的密钥（例如 `META_TEST_EVENT_CODE`）是否删除 | 你 | M12 | 已解决（10/16）：`META_TEST_EVENT_CODE` 已从正式环境删除，购买事件不再被当成测试 |
 
 ### 8.1 切换前还缺的东西（总表）
 
@@ -450,7 +454,7 @@ wrangler.toml            Worker 设定（staging / production）
 | M9 | 正式环境的 `RESEND_API_KEY`、`RESEND_WEBHOOK_SECRET` | 切换后顾客信、团队信、送达状态都没有 | 跟 M1 一起，切换时建正式用的金钥和 Resend 的通知 | 切换时 | **完成**（10/13）：正式环境 `RESEND_API_KEY`（Resend 金钥 `shopapgo-production`，权限是全部，你决定保留）、`RESEND_WEBHOOK_SECRET`（Resend 通知 `https://www.shopapgo.com/api/webhooks/resend`，7 种寄送状态，**目前暂停**，切换当天打开）。旧程序没有寄件地址，不会寄信 |
 | M10 | healthchecks.io 和 `HEALTHCHECK_PING_URL`（营运手册第 2 节第 6、7 项） | 排程整个停掉时没有人会知道（演练第 12 项的一部分） | 免费方案即可 | 切换前 | **完成**（10/15）：你注册 healthchecks.io（免费，帐号 dev01@apgo.com.my，通知寄到这个信箱），我在你的 Chrome 建了两个检查「shopapgo production」「shopapgo staging」（每 5 分钟、宽限 10 分钟）；Ping URL 由你贴进两个环境的 `HEALTHCHECK_PING_URL`。测试站几分钟内就开始报平安；正式环境的旧程序不用它，检查会停在「还没收到」、不发警报，切换后新程序开始报。你选只用 healthchecks.io（不另外加网站监测） |
 | M11 | Turnstile 金钥 `TURNSTILE_SITE_KEY`、`TURNSTILE_SECRET_KEY`（联络表单防机器人） | 两个环境都没有：只靠限次和隐藏栏位挡垃圾讯息 | Cloudflare → Turnstile | 切换前（建议） | **完成**（10/15）：你在 Cloudflare 建 Turnstile widget「shopapgo contact form」（网域 shopapgo.com，含 www、staging 等子网域；Managed 模式）。Secret Key 你自己贴进测试站和正式环境（正式环境的旧店不用它，没有影响）；Site Key 是公开值，写进设定档。部署后联络表单会出现机器人检查 |
-| M12 | GA4 Measurement Protocol 密钥 `GA4_API_SECRET`（D58，营运手册第 20 节） | 退款不会从 GA4 的营收扣掉 | 切换当天建 | 切换时 | 未做（按计划） |
+| M12 | GA4 Measurement Protocol 密钥 `GA4_API_SECRET`（D58，营运手册第 20 节） | 退款不会从 GA4 的营收扣掉 | 切换当天建 | 切换时 | **完成**（10/16）：GA4 资源 shopapgo.com (US) → 资料串流 shopapgo.com → Measurement Protocol API 密钥「shopapgo-worker」（你先同意了 Google 的使用者资料收集声明），你把值贴进正式环境的 `GA4_API_SECRET`。之后退款会自动从 GA4 营收扣掉 |
 | M13 | 找到 amazon-spapi-mcp 的原始码（在 Mac 上部署的） | 库存显示、库存不足自动停止结账（M6-09、M9-17、演练第 9 项）。10/12 你决定：继续找，演练先跳过第 9 项，上线不等它；没有库存时，Amazon 缺货照现有流程寄延迟信、在后台「取消并退款」 | 请 Mac 的使用者找出来分享（不要附 `.dev.vars`、`.env`） | 找到后补 | 未做 |
 | M14 | 在测试站后台用拥有者登录，自己试一次改商品再恢复（营运手册第 23 节） | 演练第 14 项的改价、改文字和图片（只有拥有者能改；我用来检查的金钥是成员身分，测试站已正确拒绝） | 后台 → 商品与库存 → 修改价格、文字和图片 | 演练第二轮 | 未做 |
 | M15 | 从 Airwallex、PayPal 后台下载同一段期间的交易报表 | 演练第 14 项「汇出的 CSV 跟付款服务的报表对得上」 | 你下载给我，或让我在你的 Chrome 只看金额 | 演练第二轮 | 未做 |
@@ -480,6 +484,17 @@ wrangler.toml            Worker 设定（staging / production）
 | C12 | 切换前在测试站验证旧 store 网址的转址：`store-staging.shopapgo.com` 的网页 301 到 `staging.shopapgo.com`，`/api/*` 不转址 | 10/14 的 www 切换设定 PR 合并后部署测试站 | **完成**（10/15）：#62 部署测试站后实测，转址全部正确，`/api/*` 不转址；部署后约 1 分钟才全部换成新版本（营运手册第 24 节已注明） |
 | C13 | 销售税检视（D68）：上线后每季看一次网站在各州的销售额和笔数（后台报表），同时从 Amazon 下载 FBA 库存报表看货放在哪些州；网站美国营收明显成长、或任何一州接近经济门槛时，提醒你决定是否注册、接计税服务 | 上线后每季 | 等 |
 | C14 | Airwallex 开通信用卡后（M18）：把 `commerce/wrangler.toml` 正式环境的 `CARD_PAYMENTS_ENABLED` 改成 `"true"`（同时改 `worker/config-check.js` 的清单），合并后部署正式环境；Card、Apple Pay、Google Pay 就会出现。部署后用真卡买一笔最便宜的商品再退款，Apple Pay 也试一次 | Airwallex 通知开通后 | 等 |
+| C15 | 第一张真实订单整段检查：付款（PayPal 或 Airwallex Pay）、确认信、新订单通知、1 小时后送 Amazon、读回比对、出货信；Meta 事件管理工具的 Purchase（浏览器＋伺服器、去重）和 GA4 purchase | 第一张真实订单进来时 | 等 |
+| C16 | 正式部署核准人加上 WADEYEH（你 10/16 说两个帐号都要能核准）：GitHub → Settings → Environments → Production → Required reviewers 加 WADEYEH，并改 D65 | 有空时（要 WADEYEH 登录） | 等 |
+| C17 | **后台安全（检查报告第 2 项，高）**：正式后台只靠一组共用密码，`ADMIN_TOKEN` 也能当密码登录，没有登录次数限制、没有两步验证、操作纪录都记成同一人；两组都是旧程序留下来、没换过。做法：正式后台照测试站开 Cloudflare 登录（M4），同时换掉两组金钥、加后台限速，开好后删掉 `ADMIN_LOGIN_*` | 尽快 | 等你决定 |
+| C18 | 售后人工流程写进营运手册：退货（Seller Central 的 MCF 退货授权、收到后看状况再退款）、补寄（新订单编号、手动寄追踪号）、包裹遗失和「显示送达但没收到」、退款失败改银行转帐；修正第 20 节「退货后在订单页重新送单」（程序做不到）；每周看一次送出超过 30 天没送达的包裹 | 上线后 | 等 |
+| C19 | 出货：Amazon 接受取消请求就当成已取消并退款，改成读回 Cancelled 才寄信退款，已取消或已退款的单在 Amazon 显示出货时通知你；送单时明确写 FillOrKill（今天读回已是 FillOrKill）；确认两个商品在 Amazon 是否属危险品、有没有地区限制；Amazon 建单就回缺货时走缺货流程；单一包裹的出货信附追踪连结 | 上线后 | 等 |
+| C20 | 付款：通知签名验证失败要留纪录（新密钥贴错时才会发现），到 Airwallex 后台看通知传送是否成功；正式环境 Airwallex Pay 做一次不付款的建单测试；PayPal 被拒后重试与 PayPal 失败纪录；两个分页几乎同时付款的极小时间差（只更新未付款的结帐、重复付款以付款纪录判断）；付款报表加手续费、实收，并跟付款服务报表对帐（M15） | 上线后 | 等 |
+| C21 | 顾客看到的：确认信补付款方式、预计送达、查订单连结、客服信箱；订单状态页加出货状态和追踪号；结帐时价格变了要提示顾客重新确认 | 上线后 | 等 |
+| C22 | 内容与政策：「持久 6 个月／4 个月」等产品宣称补上依据纪录；销售条款和退货政策写的付款方式（Airwallex 卡、Apple Pay、Google Pay）跟正式环境现况（D70）对齐；商品资料的退货运费写法改成「顾客负担」 | 上线后 | 等 |
+| C23 | 平台：数据库定期汇出到 Cloudflare 以外并试一次还原；资料保存期限（订单 7 年、留言 2 年）自动执行；GitHub main 分支保护、正式部署禁止自己核准（跟 C16 一起）；设定检查补 `ADMIN_LOGIN_*`、`GA4_API_SECRET`、`HEALTHCHECK_PING_URL`、`PRICING_APPROVED`，并检查「不该存在」的（例如 `META_TEST_EVENT_CODE`）；Resend 正式金钥改成只能寄信；Google 地址验证额度测试站和正式分开；顾客资料汇出／删除在测试站实跑一次 | 上线后 | 等 |
+| C24 | 追踪：GA4 内部流量筛选从「测试」改成「有效」（我们自己人的浏览不算进报表）；第一张真实订单确认 Meta 和 GA4 的 purchase（C15） | 有空时 | 等 |
+| C25 | 文件更新：模块规格（多份还写草稿、等会计师律师、有刷卡）、情境清单、对照表（161／157 条对不上）、`docs/ops/production-config.md`、`wrangler.toml` 和 `pricing.js` 的过时注解 | 有空时 | 等 |
 
 ---
 
@@ -515,8 +530,8 @@ wrangler.toml            Worker 设定（staging / production）
 | G6 | **通过** | 送单、读回比对、追踪同步、出货信、缺货、送单失败（演练第 5、8、12 项） | — |
 | G7 | **通过** | 确认、出货、退款、取消、改地址、缺货延迟信都送达测试信箱；寄信失败重试有自动测试 | — |
 | G8 | 未做 | 自动测试有（PR 3-2） | M4（Cloudflare 登录）后做演练第 11 项 |
-| G9 | 切换时做 | GTM 第 3 版（含 GA4 电商标签）10/12 已发布 | 切换后用 GTM 预览和 Meta 测试工具看四个电商事件、Purchase 去重 |
-| G10 | 切换时做 | 产品页结构化资料、旧网址 301 都有自动测试；store 和裸网域转址见 #62 | 切换后用 Rich Results Test、提交 sitemap（测试站有密码，Google 的工具进不去） |
+| G9 | **部分**（10/16） | www 的浏览器事件（PageView、ViewContent）有进 Meta 资料集；GA4 即时报表收到 www 的访客；GTM-TD5NTFH9 在页面上。Meta 测试事件代码已删除（伺服器端的 InitiateCheckout、Purchase 只在付款后送出，没有真钱付款看不到） | 第一张真实订单：在 Meta 事件管理工具确认 Purchase 有浏览器和伺服器两份、已去重；GA4 有 purchase（C15） |
+| G10 | **通过**（10/16） | #77 部署后：Search Console 重新读取网站地图，找到 37 页；Rich Results Test（Atomic Glaze Coating）：产品摘要、商家信息都有效，价格、有货、运费、送达天数、不寄 AK／HI、30 天退货都读到；唯一的非严重问题是退货运费没写固定金额（C22） | — |
 | G11 | **你决定不请律师**（10/15，D69） | 四份政策补齐：卖家瑋瑄科技和登记地址（10/16）、准据法、赔偿上限、风险转移、资料保存期间；数字跟结账一致（自动测试） | — （生效日期 2026-10-16，切换当天填上） |
 | G12 | **你决定先 $0**（10/15，D68） | 你知道风险，上线后每季检视（C13） | — |
 | G13 | **通过（测试站）**（10/15） | 测试站 14 页（首页、指南、商品总览、两个商品页、购物车、结账、四个政策页、联络、找不到页面）× 手机 390、平板 768、桌面 1440、最窄 320：没有横向溢出、没有坏图、没有程序错误。品牌页（首页、指南列表、一篇指南）跟现在的 www 比，第一个画面差异 0.1–1.5%。截图在这台电脑的 `commerce/review/g13/` | 切换后在正式网址再拍一次；政策页只剩登记地址（M20）和生效日期两个 [TO CONFIRM]（10/15 D69 拿掉了草稿标示） |
@@ -604,6 +619,9 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/16 | 你决定今天切换。价格确认（G2）：Atomic Glaze Coating $29.99、Atomic Colored Glaze $59.99、运费 $7.99、税 $0。切换准备：回退指令完成（C11，切换前版本 `f62194a4`），政策页生效日期填 October 16, 2026 |
 | 10/16 | **切换完成**：#73 合并后正式部署（版本 487aee1a，09:15 UTC），www 由新程序服务，检查表全部正确（首页、商品、指南、store 和裸网域 301、admin、/api 不转址）。Resend 正式通知打开。Airwallex 正式通知编辑时不能换版本，所以新增一个：`https://www.shopapgo.com/api/webhooks/airwallex`、版本 2026-08-21、全部 294 个事件，新密钥由你贴进 `AIRWALLEX_WEBHOOK_SECRET`；旧的 store 通知待删。Amazon 测试单第一次取消失败（Amazon 忙），修正 #74 后第二次正式部署（74e0fa95），测试单三步通过（G15）。排程开始执行，/api/health 正常 |
 | 10/16 | 你说「测试单通过后打开自动送单」：正式环境设 `MCF_AUTO_SUBMIT`、`MCF_SYNC_CRON` = true（这个 PR），合并后第三次正式部署。付款的订单在 1 小时可修改时间后自动送 Amazon，排程读回出货状态 |
+| 10/16 | #75 合并后第三次正式部署，后台显示「自动送单开启」。不花钱的检查（你决定不做真钱测试）：www 结帐页只有 PayPal（预设）和 Airwallex Pay，PayPal 正式按钮有「Debit or Credit Card」；按 PayPal 后正式环境建单成功（7A9013504V4293635，没付款就关掉），后台付款查询读得到；联络表单寄出成功。之后：Search Console 重新提交网站地图（G10）、GA4 密钥（M12）、删除 Meta 测试事件代码（O10） |
+| 10/16 | 对照情境清单和设计文件做全面检查（4 组同时）：约 165 条验收测试，131 条有自动测试；找到 5 个高风险。你选修第 1、3、4、5 项（D71–D74）：#77、#78 合并后部署正式环境（版本 6aaa6b1d），网站地图 37 页、Rich Results 有效（G10）。第 2 项后台安全和其他中、低风险项目记成 C17–C25 |
+| 10/16 | PayPal 收款设定（你登录后我只看不改）：帐户主要币别是 **USD**，网站收的就是美元，不会因为币别卡在待处理；其他币别设成「全部接受并换成 USD」；「同一个 invoice ID 只能付一次」已开（同一张结帐不会被付两次）；eCheck 没有封锁（少数顾客用 eCheck 时会等 3–5 个工作天，D72 已经会等它入帐才出货）。不需要改 |
 
 ---
 
