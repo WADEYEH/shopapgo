@@ -1,0 +1,58 @@
+# amazon-spapi-mcp: the Amazon SP-API gateway behind amazon-mcp.apgo.tw (MCP tools, the store's /internal/outbound
+# fulfillment API, and the Amazon review-request scheduler). Rebuilt on 2026-10-16 from the code that was live then
+# (version deployed 2026-10-06 by upload; the original source was not found). src/worker.js is that bundle, deployed
+# as is (no_bundle). Every setting below matches what Cloudflare reported for the live Worker.
+name = "amazon-spapi-mcp"
+main = "src/worker.js"
+compatibility_date = "2026-09-22"
+compatibility_flags = ["nodejs_compat"]
+no_bundle = true
+workers_dev = true
+preview_urls = true
+routes = [{ pattern = "amazon-mcp.apgo.tw/*", zone_name = "apgo.tw" }]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "AmazonSpapiMcp"
+class_name = "AmazonSpapiMcp"
+
+[[durable_objects.bindings]]
+name = "REVIEW_SCHEDULER"
+class_name = "ReviewSolicitationScheduler"
+
+# The live Worker is at migration tag v2: nothing new is applied while the last tag here is v2.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AmazonSpapiMcp"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["ReviewSolicitationScheduler"]
+
+[[d1_databases]]
+binding = "REVIEW_DB"
+database_name = "amazon-review-solicitations"
+database_id = "980273b3-86c4-49dd-9be5-548e90b7883f"
+
+[vars]
+REVIEW_SOLICITATION_MARKETPLACES = "ATVPDKIKX0DER"
+REVIEW_SOLICITATION_MAX_ORDER_AGE_DAYS = "45"
+REVIEW_SOLICITATION_MAX_ORDERS_PER_RUN = "15"
+REVIEW_SOLICITATION_MIN_ORDER_AGE_DAYS = "5"
+REVIEW_SOLICITATION_MODE = "live"
+REVIEW_SOLICITATION_SKIP_ZERO_TOTAL = "true"
+
+# Secrets (set on Cloudflare, never in this repo): AMAZON_SP_API_CLIENT_ID, AMAZON_SP_API_CLIENT_SECRET,
+# AMAZON_SP_API_REFRESH_TOKEN, MCP_API_KEY, OUTBOUND_INTERNAL_TOKEN, SHORTLINKS_INTERNAL_TOKEN.

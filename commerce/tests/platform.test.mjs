@@ -433,6 +433,28 @@ test("wrangler: production cron every 5 minutes, staging every 2; Workers Issues
 
 // ---------- deploys ----------
 
+test("Amazon gateway: its code and config are in the repo, CI dry-runs it, deploys only by hand from main with approval", async () => {
+  const root = new URL("../../", import.meta.url);
+  const toml = await readFile(new URL("amazon-spapi-mcp/wrangler.toml", root), "utf8");
+  assert.match(toml, /^name = "amazon-spapi-mcp"$/m);
+  assert.match(toml, /^main = "src\/worker\.js"$/m);
+  assert.match(toml, /^no_bundle = true$/m, "the live bundle is deployed as it is");
+  assert.match(toml, /pattern = "amazon-mcp\.apgo\.tw\/\*", zone_name = "apgo\.tw"/, "the same route the live Worker has");
+  assert.match(toml, /tag = "v2"/, "the live migration tag: nothing new is applied");
+  assert.ok(!/secret|token|key/i.test(toml.replace(/^#.*$/gm, "").replace(/MCP_API_KEY|OUTBOUND_INTERNAL_TOKEN/g, "")), "no secret in the config");
+  const ignore = await readFile(new URL("amazon-spapi-mcp/.gitignore", root), "utf8");
+  for (const name of [".dev.vars", ".env", "dist/"]) assert.ok(ignore.includes(name), name);
+  const ci = await readFile(new URL(".github/workflows/ci.yml", root), "utf8");
+  assert.match(ci, /amazon-gateway:[\s\S]*working-directory: amazon-spapi-mcp[\s\S]*deploy --dry-run/);
+  const deploy = await readFile(new URL(".github/workflows/deploy-amazon-gateway.yml", root), "utf8");
+  assert.match(deploy, /^on:\n {2}workflow_dispatch:/m, "by hand only");
+  assert.ok(!/^\s+(push|pull_request|workflow_run|schedule):/m.test(deploy), "never automatically");
+  assert.ok(deploy.includes("if: github.ref == 'refs/heads/main' && inputs.confirm == 'deploy amazon gateway'"));
+  assert.match(deploy, /environment: production/, "a reviewer approves");
+  assert.ok(deploy.includes("secrets.AMAZON_GATEWAY_DEPLOY_TOKEN"));
+  assert.match(deploy, /deployments status[\s\S]*GITHUB_STEP_SUMMARY[\s\S]*deploy\n[\s\S]*amazon-mcp\.apgo\.tw\/health/, "records the version before, deploys, checks the new one answers");
+});
+
 test("deploy workflow: staging after CI on main; production only by hand, from main, switched on, confirmed and approved", async () => {
   const workflow = await readFile(new URL("../../.github/workflows/deploy.yml", import.meta.url), "utf8");
   const job = (name) => {
