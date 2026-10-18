@@ -99,11 +99,11 @@ routes = [
   { pattern = "store-staging.shopapgo.com", custom_domain = true },
 ]
 
-# Run the Worker next to its D1 database (Eastern North America, "ENAM") instead of next to the visitor: a back-office
+# Run the Worker next to its D1 database (staging: Asia-Pacific, Osaka) instead of next to the visitor: a back-office
 # page makes about ten queries one after another, each a trip across the Pacific from Asia (~0.25 s). Placement hint,
 # docs: developers.cloudflare.com/workers/configuration/placement (10/18 trial on staging).
 [env.staging.placement]
-region = "aws:us-east-1"
+region = "aws:ap-northeast-3"
 
 [env.staging.assets]
 # The site: the Next.js export built for a test site by scripts/build-site.mjs (npm run build:site).
