@@ -99,6 +99,13 @@ routes = [
   { pattern = "store-staging.shopapgo.com", custom_domain = true },
 ]
 
+# Run the Worker next to its D1 database instead of next to the visitor (placement hint, Cloudflare docs: Workers →
+# Configuration → Placement). A back-office page makes about ten queries one after another; from Asia each was a long
+# trip to the database. Staging's database is in Asia-Pacific (Osaka): measured 10/18, the order list went from ~2.5 s
+# to ~0.7 s. Production's database is in Eastern North America: see [env.production.placement].
+[env.staging.placement]
+region = "aws:ap-northeast-3"
+
 [env.staging.assets]
 # The site: the Next.js export built for a test site by scripts/build-site.mjs (npm run build:site).
 directory = "../out"
@@ -213,6 +220,14 @@ routes = [
 # Do NOT deploy main here before the cutover (docs/commerce-plan.md §6, stage 4). Every customer page is a Next.js page
 # now (D41) and needs www's /_next/* from the same build, so the deploy that brings this site to production also moves
 # all of www to this Worker (the routes above change then). Until that deploy nothing below takes effect.
+
+# Next to the production D1 database (Eastern North America, "ENAM"; wrangler d1 info), like staging's
+# [env.staging.placement]: the back office from Asia stops paying a Pacific crossing per query, and the shop's API calls
+# from the US West Coast stop paying a cross-country trip per query. Pages still go through this Worker
+# (run_worker_first), so a page now runs in Virginia: one extra trip for visitors far from it.
+[env.production.placement]
+region = "aws:us-east-1"
+
 [env.production.assets]
 directory = "../out"
 binding = "ASSETS"
