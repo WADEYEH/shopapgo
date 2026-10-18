@@ -497,6 +497,13 @@ wrangler.toml            Worker 设定（staging / production）
 | C23 | 平台：数据库定期汇出到 Cloudflare 以外并试一次还原；资料保存期限（订单 7 年、留言 2 年）自动执行；GitHub main 分支保护、正式部署禁止自己核准（跟 C16 一起）；设定检查补 `ADMIN_LOGIN_*`、`GA4_API_SECRET`、`HEALTHCHECK_PING_URL`、`PRICING_APPROVED`，并检查「不该存在」的（例如 `META_TEST_EVENT_CODE`）；Resend 正式金钥改成只能寄信；Google 地址验证额度测试站和正式分开；顾客资料汇出／删除在测试站实跑一次 | 上线后 | 等 |
 | C24 | 追踪：GA4 内部流量筛选从「测试」改成「有效」（我们自己人的浏览不算进报表）；第一张真实订单确认 Meta 和 GA4 的 purchase（C15） | 有空时 | 等 |
 | C25 | 文件更新：模块规格（多份还写草稿、等会计师律师、有刷卡）、情境清单、对照表（161／157 条对不上）、`docs/ops/production-config.md`、`wrangler.toml` 和 `pricing.js` 的过时注解 | 有空时 | 等 |
+| C26 | 售后案件系统（M7）：退货、补寄、客诉在后台建案件、追进度（D42、D47 说好切换后做；现在用客服信箱加订单备注） | 上线后，你决定何时做 | 等 |
+| C27 | 缺货 3 天自动取消并退款（M4-14）：现在第 3 天提醒你、由你按「取消并退款」（10/9 你选的）；要不要改成自动 | 上线后，你决定 | 等 |
+| C28 | 组合包（M2-05、O9）：价格、库存（各组件可售量 ÷ 每包数量取最小值）、送 Amazon 拆单 | 你决定要卖什么组合 | 等 |
+| C29 | 上线检查 G13：在正式网址重新截图，确认手机、平板、电脑都没破版（切换前只在测试站做过）；G8 等 C17 做完后再验 | 尽快（G13） | 等 |
+| C30 | 清理：删除旧的 Cloudflare Pages 专案（apgo-us-store.pages.dev，切换时说好保留两周）；删除测试站旧的 Resend 金钥 `shopapgo-staging`（已换新的） | 10/30 之后（Pages）；有空时（Resend） | 等 |
+| C31 | Amazon 转接程序以后只从 GitHub 部署（D75）：请 Mac 的使用者**不要再从 Mac 部署**，否则会把 1.8.3（含库存入口）盖回旧版 | 尽快告诉 Mac 的使用者 | 等 |
+| C32 | 另外两个跟 Amazon 有关的 Worker 原始码也不在 GitHub：`apgo-amazon-mcp-gateway`（Amazon 工具的登录入口 amazon-connect.apgo.tw）、`amazon-review-solicitation-cron`（评论排程备援，每天 16:30 UTC）。照 D75 的方式搬进 repo | 有空时 | 等 |
 
 ---
 
