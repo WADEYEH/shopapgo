@@ -89745,6 +89745,30 @@ async function handleInternalOutbound(request2, env) {
         return json2(await cancelFulfillmentOrder(env, seg[1]));
       }
     }
+    if (seg.length === 1 && seg[0] === "inventory") {
+      // Added 2026-10-16 for the store (shopapgo docs/design/amazon-mcp-inventory.md): FBA sellable stock per seller SKU,
+      // read-only. GET /internal/outbound/inventory?skus=D204,D215 (1-50 SKUs).
+      if (method !== "GET") return json2({ error: "Method not allowed" }, 405, { allow: "GET" });
+      const skus = [...new Set((url2.searchParams.get("skus") || "").split(",").map((s2) => s2.trim()).filter(Boolean))];
+      if (!skus.length || skus.length > 50 || skus.some((s2) => s2.length > 40)) {
+        return json2({ error: "skus: 1 to 50 seller SKUs, comma separated" }, 400);
+      }
+      const rows = await getInventorySummaries(env, { sellerSku: skus.join(",") });
+      const count = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+      return json2({
+        marketplaceId: MARKETPLACE_US,
+        items: rows.map((row) => {
+          const d2 = row.inventoryDetails ?? {};
+          return {
+            sellerSku: row.sellerSku,
+            fulfillable: count(d2.fulfillableQuantity),
+            inbound: count(d2.inboundWorkingQuantity) + count(d2.inboundShippedQuantity) + count(d2.inboundReceivingQuantity),
+            reserved: count(d2.reservedQuantity?.totalReservedQuantity),
+            updatedAt: row.lastUpdatedTime ?? null
+          };
+        })
+      });
+    }
     if (seg.length === 2 && seg[0] === "tracking") {
       if (method !== "GET") return json2({ error: "Method not allowed" }, 405, { allow: "GET" });
       if (!/^\d+$/.test(seg[1])) return json2({ error: "packageNumber must be a non-negative integer" }, 400);
@@ -91001,7 +91025,7 @@ var index_default = {
         JSON.stringify({
           ok: true,
           name: "amazon-spapi-mcp",
-          version: "1.8.2",
+          version: "1.8.3",
           mcp: "/mcp",
           auth: "Authorization: Bearer <MCP_API_KEY> or x-api-key: <MCP_API_KEY>"
         }),
