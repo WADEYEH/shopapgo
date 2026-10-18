@@ -262,11 +262,19 @@ SITE_HOST = "www.shopapgo.com"
 MOVED_HOSTS = "store.shopapgo.com,shopapgo.com"
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
 ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
-# Cloudflare Access sign-in (worker/admin-identity.js), switched on once Zero Trust is set up (docs/ops/runbook.md):
-#   ADMIN_ACCESS = "true", ACCESS_TEAM_DOMAIN = "https://<team>.cloudflareaccess.com", ACCESS_AUD = "<application audience tag>"
-# and, to keep Cloudflare's allowed-email list equal to the member list (worker/access-list.js):
-#   CLOUDFLARE_ACCOUNT_ID = "<account id>", ACCESS_LIST_ID = "<Zero Trust email list id>", secret ACCESS_LIST_API_TOKEN
-#   (wrangler secret put ACCESS_LIST_API_TOKEN --env production; a token that can only edit Zero Trust lists).
+# Cloudflare Access sign-in (worker/admin-identity.js; C17, 10/18, docs/ops/runbook.md section 11): team "apgo",
+# application "shopapgo back office (production)" on admin.shopapgo.com (Google or an email code, 24 hours), policy
+# "shopapgo back office members (production)" = the emails in the Zero Trust list below. No service token: scripts do not
+# get into the production back office (owner 10/18). The shared login (ADMIN_LOGIN_*) and ADMIN_TOKEN stay set but no
+# longer open /admin while this is on (owner 10/18: keep them). None of these values is a secret.
+ADMIN_ACCESS = "true"
+ACCESS_TEAM_DOMAIN = "https://apgo.cloudflareaccess.com"
+ACCESS_AUD = "10359036cf5986317a667fe3a9eef8c2ee4930f19e8ed215d6f471113681202a"
+# The member list kept equal to Cloudflare's allowed-email list (worker/access-list.js): Zero Trust list
+# "apgo-backoffice-members-production" (separate from staging's); the secret ACCESS_LIST_API_TOKEN
+# ("backoffice-member-list-production", Zero Trust: Edit on this account).
+CLOUDFLARE_ACCOUNT_ID = "71eb47531bc5b2d880acc57b74989146"
+ACCESS_LIST_ID = "013e636e-54ff-4339-b3c5-5728e1b1928a"
 # Meta Conversions API (worker/meta-capi.js). The dataset (pixel) id is public, not a secret. Without it the whole CAPI
 # path is skipped, which is why staging / local have no such line. Secrets: META_CAPI_ACCESS_TOKEN (and META_TEST_EVENT_CODE
 # while testing), set by the owner with `wrangler secret put <NAME> --env production`. See docs/meta-tracking.md.
@@ -293,8 +301,9 @@ REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw"   # a refund that failed
 # shipment status. Switched on after the cutover's Hold test order passed (runbook section 15, D26).
 MCF_AUTO_SUBMIT = "true"
 MCF_SYNC_CRON = "true"
-# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. Until ADMIN_ACCESS is on, admin
-# login is ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD (same secret names as staging) with ADMIN_TOKEN as fallback.
+# ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. With ADMIN_ACCESS on (above),
+# admin login is Cloudflare Access only; ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD and ADMIN_TOKEN would open /admin again
+# only if ADMIN_ACCESS were switched off.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
 # prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
 # Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
