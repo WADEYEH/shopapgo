@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/shop/api";
 import { MAX_QTY, addToCart, removeFromCart, setCartQty, useCartItems } from "@/lib/shop/cart";
-import { fetchStoreConfig, isEstimate, money, onSale } from "@/lib/shop/store-config";
+import { fetchStoreConfig, isEstimate, money, onSale, outOfStock } from "@/lib/shop/store-config";
 import { PRODUCTS } from "@/lib/shop/catalog";
 import { liveOverrides } from "@/lib/shop/live-content";
 import { productContent } from "@/lib/shop/product-content.mjs";
 import { quoteItems, track } from "@/lib/us/analytics";
 import { Estimate, Notice, PriceRows, ProductName, RoutineWord, productImage } from "@/components/shop/ui";
+
+// The notice's title when the quote refuses the cart for something in it (the Worker's error codes).
+const REFUSALS = { product_unavailable: "Not available right now", out_of_stock: "Out of stock", not_enough_stock: "Not enough in stock" };
 
 // /cart (M3 §2): the lines and quantities come from the browser's cart, every price from the Worker's quote
 // (POST /api/cart/quote) for exactly those lines. Shipping and tax are settled at checkout.
@@ -45,8 +48,13 @@ export default function CartPage() {
   const [error, setError] = useState("");
   const [estimate, setEstimate] = useState(false);
   const [config, setConfig] = useState(null);
-  // The quote refused the cart because an owner stopped selling something in it (commerce/worker/products.js).
-  const [unavailable, setUnavailable] = useState(false);
+  // Why the quote refused the cart, when it was something in it that cannot be bought now: an owner stopped selling it
+  // (product_unavailable, commerce/worker/products.js), it is out of stock at Amazon (out_of_stock), or the cart asks for
+  // more than Amazon can ship (not_enough_stock; commerce/worker/inventory.js).
+  const [refusal, setRefusal] = useState("");
+  const unavailable = refusal === "product_unavailable" || refusal === "out_of_stock";
+  // not_enough_stock: { sku, available }, so the shopper can lower that line with one press.
+  const [shortage, setShortage] = useState(null);
   const quoteSeq = useRef(0);
   const viewTracked = useRef(false);
 
@@ -80,7 +88,8 @@ export default function CartPage() {
       (next) => {
         if (seq !== quoteSeq.current) return;
         setError("");
-        setUnavailable(false);
+        setRefusal("");
+        setShortage(null);
         setQuote(next);
         if (!viewTracked.current) {
           viewTracked.current = true;
@@ -90,8 +99,10 @@ export default function CartPage() {
       (failure) => {
         if (seq !== quoteSeq.current) return;
         setError(failure.message);
-        setUnavailable(failure.code === "product_unavailable");
-        if (failure.code === "product_unavailable") fetchStoreConfig().then(setConfig, () => {});
+        const code = REFUSALS[failure.code] ? failure.code : "";
+        setRefusal(code);
+        setShortage(code === "not_enough_stock" && failure.detail?.sku ? failure.detail : null);
+        if (code) fetchStoreConfig().then(setConfig, () => {});
       },
     );
   }, [items]);
@@ -108,18 +119,29 @@ export default function CartPage() {
       </div>
 
       <div data-cart-message="" aria-live="polite">
-        {error && <Notice tone="warning" title={unavailable ? "Not available right now" : "Cart unavailable"}>{error}</Notice>}
+        {error && <Notice tone="warning" title={REFUSALS[refusal] ?? "Cart unavailable"}>{error}</Notice>}
         {unavailable && (
           <ul className="line-items" data-cart-unavailable="">
             {(items ?? []).filter((item) => !onSale(config, item.sku)).map((item) => (
               <li key={item.sku} className="line-item" data-line={item.sku}>
                 <div className="line-item__body">
                   <span className="line-item__title">{PRODUCTS[item.sku] ? productContent(item.sku, liveOverrides(config, item.sku)).name : item.sku}</span>
-                  <span className="line-item__meta">Not available right now</span>
+                  <span className="line-item__meta">{outOfStock(config, item.sku) ? "Out of stock" : "Not available right now"}</span>
                 </div>
                 <button type="button" className="line-item__remove" onClick={() => removeFromCart(item.sku)}>Remove</button>
               </li>
             ))}
+          </ul>
+        )}
+        {shortage && (
+          <ul className="line-items" data-cart-shortage="">
+            <li className="line-item" data-line={shortage.sku}>
+              <div className="line-item__body">
+                <span className="line-item__title">{PRODUCTS[shortage.sku] ? productContent(shortage.sku, liveOverrides(config, shortage.sku)).name : shortage.sku}</span>
+                <span className="line-item__meta">Only {shortage.available} can ship right now</span>
+              </div>
+              <button type="button" className="line-item__remove" onClick={() => setCartQty(shortage.sku, shortage.available)}>Change to {shortage.available}</button>
+            </li>
           </ul>
         )}
       </div>

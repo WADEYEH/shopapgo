@@ -27,7 +27,7 @@ function healthDetail(item) {
   const key = `health.${item.key}.${item.status}`;
   const values = {
     env: d.env, from: d.from ?? "", n: d.uncheckedToday ?? 0,
-    at: formatDate(d.lastSyncAt ?? d.lastRunAt ?? d.at),
+    at: formatDate(d.lastSyncAt ?? d.lastRunAt ?? d.lastReadAt ?? d.at),
     date: d.lastDate ?? "",
   };
   return t(key, values);
@@ -38,6 +38,15 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
   if (!isCurrent()) return;
   const { numbers, pipeline, attention, health, products, latest } = data;
   const privacy = data.privacy ?? [];
+  // Products out of stock on the site, and Amazon's stock not read for an hour (worker/inventory.js), to the product's page.
+  const stockItems = [
+    ...(data.stock?.stale ? [{ kind: "stale", href: "#/products", title: t("attention.stockStale"), detail: t("attention.stockStaleDetail", { date: formatDate(data.stock.stale.since) }), tone: "warn" }] : []),
+    ...(data.stock?.out ?? []).map((product) => ({
+      kind: "out", href: `#/products/${encodeURIComponent(product.id)}`, title: `${t("attention.stockOut")}: ${product.name}`,
+      detail: t("attention.stockOutDetail", { n: product.available, date: formatDate(product.outSince, { time: false }) }), tone: "bad",
+    })),
+  ];
+  const waitingTotal = attention.total + privacy.length + stockItems.length;
   setOrdersBadge(attention.items.filter((item) => ["review", "not_sent", "stockout", "disputes", "refunds", "unrefunded"].includes(item.kind)).length);
 
   const search = el("form", { class: "search", role: "search", "data-dashboard-search": true },
@@ -57,7 +66,16 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
   const attentionCard = card({ "aria-labelledby": "attn-h", "data-dashboard-attention": true },
     el("div", { class: "card__head" },
       el("h2", { class: "card__title", id: "attn-h" }, t("dashboard.attention")),
-      attention.total + privacy.length > 0 && el("span", { class: "card__meta card__meta--accent" }, t("dashboard.attentionCount", { n: attention.total + privacy.length }))),
+      waitingTotal > 0 && el("span", { class: "card__meta card__meta--accent" }, t("dashboard.attentionCount", { n: waitingTotal }))),
+    stockItems.length > 0 && el("ul", { class: "row-list", "data-dashboard-stock": true }, ...stockItems.map((item) =>
+      el("li", {},
+        el("a", { class: "row-link", href: item.href, "data-attention": `stock-${item.kind}` },
+          el("span", { class: `dot dot--${item.tone}` }),
+          el("span", { class: "row-link__text" },
+            el("span", { class: "row-link__title" }, item.title),
+            el("span", { class: "row-link__detail" }, item.detail)),
+          el("span", { class: "row-link__action" }, t("attention.stock.action")),
+          icon("next", 18))))),
     // Privacy requests to answer (M11-05): overdue or close first, to the customer's page.
     privacy.length > 0 && el("ul", { class: "row-list", "data-dashboard-privacy": true }, ...privacy.map((item) =>
       el("li", {},
@@ -78,7 +96,7 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
               el("span", { class: "row-link__detail" }, [item.orderId, item.name, attentionDetail(item)].filter(Boolean).join(" · "))),
             el("span", { class: "row-link__action" }, t(`attention.${item.kind}.action`)),
             icon("next", 18)))))
-      : !privacy.length && el("p", { class: "all-clear" }, icon("check", 18), t("dashboard.nothingWaiting")),
+      : !privacy.length && !stockItems.length && el("p", { class: "all-clear" }, icon("check", 18), t("dashboard.nothingWaiting")),
     attention.clear.length > 0 && el("div", { class: "chips chips--clear" },
       el("span", { class: "chips__label" }, t("dashboard.allClear")),
       ...attention.clear.map((kind) => el("span", { class: "chip" }, icon("check", 14), t(`attention.${kind}.clear`)))),
@@ -128,8 +146,8 @@ export async function renderDashboard(host, { adminApi, isCurrent, navigate, set
         routineTile(product.routine, "sm"),
         el("span", { class: "mini-product__text" },
           el("span", { class: "mini-product__name" }, product.name),
-          el("span", { class: "mini-product__meta" }, `${product.sku} · ${money(product.priceCents)} · ${t(product.stock?.connected ? "products.stockConnected" : "products.stockNotConnected")}`)),
-        product.onSale ? badge("ok", t("products.onSale")) : badge("bad", t("products.stopped")))))));
+          el("span", { class: "mini-product__meta" }, `${product.sku} · ${money(product.priceCents)} · ${product.stock?.connected ? `${t("products.available")} ${product.stock.available}` : t("products.stockNotConnected")}`)),
+        !product.onSale ? badge("bad", t("products.stopped")) : product.stock?.outOfStock ? badge("bad", t("products.outOfStock")) : badge("ok", t("products.onSale")))))));
   productsCard.querySelector(".card__title").id = "prod-h";
 
   host.replaceChildren(

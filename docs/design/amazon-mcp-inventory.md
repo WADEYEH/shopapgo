@@ -2,6 +2,8 @@
 
 给负责 `amazon-spapi-mcp`（Cloudflare Worker，网址 amazon-mcp.apgo.tw）的人。写于 2026-10-09（PR 3-6）。
 
+> **已完成（2026-10-18）**：转接程序的原始码已放进 repo 的 `amazon-spapi-mcp/`（D75），入口在 1.8.3 上线（#80）。跟下面的规格有一点不同：Amazon 没有纪录的 SKU 不会出现在回覆里（不是回 0）；网站把没出现的 SKU 当成 0 件。网站这边见 `commerce/worker/inventory.js` 和营运手册第 26 节。
+
 ## 为什么要加
 
 网站要在 Amazon 可售库存低于 5 件时显示缺货、不让结账（D25，M6-09），后台也要有库存页（M9-17）。网站本身不保管 Amazon 的授权，一律透过这个转接程序。

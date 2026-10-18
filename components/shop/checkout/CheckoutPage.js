@@ -49,6 +49,8 @@ import { AddressCheck, CardField, CheckOption, Field, OrderStatus, OrderSummary,
 
 const SHIPPING_FIELDS = ["firstName", "lastName", "street", "street2", "city", "state", "zip"];
 const ADDRESS_FIELDS = ["street", "street2", "city", "state", "zip"];
+// The quote refused something in the cart (the Worker's codes; commerce/worker/catalog.js): the message's title.
+const CART_REFUSALS = { product_unavailable: "Not available right now", out_of_stock: "Out of stock", not_enough_stock: "Not enough in stock" };
 const EMPTY_CONTACT = { email: "", phone: "", marketingOptIn: false };
 const EMPTY_SHIPPING = Object.fromEntries(SHIPPING_FIELDS.map((name) => [name, ""]));
 const CARD_FIELDS = [
@@ -289,7 +291,9 @@ export default function CheckoutPage() {
       showQuote(quote);
       return quote;
     } catch (error) {
-      showMessage("warning", "Pricing unavailable", error.message);
+      // Something in the cart cannot be bought now (stopped, out of stock, more than Amazon can ship): fixed in the cart.
+      if (CART_REFUSALS[error.code]) showMessage("warning", CART_REFUSALS[error.code], error.message, { href: "/cart", text: "Back to cart →" });
+      else showMessage("warning", "Pricing unavailable", error.message);
       return null;
     }
   }

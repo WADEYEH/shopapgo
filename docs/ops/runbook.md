@@ -639,3 +639,39 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 **回退**：`cd amazon-spapi-mcp && npx --yes wrangler@4.144.0 rollback <版本号>`。版本号在部署执行摘要；10/16 改版前是 `ce267b34-956c-4821-8cce-c14a3cc42fda`。
 
 **金钥**（都在 Cloudflare，repo 里没有）：`AMAZON_SP_API_CLIENT_ID`、`AMAZON_SP_API_CLIENT_SECRET`、`AMAZON_SP_API_REFRESH_TOKEN`、`MCP_API_KEY`、`OUTBOUND_INTERNAL_TOKEN`（网站也有一份，换的话两边要一起换，见 M8）、`SHORTLINKS_INTERNAL_TOKEN`。
+
+---
+
+## 26. Amazon 库存：缺货显示和停止结账（C4，D25、D76）
+
+**怎么运作**（`commerce/worker/inventory.js`）：
+- 网站每 15 分钟透过转接程序（第 25 节，`GET /internal/outbound/inventory`）读一次 D204、D215 在 Amazon 的可售数量，存在资料库 `product_stock`。只读，不会改 Amazon 任何东西。
+- **可售少于 5 件**：网站自动当成缺货。商品页和商品总览显示「Out of stock」，不能加入购物车；已经在购物车里的显示缺货、不能结账；Google 的商品资料改成缺货。团队收到一封「Out of stock on the website」通知。**已付款的订单不受影响**，照常出货。
+- **补到 5 件以上**：下一次读取后自动恢复销售，不用按任何东西。
+- **一次买的数量超过 Amazon 可售量**也会挡下，购物车有「Change to N」按钮一键改成可以出货的数量。
+- 你手动按的「停售」开关优先：手动停售的商品，补货后也不会自己恢复。
+- **读不到 Amazon 时**（D76）：照最后读到的数字继续卖。超过 1 小时还读不到，团队收到一封「Amazon stock has not been read for an hour」，后台首页和每日摘要会一直列出，直到恢复。从来没读到过的商品照常卖。
+
+**在哪里看**：
+- 后台「商品」：每个商品的可售、送往途中、上次读取时间，缺货的有红色「缺货」标签；「立即更新」按钮马上读一次（30 秒内只读一次；成员也可以按，因为它不改任何东西）。
+- 商品页（后台）：可售、送往 Amazon 途中、Amazon 保留中、门槛，Amazon 更新时间和网站读取时间，缺货从什么时候开始。
+- 后台首页「今天要处理的事」：缺货的商品、超过 1 小时没读到库存；「系统状态」多一行「Amazon 库存」。
+- 每日摘要：缺货的商品、读不到库存。
+
+**收到通知时怎么做**：
+- 「Out of stock on the website」：到 Seller Central 安排补货。网站会自己恢复，不用做别的。如果已经有付款的订单 Amazon 出不了货，照订单页的缺货步骤处理（延迟信、3 天后「取消并退款」）。
+- 「Amazon stock has not been read for an hour」：检查转接程序 `https://amazon-mcp.apgo.tw/health`（第 25 节）、Cloudflare 的 Worker 纪录；网站这段时间照最后的数字卖。恢复后不用做别的。
+
+**测试站**：订单送的是假的 Amazon（`MCF_FAKE`），但库存读的是**真的** Amazon（只读，安全），所以测试站的数字应该跟正式环境一样。要试缺货（演练第 9 项），在资料库设一个模拟数字（只有测试站会用它，正式环境会忽略）：
+
+```bash
+cd commerce
+npx wrangler d1 execute DB --env staging --remote --command "UPDATE product_stock SET simulated_available = 2 WHERE sku = 'd215'"
+```
+
+网站马上显示缺货；下一次读取（或后台按「立即更新」）后团队收到缺货通知。试完改回来：
+
+```bash
+cd commerce
+npx wrangler d1 execute DB --env staging --remote --command "UPDATE product_stock SET simulated_available = NULL"
+```

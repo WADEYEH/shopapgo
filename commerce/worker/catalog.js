@@ -22,12 +22,14 @@ export const DEFAULT_SHIPPING_METHOD = DEFAULT_PRICING.defaultShippingMethod;
 // Same object as DEFAULT_PRICING.tax.stateRatesBps (empty: tax is undecided).
 export const TAX_RATES_BPS = DEFAULT_PRICING.tax.stateRatesBps;
 
-// field: the checkout field the shopper should fix, when there is one (returned with the error).
+// field: the checkout field the shopper should fix, when there is one (returned with the error). detail: more for the
+// page, when it can help the shopper fix the cart (not_enough_stock: { sku, available }).
 export class QuoteError extends Error {
-  constructor(code, message, field) {
+  constructor(code, message, field, detail) {
     super(message);
     this.code = code;
     if (field) this.field = field;
+    if (detail) this.detail = detail;
   }
 }
 
@@ -46,12 +48,19 @@ export function normalizeItems(items, pricing = DEFAULT_PRICING) {
     if (!products[key]) throw new QuoteError("unknown_sku", "An item in your cart is no longer available.");
     // Stopped by an owner (worker/products.js): carts that already have it cannot check out.
     if (products[key].onSale === false) throw new QuoteError("product_unavailable", `${products[key].name} is not available right now. Remove it from your cart to check out.`);
+    // Fewer than 5 at Amazon (worker/inventory.js, D25): the same, as out of stock.
+    if (products[key].inStock === false) throw new QuoteError("out_of_stock", `${products[key].name} is out of stock. Remove it from your cart to check out.`);
     if (!Number.isInteger(qty) || qty < 1) throw new QuoteError("invalid_qty", "Quantity must be at least 1.");
     quantities.set(key, (quantities.get(key) ?? 0) + qty);
   }
-  for (const qty of quantities.values()) {
+  for (const [key, qty] of quantities) {
     if (qty > maxQtyPerLine) {
       throw new QuoteError("invalid_qty", `You can order up to ${maxQtyPerLine} of each item.`);
+    }
+    // More than Amazon can ship (`available`, only on products whose stock was read).
+    const available = products[key].available;
+    if (Number.isInteger(available) && qty > available) {
+      throw new QuoteError("not_enough_stock", `Only ${available} of ${products[key].name} can ship right now. Lower the quantity to check out.`, undefined, { sku: key, available });
     }
   }
   return [...quantities].map(([key, qty]) => ({ key, qty }));
@@ -118,7 +127,8 @@ export function publicConfig(env = {}, pricing = resolvePricing(env)) {
     })),
     products: Object.fromEntries(
       // content: what an owner changed in the product's words and photos (worker/product-content.js; {} = the site's own).
-      Object.entries(pricing.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents, onSale: p.onSale !== false, content: p.content ?? {} }]),
+      // inStock: false below 5 at Amazon (worker/inventory.js). How many Amazon has is not published.
+      Object.entries(pricing.products).map(([id, p]) => [id, { sku: p.sku, name: p.name, priceCents: p.priceCents, onSale: p.onSale !== false, inStock: p.inStock !== false, content: p.content ?? {} }]),
     ),
     tax: { status: taxStatus(pricing) },
     storeReady: storeReadiness(env).ready,

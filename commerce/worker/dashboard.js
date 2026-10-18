@@ -8,6 +8,7 @@
 import { mcfReadiness } from "./amazon-mcf.js";
 import { calendar, DAY } from "./business-time.js";
 import { cronHealth } from "./cron.js";
+import { currentStock } from "./inventory.js";
 import { customerEmailConfig } from "./customer-email.js";
 import { coolingOffMinutes } from "./order-core.js";
 import { listOrders } from "./orders.js";
@@ -110,7 +111,7 @@ async function attention(env, nowMs) {
 }
 
 // Whether each connection the store needs is set up and working. Names of settings only, never their values.
-async function health(env, nowMs) {
+async function health(env, nowMs, stock) {
   const db = env.DB;
   const cron = await cronHealth(env, { now: () => new Date(nowMs) });
   let mcf;
@@ -128,6 +129,8 @@ async function health(env, nowMs) {
     { key: "paypal", status: set("PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET") ? (set("PAYPAL_WEBHOOK_ID") ? "ok" : "warn") : "off", detail: { env: String(env.PAYPAL_ENV ?? "").toLowerCase() === "live" ? "live" : "sandbox", webhook: set("PAYPAL_WEBHOOK_ID") } },
     { key: "email", status: customerEmailConfig(env) ? "ok" : "off", detail: { from: customerEmailConfig(env)?.from ?? null } },
     { key: "amazon", status: mcf.mode === "ready" ? "ok" : mcf.mode === "off" ? "off" : "warn", detail: { mode: mcf.mode, lastSyncAt: lastSync.last_ok_at ?? null } },
+    // Amazon's stock (worker/inventory.js): read in the last hour, or since when it is not.
+    { key: "stock", status: !stock.configured ? "off" : stock.lastReadAt && !stock.stale ? "ok" : "warn", detail: { lastReadAt: stock.lastReadAt } },
     { key: "address", status: !set("GOOGLE_ADDRESS_VALIDATION_KEY") ? "off" : unchecked.n ? "warn" : "ok", detail: { uncheckedToday: unchecked.n ?? 0 } },
     { key: "schedule", status: cron.ok ? "ok" : "warn", detail: { lastRunAt: cron.cron.lastRunAt } },
     { key: "digest", status: digest.value ? "ok" : "off", detail: { lastDate: digest.value ?? null, at: digest.updated_at ?? null } },
@@ -135,11 +138,12 @@ async function health(env, nowMs) {
 }
 
 export async function dashboard(env, { nowMs = Date.now() } = {}) {
+  const stock = (await currentStock(env, { nowMs })).status;
   const [numbers, ship, waiting, connections, products, latest] = await Promise.all([
     salesNumbers(env, { nowMs }),
     pipeline(env, nowMs),
     attention(env, nowMs),
-    health(env, nowMs),
+    health(env, nowMs, stock),
     listProducts(env, { nowMs }),
     listOrders(env.DB, { limit: 5, coolingMinutes: coolingOffMinutes(env), nowMs }),
   ]);
@@ -149,9 +153,14 @@ export async function dashboard(env, { nowMs = Date.now() } = {}) {
     pipeline: ship,
     attention: waiting,
     health: connections,
-    products: products.map(({ id, sku, name, routine, size, priceCents, onSale, stock }) => ({ id, sku, name, routine, size, priceCents, onSale, stock })),
+    products: products.map(({ id, sku, name, routine, size, priceCents, onSale, stock: s }) => ({ id, sku, name, routine, size, priceCents, onSale, stock: s })),
     latest: latest.orders,
     // Privacy requests not answered yet (M11-05), closest deadline first.
     privacy: await privacyReminders(env.DB, { nowMs }),
+    // For "what needs someone" (worker/inventory.js): products out of stock on the site, and stock not read for an hour.
+    stock: {
+      out: products.filter((product) => product.onSale && product.stock.outOfStock).map(({ id, sku, name, stock: s }) => ({ id, sku, name, available: s.available, outSince: s.outSince })),
+      stale: stock.stale ? { since: stock.lastReadAt ?? stock.failingSince } : null,
+    },
   };
 }

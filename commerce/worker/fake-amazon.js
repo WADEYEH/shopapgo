@@ -13,6 +13,8 @@
 //   reject    any recipient name containing "REJECT": the order is refused when sent (a validation error, as Amazon
 //             answers a bad address), so the "sending to Amazon failed" team alert can be tried on staging (C10)
 //   cancel    allowed while RECEIVED or PROCESSING, as at Amazon
+//   stock     100 sellable units of every SKU, only when staging has no real connection: with one, the stock read goes to
+//             the real Amazon (it changes nothing there; worker/amazon-mcf.js getInventory)
 //
 // MCF_FAKE anywhere else (production, local dev without SITE_ENV=staging) is "blocked": nothing is sent at all, neither
 // to the fake nor to Amazon, and the back office says why. The fake never calls fetch().
@@ -24,6 +26,7 @@ const LIST_LIMIT = 200;
 const STOCKOUT = /STOCKOUT/i;
 const MISMATCH = /MISMATCH/i;
 const REJECT = /REJECT/i;
+const FAKE_STOCK = 100;
 
 // "on" | "blocked" | null (off).
 export function fakeMode(env = {}) {
@@ -195,6 +198,11 @@ export async function fakeOutbound(env, method, path, { body, query } = {}, { no
       await db.prepare("UPDATE staging_fake_mcf_orders SET status = 'CANCELLED', updated_at = ? WHERE seller_order_id = ?").bind(iso(nowMs), row.seller_order_id).run();
       return reply(200, { payload: {} });
     }
+  }
+
+  if (method === "GET" && path === "/internal/outbound/inventory") {
+    const skus = String(query?.skus ?? "").split(",").map((sku) => sku.trim()).filter(Boolean);
+    return reply(200, { marketplaceId: "ATVPDKIKX0DER", items: skus.map((sellerSku) => ({ sellerSku, fulfillable: FAKE_STOCK, inbound: 0, reserved: 0, updatedAt: iso(nowMs) })) });
   }
 
   const trackingMatch = path.match(/^\/internal\/outbound\/tracking\/(\d+)$/);

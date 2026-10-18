@@ -591,7 +591,7 @@ async function dispatch(request, env, ctx) {
     return await route(request, env, { env, ctx, origin, adminOrigin });
   } catch (error) {
     if (error instanceof QuoteError) {
-      return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } }, 400);
+      return json({ error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}), ...(error.detail ? { detail: error.detail } : {}) } }, 400);
     }
     if (error instanceof PricingConfigError) {
       // A broken PRICING_JSON must never fall back to other numbers: refuse and say why in the log.

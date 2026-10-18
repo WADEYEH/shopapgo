@@ -393,7 +393,7 @@ test("cron: no ping without an https HEALTHCHECK_PING_URL; a failing ping or mis
   } finally {
     console.error = original;
   }
-  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "config", "digest", "email_retry", "fulfillment", "ga4", "mcf_submit", "mcf_sync", "meta_retry", "payments", "tracking"]);
+  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "config", "digest", "email_retry", "fulfillment", "ga4", "mcf_submit", "mcf_sync", "meta_retry", "payments", "stock", "tracking"]);
 });
 
 test("health: 503 until the cron has run, 200 after, 503 again once the last run is older than 30 minutes", { skip }, async () => {

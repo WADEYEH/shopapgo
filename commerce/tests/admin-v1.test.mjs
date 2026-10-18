@@ -147,7 +147,7 @@ test("products list their price, switch, stock placeholder and this month's sale
   assert.equal(d204.priceCents, 5999);
   assert.equal(d204.name, "Atomic Colored Glaze");
   assert.equal(d204.page, "/products/atomic-colored-glaze");
-  assert.deepEqual(d204.stock, { connected: false, available: null, inbound: null, reserved: null, threshold: 5 });
+  assert.deepEqual(d204.stock, { connected: false, available: null, inbound: null, reserved: null, threshold: 5, outOfStock: false, outSince: null, amazonUpdatedAt: null, readAt: null, simulated: false });
   assert.equal(d204.sales.soldMonth, 1);
   assert.equal(d215.sales.soldMonth, 3);
   assert.equal(d215.sales.revenueMonthCents, 2999 * 3);

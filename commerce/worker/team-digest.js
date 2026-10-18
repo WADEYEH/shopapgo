@@ -13,7 +13,11 @@
 //   addresses       paid in the last day with the address unchecked because the check service was down
 //   returned        packages going back to the sender in the last 14 days (worker/package-tracking.js, F9)
 //   privacy         privacy requests not answered yet, with the date to answer by (M11-05; worker/customer-privacy.js)
+//   stock           products out of stock on the site (fewer than 5 at Amazon), and Amazon stock not read for an hour
+//                   (worker/inventory.js)
 import { alertTeam } from "./team-alerts.js";
+import { STOCK_THRESHOLD, currentStock, stoppedProducts } from "./inventory.js";
+import { resolvePricing } from "./pricing.js";
 import { privacyReminders } from "./customer-privacy.js";
 import { returnedPackages } from "./package-tracking.js";
 import { addWorkingDays } from "./fulfillment-checks.js";
@@ -100,6 +104,25 @@ export async function digestSections(env, { nowMs = Date.now() } = {}) {
       count: privacy.length,
       detail: privacy.slice(0, LIST).map((item) => `${item.kind === "delete" ? "delete" : "see their data"}, ${item.handler}, ${item.daysLeft < 0 ? `${-item.daysLeft} days late` : `answer by ${day(Date.parse(item.dueAt))}`}`).join("; ")
         + (privacy.length > LIST ? ` and ${privacy.length - LIST} more` : ""),
+    });
+  }
+  const stock = await currentStock(env, { nowMs });
+  const names = resolvePricing(env).products;
+  // A product an owner stopped is not for sale anyway.
+  const stopped = await stoppedProducts(env.DB);
+  const out = Object.entries(stock.products).filter(([id, s]) => s.outOfStock && !stopped.has(id));
+  if (out.length) {
+    sections.push({
+      title: `Out of stock on the website (fewer than ${STOCK_THRESHOLD} at Amazon): it sells again by itself once Amazon has more`,
+      count: out.length,
+      detail: out.map(([id, s]) => `${names[id]?.name ?? id} (${s.available} at Amazon${s.outSince ? `, since ${day(Date.parse(s.outSince))}` : ""})`).join("; "),
+    });
+  }
+  if (stock.status.stale) {
+    sections.push({
+      title: "Amazon stock not read for over an hour: the website sells on the last numbers it read",
+      count: 1,
+      detail: `last read ${stock.status.lastReadAt ? day(Date.parse(stock.status.lastReadAt)) : "never"}; see docs/ops/runbook.md section 26`,
     });
   }
   return sections;
