@@ -20,6 +20,7 @@
 //   GET  /admin/api/dashboard                the first page: numbers, what is waiting, shipping, connections (worker/dashboard.js)
 //   POST /admin/api/orders/:id/notes         an internal note { body } (worker/order-notes.js, I10)
 //   GET  /admin/api/products[/:id]           products with sales, stock and the on-sale switch (worker/products.js)
+//   POST /admin/api/products/stock/refresh   read Amazon's stock now (worker/inventory.js; read-only, anyone signed in)
 //   POST /admin/api/products/:id/sale        owners only: stop or resume selling { onSale, reason } (A4, M9-07)
 //   POST /admin/api/products/:id/content     owners only: publish the price, words and photos { content, expectedVersion } (D52, D63)
 //   POST /admin/api/products/:id/restore     owners only: put a version back (0 = the original) { version, expectedVersion }
@@ -66,6 +67,7 @@ import { listContactMessages } from "./contact.js";
 import { dashboard, salesNumbers } from "./dashboard.js";
 import { NoteError, addNote, listNotes } from "./order-notes.js";
 import { ProductError, getProduct, listProducts, setOnSale } from "./products.js";
+import { currentStock, refreshStockNow } from "./inventory.js";
 import { ContentError, publishContent, restoreContent, uploadProductImage } from "./product-content.js";
 import { forgetLiveContent } from "./site-content.js";
 import { refundPanel, requestAdminRefund } from "./admin-refunds.js";
@@ -465,6 +467,14 @@ export async function handleAdminApi(request, env, pathname) {
       throw error;
     }
   }
+  // Read Amazon's stock now (the Refresh button on Products). It changes nothing at Amazon, so members may press it too.
+  if (pathname === "/admin/api/products/stock/refresh") {
+    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
+    const blocked = csrfProblem(request);
+    if (blocked) return fail(403, "forbidden", blocked, NO_INDEX);
+    const result = await refreshStockNow(env);
+    return json({ result, products: await listProducts(env), stock: (await currentStock(env)).status }, 200, NO_INDEX);
+  }
   const productSale = pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)\/sale$/);
   if (productSale) {
     if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.", { ...NO_INDEX, Allow: "POST" });
@@ -557,7 +567,7 @@ export async function handleAdminApi(request, env, pathname) {
   }
 
   if (pathname === "/admin/api/dashboard") return json(await dashboard(env), 200, NO_INDEX);
-  if (pathname === "/admin/api/products") return json({ products: await listProducts(env) }, 200, NO_INDEX);
+  if (pathname === "/admin/api/products") return json({ products: await listProducts(env), stock: (await currentStock(env)).status }, 200, NO_INDEX);
   const product = pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)$/);
   if (product) {
     const found = await getProduct(env, product[1]);

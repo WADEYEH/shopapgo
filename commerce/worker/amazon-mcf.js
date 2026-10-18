@@ -16,11 +16,17 @@
 //   GET  /internal/outbound/orders?query_start_date=&next_token=   list; pages can be empty but carry a nextToken
 //   POST /internal/outbound/orders/:id/cancel                no body
 //   GET  /internal/outbound/tracking/:packageNumber          numeric, from shipments[].fulfillmentShipmentPackage[].packageNumber
+//   GET  /internal/outbound/inventory?skus=A,B               read-only (gateway 1.8.3+): sellable, inbound and reserved
+//                                                            units per seller SKU; a SKU Amazon has no stock record for is
+//                                                            left out of the reply
 //
-// Nothing here runs unless worker/mcf.js calls it, and that only happens when MCF_AUTO_SUBMIT=true.
+// Nothing here runs unless worker/mcf.js calls it, and that only happens when MCF_AUTO_SUBMIT=true. The stock read
+// (worker/inventory.js) runs whenever the connection and the SKU map are set.
 //
 // Staging: MCF_FAKE=true (with SITE_ENV=staging) answers every call from worker/fake-amazon.js instead, so a staging order
-// never ships a real parcel; the connection settings are then not needed. MCF_FAKE anywhere else sends nothing at all.
+// never ships a real parcel; the connection settings are then not needed. The stock read is the exception: it changes
+// nothing at Amazon, so staging reads the real stock whenever the connection is set. MCF_FAKE anywhere else sends
+// nothing at all.
 //
 // Env (values only via `wrangler secret put` / .dev.vars; never commit them):
 //   AMAZON_OUTBOUND_BASE_URL, OUTBOUND_INTERNAL_TOKEN   connection to the MCP Worker
@@ -217,10 +223,12 @@ function httpError(status, body, label) {
 // Every outbound call here is safe to repeat: previews / gets / lists only read, cancel is idempotent, and create always
 // carries the same caller-chosen seller_fulfillment_order_id (the endpoint answers alreadyExists instead of creating a
 // second order), so network errors / timeouts / 429 / 5xx are retried (3 tries, exponential backoff) with the SAME body.
-async function outbound(env, method, path, { body, query, label } = {}) {
+// readOnly: a call that changes nothing at Amazon goes to the real gateway even with MCF_FAKE on, when it is set up.
+async function outbound(env, method, path, { body, query, label, readOnly = false } = {}) {
   const fake = fakeMode(env);
   if (fake === "blocked") throw new McfError("config", FAKE_BLOCKED_MESSAGE, { code: "fake_outside_staging" });
-  if (fake === "on") {
+  const realRead = readOnly && Boolean(baseUrl(env)) && Boolean(String(env.OUTBOUND_INTERNAL_TOKEN ?? "").trim());
+  if (fake === "on" && !realRead) {
     const reply = await fakeOutbound(env, method, path, { body, query });
     if (reply.status >= 200 && reply.status < 300) return reply;
     throw httpError(reply.status, reply.body, label);
@@ -496,4 +504,22 @@ export async function getPackageTracking(env, packageNumber) {
 export async function cancelFulfillmentOrder(env, orderId) {
   await outbound(env, "POST", `/internal/outbound/orders/${encodeURIComponent(orderId)}/cancel`, { label: "cancel order" });
   return { requested: true };
+}
+
+// Read-only: what Amazon can ship of each seller SKU (worker/inventory.js). [{ sellerSku, fulfillable, inbound, reserved,
+// updatedAt }]; a SKU Amazon has no stock record for is not in the list.
+export async function getInventory(env, sellerSkus) {
+  const skus = [...new Set(sellerSkus.map((sku) => String(sku).trim()).filter(Boolean))];
+  if (!skus.length) return [];
+  const { body } = await outbound(env, "GET", "/internal/outbound/inventory", { query: { skus: skus.join(",") }, label: "stock", readOnly: true });
+  const units = (value) => (Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : 0);
+  return asArray(body?.items)
+    .filter((item) => typeof item?.sellerSku === "string" && item.sellerSku)
+    .map((item) => ({
+      sellerSku: clip(item.sellerSku, 40),
+      fulfillable: units(item.fulfillable),
+      inbound: units(item.inbound),
+      reserved: units(item.reserved),
+      updatedAt: typeof item.updatedAt === "string" && Number.isFinite(Date.parse(item.updatedAt)) ? item.updatedAt : null,
+    }));
 }

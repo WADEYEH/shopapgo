@@ -48,6 +48,7 @@ const ADDED = [
   "product_content",
   "product_images",
   "product_settings",
+  "product_stock",
   "product_versions",
   "staging_fake_mcf_orders",
   "team_alerts",

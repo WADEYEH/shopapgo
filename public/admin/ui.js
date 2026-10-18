@@ -40,6 +40,7 @@ const ICONS = {
   external: [["path", { d: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6" }]],
   info: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "M12 11v6M12 7.5v.5" }]],
   download: [["path", { d: "M12 4v11M7 10l5 5 5-5M5 20h14" }]],
+  refresh: [["path", { d: "M20 12a8 8 0 1 1-2.4-5.7" }], ["path", { d: "M20 4v5h-5" }]],
 };
 const SVG = "http://www.w3.org/2000/svg";
 

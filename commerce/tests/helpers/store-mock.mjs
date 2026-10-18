@@ -4,6 +4,8 @@ import { QuoteError, publicConfig, quote } from "../../worker/catalog.js";
 import { validateCheckout } from "../../worker/checkout.js";
 import { ADDRESS_MESSAGES } from "../../worker/address-check.js";
 import { resolvePricing } from "../../worker/pricing.js";
+import { STOCK_THRESHOLD } from "../../worker/inventory.js";
+import { withStock } from "../../worker/products.js";
 import { applyContent } from "../../../lib/shop/product-content.mjs";
 import { checkShipping } from "../../../lib/shop/address-rules.mjs";
 import { CONTACT_MESSAGES, checkContactMessage } from "../../../lib/shop/contact-rules.mjs";
@@ -140,12 +142,14 @@ window.paypal = {
 };
 `;
 
-// stopped: product ids an owner stopped selling (worker/products.js livePricing).
-export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [], content = {} } = {}) {
+// stopped: product ids an owner stopped selling (worker/products.js livePricing). stock: what Amazon can ship per product
+// id ({ d215: 3 }; worker/inventory.js), below 5 out of stock; products not listed were never read and sell.
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [], content = {}, stock = {} } = {}) {
   // content: what owners changed per product ({ [sku]: { name, priceCents, images, … } }; worker/product-content.js).
   const livePricing = () => {
     const pricing = Object.keys(content).length ? applyContent(resolvePricing(env), content) : resolvePricing(env);
-    return { ...pricing, products: Object.fromEntries(Object.entries(pricing.products).map(([id, product]) => [id, stopped.includes(id) ? { ...product, onSale: false } : product])) };
+    const switched = { ...pricing, products: Object.fromEntries(Object.entries(pricing.products).map(([id, product]) => [id, stopped.includes(id) ? { ...product, onSale: false } : product])) };
+    return withStock(switched, Object.fromEntries(Object.entries(stock).map(([id, available]) => [id, { connected: true, available, outOfStock: available < STOCK_THRESHOLD }])));
   };
   const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [], contact: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
@@ -233,7 +237,7 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {
-      if (error instanceof QuoteError) return reply(400, { error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}) } });
+      if (error instanceof QuoteError) return reply(400, { error: { code: error.code, message: error.message, ...(error.field ? { field: error.field } : {}), ...(error.detail ? { detail: error.detail } : {}) } });
       throw error;
     }
   });

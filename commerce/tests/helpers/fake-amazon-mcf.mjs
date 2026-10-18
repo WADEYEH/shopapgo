@@ -18,8 +18,12 @@
 //   failCancel    number of cancel calls answered 400 (Amazon already picking it)
 //   busyCancel    number of cancel calls answered 400 "System is busy" (a cancel right after the create, 10/16)
 //   ignoreHold    store every order as "Ship" even when "Hold" was asked for (a connection that drops the flag)
+//   stock         { sellerSku: { fulfillable, inbound?, reserved? } } for the stock read (gateway 1.8.3); a seller SKU
+//                 not listed is left out of the reply, as the gateway does for one Amazon has no record of. Without
+//                 this option every SKU has 100.
 //
 //   amazon.editCopy(orderId, (view) => view)   change what getOrder returns (Amazon's copy) for the read-back check
+//   amazon.setStock(sellerSku, fulfillable)    change the stock; amazon.stockDown(true) answers every stock read 500
 export const FAKE_OUTBOUND_TOKEN = "test-outbound-token-0123456789";
 export const FAKE_BASE_URL = "https://amazon-mcp.test.example";
 export const FAKE_AMAZON_ENV = {
@@ -46,6 +50,10 @@ export function createFakeAmazon(options = {}) {
   let failCancel = options.failCancel ?? 0;
   let busyCancel = options.busyCancel ?? 0;
   const copyEdits = new Map();
+  const stock = new Map(Object.entries(options.stock ?? {}));
+  const plenty = options.stock ? null : { fulfillable: 100 };
+  const level = (sku) => stock.get(sku) ?? plenty;
+  let stockDown = false;
 
   const failure = (e) => reply(e.status, { error: e.error ?? "error", ...(e.spapiStatus ? { spapiStatus: e.spapiStatus } : {}), ...(e.details ? { details: e.details } : {}), ...(e.issues ? { issues: e.issues } : {}) });
 
@@ -143,6 +151,19 @@ export function createFakeAmazon(options = {}) {
       }
     }
 
+    if (method === "GET" && path === "/internal/outbound/inventory") {
+      record("inventory");
+      if (stockDown) return reply(500, { error: "Amazon unavailable", spapiStatus: 500 });
+      const skus = (parsed.searchParams.get("skus") || "").split(",").filter(Boolean);
+      if (!skus.length || skus.length > 50) return reply(400, { error: "skus: 1 to 50 seller SKUs, comma separated" });
+      return reply(200, {
+        marketplaceId: "ATVPDKIKX0DER",
+        items: skus.filter((sku) => level(sku)).map((sku) => ({
+          sellerSku: sku, fulfillable: level(sku).fulfillable, inbound: level(sku).inbound ?? 0, reserved: level(sku).reserved ?? 0, updatedAt: "2026-10-18T08:00:00Z",
+        })),
+      });
+    }
+
     const trackingMatch = path.match(/^\/internal\/outbound\/tracking\/(\d+)$/);
     if (method === "GET" && trackingMatch) {
       record("tracking");
@@ -162,6 +183,8 @@ export function createFakeAmazon(options = {}) {
     fetch: handle,
     count: (op) => calls.filter((c) => c.op === op).length,
     editCopy: (orderId, edit) => copyEdits.set(orderId, edit),
+    setStock: (sellerSku, fulfillable, more = {}) => stock.set(sellerSku, { fulfillable, ...more }),
+    stockDown: (down) => { stockDown = down; },
     setStatus(orderId, status) {
       const stored = orders.get(orderId);
       stored.status = status;

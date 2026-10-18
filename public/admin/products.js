@@ -2,6 +2,10 @@
 // stock at Amazon, details, changes and the owners' stop-selling switch (A4, M2-04, M9-07). API: GET
 // /admin/api/products[/:id], POST /admin/api/products/:id/sale (worker/products.js).
 //
+// Stock (D25, D76, M9-17; worker/inventory.js): what Amazon can ship, read every 15 minutes, with when it was read and
+// the Refresh button (POST /admin/api/products/stock/refresh; reads now, anyone signed in). Below 5 the product is out
+// of stock on the site by itself.
+//
 // Owners change the price, words and photos here (D52; D61–D64, PR 3-12; worker/product-content.js): edit, then a
 // review of before and after (the Worker says what would change), then publish: live at once. Every publish is a
 // version; any version, or the site's original, can be put back. Photos are made smaller in this browser before they
@@ -11,6 +15,34 @@ import { badge, card, cardHead, el, field, icon, money, notice, routineTile } fr
 
 const stockText = (stock) => (stock?.connected ? String(stock.available ?? "—") : t("products.stockNotConnected"));
 const saleBadge = (product) => (product.onSale ? badge("ok", t("products.onSale"), { "data-on-sale": "true" }) : badge("bad", t("products.stopped"), { "data-on-sale": "false" }));
+// Out of stock on the site (below 5 at Amazon). A stopped product already says Stopped.
+const stockBadge = (product) => product.onSale && product.stock?.outOfStock && badge("bad", t("products.outOfStock"), { "data-out-of-stock": "true" });
+
+// When Amazon's stock was last read, or why it is not.
+function stockStatusLine(status) {
+  if (!status?.configured) return el("p", { class: "hint", "data-stock-status": "off" }, t("products.stockOff"));
+  if (status.stale) return el("p", { class: "hint", "data-stock-status": "stale" }, el("span", { class: "dot dot--warn" }), " ", t("products.stockStale", { at: formatDate(status.lastReadAt ?? status.failingSince) }));
+  if (!status.lastReadAt) return el("p", { class: "hint", "data-stock-status": "never" }, t("products.stockNeverRead"));
+  return el("p", { class: "hint", "data-stock-status": "ok" }, t("products.stockRead", { at: formatDate(status.lastReadAt) }));
+}
+
+// Reads Amazon's stock now; `done(message)` draws the page again with what happened.
+function refreshStockButton(adminApi, done) {
+  const button = el("button", { class: "btn btn--ghost btn--sm", type: "button", "data-refresh-stock": true }, icon("refresh", 16), t("products.refreshStock"));
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const { result } = await adminApi("/admin/api/products/stock/refresh", { method: "POST", body: {} });
+      if (result?.ok) done(notice("success", t("products.refreshed"), ""));
+      else if (result?.reason === "just_read") done(notice("info", t("products.refreshJust"), ""));
+      else done(notice("warning", t("products.refreshFailed"), result?.error ?? ""));
+    } catch (error) {
+      button.disabled = false;
+      done(notice("warning", t("products.refreshFailed"), error.message));
+    }
+  });
+  return button;
+}
 
 // The fields an owner can change, in the order the editor shows them; seoTitle and seoDescription may stay empty (the
 // site's own then).
@@ -20,27 +52,39 @@ const AUTOMATIC = new Set(["seoTitle", "seoDescription"]);
 const fieldLabel = (key) => t(`products.f.${key}`);
 const MAX_SIDE = 1600;
 
-export async function renderProducts(host, { adminApi, isCurrent }) {
-  const { products } = await adminApi("/admin/api/products");
+export async function renderProducts(host, context, message = null) {
+  const { adminApi, isCurrent } = context;
+  const { products, stock } = await adminApi("/admin/api/products");
   if (!isCurrent()) return;
   const stopped = products.filter((product) => !product.onSale).length;
+  const soldOut = products.filter((product) => product.onSale && product.stock?.outOfStock).length;
   host.replaceChildren(
     el("header", { class: "page-head" },
       el("p", { class: "eyebrow" }, t("products.eyebrow", { n: products.length })),
       el("h1", { class: "page-title" }, t("nav.products"))),
+    el("div", { "aria-live": "polite", "data-stock-outcome": true }, message),
     el("section", { class: "card card--flush" },
       el("div", { class: "card__pad" }, el("div", { class: "view-chips" },
         el("span", { class: "view-chip", "aria-pressed": "true" }, t("products.all"), el("span", { class: "view-chip__n" }, String(products.length))),
         el("span", { class: "view-chip" }, t("products.onSale"), el("span", { class: "view-chip__n" }, String(products.length - stopped))),
-        el("span", { class: "view-chip" }, t("products.stopped"), el("span", { class: "view-chip__n" }, String(stopped))))),
+        el("span", { class: "view-chip" }, t("products.stopped"), el("span", { class: "view-chip__n" }, String(stopped))),
+        el("span", { class: "view-chip", "data-chip-out-of-stock": true }, t("products.outOfStock"), el("span", { class: "view-chip__n" }, String(soldOut)))),
+        el("div", { class: "button-row", "data-stock-bar": true },
+          stockStatusLine(stock),
+          stock?.configured && refreshStockButton(adminApi, (next) => renderProducts(host, context, next)))),
       el("div", { class: "table-wrap" }, el("table", { class: "tbl tbl--products" },
         el("thead", {}, el("tr", {}, ...["product", "status", "stock", "price", "sold", "refunds"].map((key) => el("th", { scope: "col", class: ["price", "sold", "refunds"].includes(key) ? "num" : null }, t(`products.col.${key}`))))),
         el("tbody", {}, ...products.map((product) => el("tr", { "data-product": product.id },
           el("td", {}, el("a", { class: "product-cell", href: `#/products/${product.id}` },
             product.image ? el("img", { class: "product-thumb", src: product.image, alt: "", width: "56", height: "56" }) : routineTile(product.routine),
             el("span", {}, el("span", { class: "cell-main" }, product.name), el("span", { class: "cell-sub" }, `${product.sku} · ${product.size}`)))),
-          el("td", {}, saleBadge(product), product.edited && badge("neutral", t("products.edited"), { "data-edited": true })),
-          el("td", {}, el("span", { class: "cell-main muted" }, stockText(product.stock)), el("span", { class: "cell-sub" }, t("products.thresholdShort", { n: product.stock.threshold }))),
+          el("td", {}, saleBadge(product), stockBadge(product), product.edited && badge("neutral", t("products.edited"), { "data-edited": true })),
+          el("td", { "data-stock": product.stock.connected ? String(product.stock.available) : "" },
+            el("span", { class: `cell-main${product.stock.connected ? "" : " muted"}` }, stockText(product.stock)),
+            el("span", { class: "cell-sub" }, [
+              product.stock.connected && t("products.inboundShort", { n: product.stock.inbound }),
+              t("products.thresholdShort", { n: product.stock.threshold }),
+            ].filter(Boolean).join(" · "))),
           el("td", { class: "num" }, money(product.priceCents)),
           el("td", { class: "num" }, String(product.sales.soldMonth)),
           el("td", { class: "num muted" }, String(product.sales.refunds30)))))))),
@@ -111,7 +155,7 @@ export async function renderProduct(host, { route, adminApi, isCurrent, me }) {
         el("div", { class: "product-head" },
           current.image ? el("img", { class: "product-thumb product-thumb--lg", src: current.image, alt: "", width: "72", height: "72" }) : routineTile(current.routine, "lg"),
           el("div", {},
-            el("div", { class: "page-head__id" }, el("h1", { class: "page-title page-title--product" }, current.name), saleBadge(current)),
+            el("div", { class: "page-head__id" }, el("h1", { class: "page-title page-title--product" }, current.name), saleBadge(current), stockBadge(current)),
             el("p", { class: "page-sub" }, `${current.sku} · ${current.size} · ${current.routine === "wet" ? "WET" : "DRY"} · ${money(current.priceCents)}`))),
         current.page && el("a", { class: "btn btn--ghost", href: current.page, target: "_blank", rel: "noopener" }, t("products.viewOnSite"), icon("external", 16))),
       outcome,
@@ -126,14 +170,7 @@ export async function renderProduct(host, { route, adminApi, isCurrent, me }) {
               stat(t("products.refunds30"), String(current.sales.refunds30)),
               stat(t("products.orderShare"), `${current.sales.monthOrderShare}%`)),
             chart),
-          card({ "data-product-stock": true },
-            cardHead(t("products.stock"), badge(current.stock.connected ? "ok" : "muted", t(current.stock.connected ? "products.stockConnected" : "products.stockNotConnected"))),
-            el("div", { class: "stat-grid" },
-              stat(t("products.available"), current.stock.connected ? String(current.stock.available) : "—"),
-              stat(t("products.inbound"), current.stock.connected ? String(current.stock.inbound) : "—"),
-              stat(t("products.reserved"), current.stock.connected ? String(current.stock.reserved) : "—"),
-              stat(t("products.threshold"), String(current.stock.threshold))),
-            el("p", { class: "callout" }, t("products.stockNote", { n: current.stock.threshold }))),
+          stockCard(current),
           editing ? null : detailsCard(current)),
         el("aside", { class: "split__aside" },
           saleCard(current),
@@ -151,6 +188,33 @@ export async function renderProduct(host, { route, adminApi, isCurrent, me }) {
             el("div", { class: "channel" }, el("span", {}, el("span", { class: "cell-main" }, "Amazon.com"), el("span", { class: "cell-sub" }, t("products.channelAmazon"))), badge("muted", t("products.separate")))))),
     );
     outcome.replaceChildren(...[result].filter(Boolean));
+  }
+
+  // Amazon's stock for this product (M9-17): the numbers, when Amazon updated them and when the store read them, out of
+  // stock since when, and Refresh.
+  function stockCard(current) {
+    const s = current.stock;
+    const status = current.stockStatus;
+    const stat = (label, value) => el("div", { class: "stat" }, el("span", { class: "stat__label" }, label), el("span", { class: "stat__value" }, value));
+    const tone = !s.connected ? "muted" : status?.stale ? "warn" : s.outOfStock ? "bad" : "ok";
+    const word = !s.connected ? "products.stockNotConnected" : status?.stale ? "products.stockStaleBadge" : s.outOfStock ? "products.outOfStock" : "products.stockConnected";
+    return card({ "data-product-stock": s.connected ? (s.outOfStock ? "out" : "in") : "none" },
+      cardHead(t("products.stock"), badge(tone, t(word))),
+      s.outOfStock && current.onSale && notice("warning", t("products.outSince", { at: formatDate(s.outSince) }), t("products.outText", { n: s.threshold })),
+      el("div", { class: "stat-grid" },
+        stat(t("products.available"), s.connected ? String(s.available) : "—"),
+        stat(t("products.inbound"), s.connected ? String(s.inbound) : "—"),
+        stat(t("products.reserved"), s.connected ? String(s.reserved) : "—"),
+        stat(t("products.threshold"), String(s.threshold))),
+      s.simulated && el("p", { class: "hint", "data-stock-simulated": true }, t("products.simulated", { n: s.amazonAvailable ?? "—" })),
+      s.connected && el("p", { class: "hint", "data-stock-times": true }, t("products.stockTimes", { amazon: formatDate(s.amazonUpdatedAt), read: formatDate(s.readAt) })),
+      el("div", { class: "button-row" },
+        stockStatusLine(status),
+        status?.configured && refreshStockButton(adminApi, async (message) => {
+          const next = await adminApi(`/admin/api/products/${encodeURIComponent(current.id)}`);
+          if (isCurrent()) draw(next, message);
+        })),
+      el("p", { class: "callout" }, t("products.stockNote", { n: s.threshold })));
   }
 
   function detailsCard(current) {

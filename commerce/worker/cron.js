@@ -18,6 +18,7 @@ import { scheduledMetaRetry } from "./meta-capi.js";
 import { scheduledPackageTracking } from "./package-tracking.js";
 import { scheduledGa4Events } from "./ga4.js";
 import { scheduledConfigCheck } from "./config-check.js";
+import { scheduledStock } from "./inventory.js";
 
 export const CRON_JOBS = {
   checkouts: scheduledCheckouts,
@@ -31,6 +32,8 @@ export const CRON_JOBS = {
   tracking: scheduledPackageTracking,
   ga4: scheduledGa4Events,
   config: scheduledConfigCheck,
+  // Amazon's stock every 15 minutes (worker/inventory.js).
+  stock: scheduledStock,
 };
 export const TICK = "_tick";
 const DEFAULT_STALE_MINUTES = 30;

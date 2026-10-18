@@ -6,7 +6,7 @@ import { MAX_QTY, addToCart } from "@/lib/shop/cart";
 import { contentMark, imageMark, useLiveCatalog } from "@/lib/shop/live-content";
 import { jsonLdText, productJsonLd } from "@/lib/shop/product-content.mjs";
 import { averageRating, reviewsToShow } from "@/lib/shop/reviews";
-import { onSale, priceCents, priceText } from "@/lib/shop/store-config";
+import { onSale, outOfStock, priceCents, priceText } from "@/lib/shop/store-config";
 import { track } from "@/lib/us/analytics";
 import { asset } from "@/lib/us/routes";
 import { SITE_URL } from "@/lib/site";
@@ -274,8 +274,10 @@ export default function ProductPage({ sku }) {
 
   const currency = config?.currency || "USD";
   const maxQty = config?.maxQtyPerLine ?? MAX_QTY;
-  // An owner can stop selling a product (commerce/worker/products.js): no Add to cart, and no pair with a stopped one.
+  // An owner can stop selling a product (commerce/worker/products.js), and below 5 at Amazon it is out of stock
+  // (commerce/worker/inventory.js): no Add to cart, and no pair with one that cannot be bought.
   const selling = onSale(config, sku);
+  const soldOut = outOfStock(config, sku);
   const pairable = onSale(config, other);
   const paired = pair && pairable;
   const lines = paired ? [{ sku, qty }, { sku: other, qty: 1 }] : [{ sku, qty }];
@@ -406,7 +408,7 @@ export default function ProductPage({ sku }) {
                       <button className="btn pdp-add" type="button" data-pdp-add="" data-placement="buybox" onClick={() => add("buybox")}>Add to cart <span aria-hidden="true">→</span></button>
                     </>
                   ) : (
-                    <p className="pdp-price-note label" data-unavailable="">Not available right now. Please check back soon.</p>
+                    <p className="pdp-price-note label" data-unavailable="" data-out-of-stock={soldOut ? "true" : undefined}>{soldOut ? "Out of stock. Please check back soon." : "Not available right now. Please check back soon."}</p>
                   )}
                 </div>
                 {status === "unavailable" && <p className="pdp-price-note label" data-price-note="">Price unavailable right now. You can still add to your cart.</p>}

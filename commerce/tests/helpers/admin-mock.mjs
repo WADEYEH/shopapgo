@@ -212,7 +212,19 @@ function teamMock(team, writes) {
 // packages: { [orderId]: packages } for shipped orders. returned: the dashboard's packages going back to the sender.
 // fulfilled: order ids already shipped. refundOutcome: what the refund POST answers (requested | failed | not_cancelled).
 // privacy: the dashboard's open privacy requests. customers: see CUSTOMERS. erasureBlockers: why deleting must wait.
-export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {}, fulfilled = [], refundOutcome = "requested", privacy = [], erasureBlockers = [], packages = {}, returned = [] } = {}) {
+// stock: what Amazon can ship per product id ({ d215: 3 }; worker/inventory.js), read at STOCK_READ_AT; without it the
+// stock is not connected. stockStale: the reads have failed for over an hour. Refresh answers stockRefresh ("ok" |
+// "just_read" | "failed") and then reports stockAfterRefresh, when given.
+export const STOCK_READ_AT = "2026-10-18T09:45:00.000Z";
+export async function mockAdminApi(page, { status = 200, emailConfigured = true, shipError, mcf = { mode: "off" }, mcfRecords = {}, paymentFailures = {}, team = {}, orderCore = {}, orderActionError = null, checkouts = [], disputes = {}, providers = {}, lang = "en", messages = [], stopped = [], notes = {}, fulfilled = [], refundOutcome = "requested", privacy = [], erasureBlockers = [], packages = {}, returned = [], stock = null, stockStale = false, stockRefresh = "ok", stockAfterRefresh = null } = {}) {
+  let levels = stock;
+  const stockStatus = () => ({
+    configured: Boolean(levels), lastReadAt: levels ? STOCK_READ_AT : null, lastAttemptAt: levels ? STOCK_READ_AT : null,
+    error: stockStale ? "Amazon outbound error (500) for stock." : null, failingSince: stockStale ? STOCK_READ_AT : null, stale: stockStale,
+  });
+  const stockOf = (id) => (levels && id in levels
+    ? { connected: true, available: levels[id], inbound: 12, reserved: 2, threshold: 5, outOfStock: levels[id] < 5, outSince: levels[id] < 5 ? STOCK_READ_AT : null, amazonUpdatedAt: "2026-10-18T09:30:00.000Z", readAt: STOCK_READ_AT, simulated: false }
+    : { connected: false, available: null, inbound: null, reserved: null, threshold: 5, outOfStock: false, outSince: null, amazonUpdatedAt: null, readAt: null, simulated: false });
   mockRole = team?.role ?? "owner";
   if (lang) await page.addInitScript((value) => { try { localStorage.setItem("apgo_admin_lang", value); } catch { /* none */ } }, lang);
   const requests = [];
@@ -260,7 +272,8 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
     const productView = (p) => ({
       ...p, changedBy: null, changedAt: null, page: `/products/${p.id === "d204" ? "atomic-colored-glaze" : "atomic-glaze-coating"}`, amazonSku: null,
       details: { promise: "A finishing step.", when: p.id === "d204" ? "After washing & fully drying" : "While paint is still wet", lasts: "6 months", scope: "Paint, clear coat." },
-      stock: { connected: false, available: null, inbound: null, reserved: null, threshold: 5 },
+      stock: stockOf(p.id),
+      stockStatus: stockStatus(),
       sales: { soldMonth: 3, revenueMonthCents: p.priceCents * 3, refunds30: 0, monthOrderShare: 50, days: Array.from({ length: 14 }, (_, i) => ({ day: `2026-10-${String(i + 1).padStart(2, "0")}`, qty: i % 3 })) },
     });
     if (url.pathname === "/admin/api/dashboard") {
@@ -282,13 +295,25 @@ export async function mockAdminApi(page, { status = 200, emailConfigured = true,
           { key: "airwallex", status: "ok", detail: { env: "demo" } }, { key: "paypal", status: "warn", detail: { env: "sandbox", webhook: false } },
           { key: "email", status: "ok", detail: { from: "APGO <orders@shopapgo.com>" } }, { key: "amazon", status: mcf.mode === "ready" ? "ok" : "off", detail: { mode: mcf.mode, lastSyncAt: null } },
           { key: "address", status: "off", detail: { uncheckedToday: 0 } }, { key: "schedule", status: "ok", detail: { lastRunAt: stamp } }, { key: "digest", status: "ok", detail: { lastDate: "2026-10-01", at: stamp } },
+          { key: "stock", status: !levels ? "off" : stockStale ? "warn" : "ok", detail: { lastReadAt: levels ? STOCK_READ_AT : null } },
         ],
-        products: products.map(({ id, sku, name, routine, size, priceCents, onSale }) => ({ id, sku, name, routine, size, priceCents, onSale, stock: { connected: false, threshold: 5 } })),
+        products: products.map(({ id, sku, name, routine, size, priceCents, onSale }) => ({ id, sku, name, routine, size, priceCents, onSale, stock: stockOf(id) })),
         latest: list.slice(0, 5).map(summary),
         privacy,
+        stock: {
+          out: products.filter((p) => p.onSale !== false && stockOf(p.id).outOfStock).map((p) => ({ id: p.id, sku: p.sku, name: p.name, available: stockOf(p.id).available, outSince: STOCK_READ_AT })),
+          stale: stockStale ? { since: STOCK_READ_AT } : null,
+        },
       });
     }
-    if (url.pathname === "/admin/api/products") return reply(200, { products: products.map(productView) });
+    if (url.pathname === "/admin/api/products") return reply(200, { products: products.map(productView), stock: stockStatus() });
+    if (url.pathname === "/admin/api/products/stock/refresh") {
+      requests.stockRefresh = (requests.stockRefresh ?? 0) + 1;
+      if (stockRefresh === "ok" && stockAfterRefresh) levels = stockAfterRefresh;
+      const result = stockRefresh === "ok" ? { ran: true, ok: true, read: 2, out: [] }
+        : stockRefresh === "just_read" ? { ran: false, reason: "just_read" } : { ran: true, ok: false, error: "Amazon outbound error (500) for stock." };
+      return reply(200, { result, products: products.map(productView), stock: stockStatus() });
+    }
     const productMatch = url.pathname.match(/^\/admin\/api\/products\/([a-z0-9]+)(\/sale)?$/);
     if (productMatch) {
       const product = products.find((p) => p.id === productMatch[1]);

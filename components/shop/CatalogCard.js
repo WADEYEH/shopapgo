@@ -3,14 +3,14 @@
 import { addToCart, useCartQty } from "@/lib/shop/cart";
 import { productPath } from "@/lib/shop/catalog";
 import { contentMark, imageMark, useLiveCatalog } from "@/lib/shop/live-content";
-import { onSale, priceCents, priceText } from "@/lib/shop/store-config";
+import { onSale, outOfStock, priceCents, priceText } from "@/lib/shop/store-config";
 import { useState } from "react";
 
 const word = (p) => (p.routine === "dry" ? "DRY" : "WET");
 
 // One product on the /products overview (D39): price from the Worker, Add to cart, a link to the product page. A product
 // the Worker no longer sells (missing from its config) is not shown; one an owner stopped selling says it is not
-// available instead of offering Add to cart. Its name, words and photo are the ones an owner set (lib/shop/live-content.js;
+// available, and one out of stock at Amazon says Out of stock, instead of offering Add to cart. Its name, words and photo are the ones an owner set (lib/shop/live-content.js;
 // the marked elements are filled by the Worker in the page it sends).
 export default function CatalogCard({ sku }) {
   const { status, config, content } = useLiveCatalog();
@@ -51,7 +51,7 @@ export default function CatalogCard({ sku }) {
               Add to cart <span aria-hidden="true">→</span>
             </button>
           ) : (
-            <span className="label" data-unavailable={sku}>Not available right now</span>
+            <span className="label" data-unavailable={sku}>{outOfStock(config, sku) ? "Out of stock" : "Not available right now"}</span>
           )}
         </div>
         <p className="catalog-card__added" data-shop-added={sku} aria-live="polite">

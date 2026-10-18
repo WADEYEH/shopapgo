@@ -8,17 +8,18 @@
 //   GET  /admin/api/products/:id          one product, with its changes
 //   POST /admin/api/products/:id/sale     owners only: { onSale, reason }
 //   Price, words and photos: worker/product-content.js (PR 3-12).
+//   Amazon's stock and out of stock below 5: worker/inventory.js (D25, D76).
 import { recordAdminAudit } from "./activity.js";
 import { mcfConfig } from "./amazon-mcf.js";
 import { calendar, DAY } from "./business-time.js";
+import { STOCK_THRESHOLD, currentStock } from "./inventory.js";
 import { resolvePricing } from "./pricing.js";
 import { PRODUCTS as CONTENT, productPath } from "../../lib/shop/product-data.mjs";
 import { applyContent, productContent } from "../../lib/shop/product-content.mjs";
 import { contentView, readOverrides } from "./product-content.js";
 
-// Below this many available at Amazon a product shows Out of stock (D25). Live stock waits for the Amazon connection
-// to report it (docs/design/amazon-mcp-inventory.md), so stock reads "not connected" for now.
-export const STOCK_THRESHOLD = 5;
+// Below this many available at Amazon a product is out of stock (D25; worker/inventory.js).
+export { STOCK_THRESHOLD };
 const CHART_DAYS = 14;
 
 export class ProductError extends Error {
@@ -40,16 +41,26 @@ export async function productSettings(db) {
   }
 }
 
+// Amazon's stock on the products (worker/inventory.js): out of stock gets inStock: false; a product read from Amazon
+// gets `available`, the most a cart may ask for (worker/catalog.js). Products not read are left as they are and sell.
+export function withStock(pricing, stock) {
+  const products = Object.fromEntries(Object.entries(pricing.products).map(([id, product]) => {
+    const s = stock[id];
+    if (!s?.connected) return [id, product];
+    return [id, { ...product, available: s.available, ...(s.outOfStock ? { inStock: false } : {}) }];
+  }));
+  return { ...pricing, products };
+}
+
 // The pricing the storefront and checkout use: worker/pricing.js, what owners changed (price and name, with the words and
-// photos for the pages: worker/product-content.js) and each product's on-sale switch.
+// photos for the pages: worker/product-content.js), each product's on-sale switch and Amazon's stock.
 export async function livePricing(env) {
-  const [settings, overrides] = await Promise.all([productSettings(env.DB), readOverrides(env.DB)]);
+  const [settings, overrides, stock] = await Promise.all([productSettings(env.DB), readOverrides(env.DB), currentStock(env)]);
   const pricing = Object.keys(overrides).length ? applyContent(resolvePricing(env), overrides) : resolvePricing(env);
-  if (!Object.values(settings).some((s) => !s.onSale)) return pricing;
   const products = Object.fromEntries(
     Object.entries(pricing.products).map(([id, product]) => [id, settings[id]?.onSale === false ? { ...product, onSale: false } : product]),
   );
-  return { ...pricing, products };
+  return withStock({ ...pricing, products }, stock.products);
 }
 
 export async function setOnSale(env, actor, productId, body, { now = () => new Date().toISOString() } = {}) {
@@ -152,7 +163,7 @@ async function history(db, sku) {
 export async function listProducts(env, { nowMs = Date.now() } = {}) {
   const pricing = resolvePricing(env);
   const ids = Object.keys(pricing.products);
-  const [settings, sales, overrides] = await Promise.all([productSettings(env.DB), salesByProduct(env, ids, nowMs), readOverrides(env.DB)]);
+  const [settings, sales, overrides, stock] = await Promise.all([productSettings(env.DB), salesByProduct(env, ids, nowMs), readOverrides(env.DB), currentStock(env, { nowMs })]);
   return ids.map((id) => {
     const product = pricing.products[id];
     const changed = overrides[id] ?? {};
@@ -175,7 +186,7 @@ export async function listProducts(env, { nowMs = Date.now() } = {}) {
       page: CONTENT[id] ? productPath(id) : null,
       amazonSku: amazonSkuOf(env, product.sku),
       details: { promise: content.promise ?? null, when: content.when ?? null, lasts: content.lasts ?? null, scope: content.scope ?? null },
-      stock: { connected: false, available: null, inbound: null, reserved: null, threshold: STOCK_THRESHOLD },
+      stock: stock.products[id],
       sales: sales[id],
     };
   });
@@ -184,5 +195,11 @@ export async function listProducts(env, { nowMs = Date.now() } = {}) {
 export async function getProduct(env, id, { nowMs = Date.now() } = {}) {
   const product = (await listProducts(env, { nowMs })).find((p) => p.id === id);
   if (!product) return null;
-  return { ...product, history: await history(env.DB, product.sku), content: CONTENT[id] ? await contentView(env, id) : null };
+  return {
+    ...product,
+    history: await history(env.DB, product.sku),
+    content: CONTENT[id] ? await contentView(env, id) : null,
+    // When the stock was last read and whether reads fail (worker/inventory.js).
+    stockStatus: (await currentStock(env, { nowMs })).status,
+  };
 }
