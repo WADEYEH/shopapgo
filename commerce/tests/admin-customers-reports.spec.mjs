@@ -220,7 +220,7 @@ test("payment lookup: an Airwallex payment shows its status and why it failed; a
 
 test("the new pages are complete in Chinese", async ({ page }) => {
   await mockAdminApi(page, { lang: "zh", fulfilled: [PAID] });
-  for (const [hash, title] of [["#/customers", "客户"], [`#/customers/${PAID}`, "Ada Lee"], ["#/reports", "报表"]]) {
+  for (const [hash, title] of [["#/customers", "客戶"], [`#/customers/${PAID}`, "Ada Lee"], ["#/reports", "報表"]]) {
     await page.goto(`/admin/index.html${hash}`);
     await expect(page.locator("h1")).toHaveText(title);
     expect(await page.locator("main").innerText()).not.toMatch(/\b(customers|privacy|reports|refund|lookup)\.[a-zA-Z_]+/);

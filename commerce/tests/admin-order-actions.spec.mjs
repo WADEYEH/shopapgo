@@ -99,9 +99,9 @@ test("orders without the order block (older Worker), or shipped ones, show no ac
 test("in Chinese the progress, actions and reasons are in Chinese", async ({ page }) => {
   await mockAdminApi(page, { lang: "zh", orderCore: { [PAID]: COOLING } });
   await page.goto(`/admin/index.html#/orders/${PAID}`);
-  await expect(detail(page).locator('[data-step="cooling"]')).toContainText("冷静期");
-  await expect(detail(page).locator("[data-order-cancel] summary")).toHaveText("取消订单");
-  await expect(detail(page).locator("#order-cancel-reason option").nth(1)).toHaveText("客户要求取消");
+  await expect(detail(page).locator('[data-step="cooling"]')).toContainText("冷靜期");
+  await expect(detail(page).locator("[data-order-cancel] summary")).toHaveText("取消訂單");
+  await expect(detail(page).locator("#order-cancel-reason option").nth(1)).toHaveText("客戶要求取消");
   await expect(detail(page).locator('[data-payment="paid"]')).toHaveText("已付款");
 });
 
