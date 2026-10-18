@@ -231,6 +231,8 @@ Amazon 出货服务没有测试环境，staging 的订单如果真的送出去�
 
 **10/15 测试站进度**：第 1、2 步原本就有（team `apgo`，`apgo.cloudflareaccess.com`；登录方式 Google 和 One-time PIN 都已开）。第 3 步名单 `apgo-backoffice-members`（ID `86679123-d156-420e-ad3b-66075645d1ee`）；第 4 步应用「shopapgo back office (staging)」（`admin-staging.shopapgo.com`，24 小时，规则「shopapgo back office members」= Allow、Email List 是这份名单）；第 5 步金钥 `backoffice-member-list`（Cloudflare 没有只能改名单的权限，最小是 Zero Trust: Edit，只限公司帐号）；第 6 步你在终端机贴上；第 7 步设定写进 `commerce/wrangler.toml`。帐号里另有 5 个其他系统的 Access 应用，都没有动。
 
+**10/18 正式环境（C17）**：名单 `apgo-backoffice-members-production`（ID `013e636e-54ff-4339-b3c5-5728e1b1928a`，先只有 wadeyeh@apgo.com.tw，跟测试站的名单分开）；应用「shopapgo back office (production)」（`admin.shopapgo.com`，24 小时，Google 和 email 验证码都可以，规则「shopapgo back office members (production)」= Allow、Email List 是这份名单）；名单金钥 `backoffice-member-list-production`（Zero Trust: Edit，只限公司帐号），你自己贴进正式环境的 `ACCESS_LIST_API_TOKEN`。**没有服务金钥**：脚本进不了正式后台（你 10/18 决定），要看后台时由你在 Chrome 登录。旧的共用帐密 `ADMIN_LOGIN_*` 和 `ADMIN_TOKEN` 依你的决定留着，但 Cloudflare 登录打开后都不能进后台；只有把 `ADMIN_ACCESS` 关掉时才会重新生效（那时建议换新）。
+
 **脚本怎么过 Cloudflare 那一关**：应用一建好，没登录的请求在 Cloudflare 就被挡下，后台程序收不到，所以只带 `ADMIN_TOKEN` 的脚本也进不来。做法：在 Zero Trust 建一把服务金钥（Service Token），应用加一条 Service Auth 规则只认这把金钥；脚本同时带服务金钥的两个标头和 `ADMIN_TOKEN`。10/15 已建：服务金钥 `claude-ops-staging`（有效 1 年，2027-10 到期前要换），应用加第 2 条规则「claude check scripts (service token)」= Service Auth、Service Token 是这把。你把 Client ID 和 Client Secret 贴进这台电脑的 `commerce/.dev.vars.staging`（git 不追踪），检查：带服务金钥加 `ADMIN_TOKEN` 得到 200，只带 `ADMIN_TOKEN` 被 Cloudflare 转去登录（302）。注意：在应用里加规则后还要按应用页面最下面的 **Save** 才会生效。
 
 **技术备注**：Cloudflare 有一个直接把登录身分交给 Worker 的功能（`ctx.access`），但它不支援同时提供网页档案的 Worker（我们就是），所以 Worker 自己验证 Access 送来的登录凭证：用 team 的公开金钥验签章，比对 AUD、发行者和有效时间。这是 Cloudflare 文件建议的标准做法。

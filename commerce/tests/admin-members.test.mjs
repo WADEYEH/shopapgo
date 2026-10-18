@@ -417,7 +417,7 @@ test("Cloudflare list: added and removed emails are copied over in one change; f
   }, { cloudflare });
 });
 
-test("wrangler: the first owner is set for staging and production; Access is on for staging only, until production is set up", async () => {
+test("wrangler: the first owner is set for staging and production; Access is on for both, each with its own application and member list", async () => {
   const { readFile } = await import("node:fs/promises");
   const toml = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
   const staging = toml.slice(toml.indexOf("[env.staging]"), toml.indexOf("[env.production]"));
@@ -428,6 +428,14 @@ test("wrangler: the first owner is set for staging and production; Access is on 
   assert.match(staging, /^ACCESS_TEAM_DOMAIN = "https:\/\/apgo\.cloudflareaccess\.com"$/m);
   assert.match(staging, /^ACCESS_AUD = "[0-9a-f]{64}"$/m);
   assert.match(staging, /^ACCESS_LIST_ID = "[0-9a-f-]{36}"$/m);
-  assert.doesNotMatch(production, /^\s*ADMIN_ACCESS\s*=/m, "production: switched on only after its own Access application exists (docs/ops/runbook.md)");
+  // Production (C17, 10/18): its own application (admin.shopapgo.com) and its own member list, never staging's.
+  assert.match(production, /^ADMIN_ACCESS = "true"$/m);
+  assert.match(production, /^ACCESS_TEAM_DOMAIN = "https:\/\/apgo\.cloudflareaccess\.com"$/m);
+  assert.match(production, /^ACCESS_AUD = "[0-9a-f]{64}"$/m);
+  assert.match(production, /^ACCESS_LIST_ID = "[0-9a-f-]{36}"$/m);
+  const value = (section, name) => section.match(new RegExp(`^${name} = "([^"]+)"$`, "m"))[1];
+  assert.notEqual(value(production, "ACCESS_AUD"), value(staging, "ACCESS_AUD"), "a different application");
+  assert.notEqual(value(production, "ACCESS_LIST_ID"), value(staging, "ACCESS_LIST_ID"), "a different member list");
+  assert.doesNotMatch(production, /^ADMIN_ACCEPT_SITE_BASIC\s*=/m, "no website login opens the production back office");
   assert.doesNotMatch(toml, /^\s*ACCESS_LIST_API_TOKEN\s*=/m, "the list token is a secret");
 });
