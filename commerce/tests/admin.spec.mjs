@@ -115,12 +115,12 @@ test("shows a clear notice when the back office is not configured", async ({ pag
 test("Chinese by default; the switch changes every page's words at once and is remembered", async ({ page }) => {
   await mockAdminApi(page, { lang: null });
   await page.goto("/admin/index.html#/orders");
-  await expect(page.locator("html")).toHaveAttribute("lang", "zh-Hans");
-  await expect(page.locator('[data-nav="orders"]')).toContainText("订单");
-  await expect(page.locator("h1")).toHaveText("订单");
-  await expect(page.locator('[data-view="to_ship"]')).toContainText("待出货");
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-Hant-TW");
+  await expect(page.locator('[data-nav="orders"]')).toContainText("訂單");
+  await expect(page.locator("h1")).toHaveText("訂單");
+  await expect(page.locator('[data-view="to_ship"]')).toContainText("待出貨");
   await expect(page.locator(`[data-order="${PAID}"] [data-payment]`)).toHaveText("已付款");
-  await expect(page).toHaveTitle("订单 · APGO 后台");
+  await expect(page).toHaveTitle("訂單 · APGO 後台");
 
   await page.locator('[data-lang="en"]').click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
@@ -130,7 +130,7 @@ test("Chinese by default; the switch changes every page's words at once and is r
   await page.reload();
   await expect(page.locator("h1")).toHaveText("Orders");
   await page.locator('[data-lang="zh"]').click();
-  await expect(page.locator("h1")).toHaveText("订单");
+  await expect(page.locator("h1")).toHaveText("訂單");
 });
 
 test("on a phone the navigation is a menu that opens and closes", async ({ page }) => {
@@ -148,7 +148,7 @@ test("on a phone the navigation is a menu that opens and closes", async ({ page 
   await expect(page).toHaveURL(/#\/products$/);
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await page.locator("[data-admin-lang-toggle]").click();
-  await expect(page.locator("h1")).toHaveText("商品与库存");
+  await expect(page.locator("h1")).toHaveText("商品與庫存");
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 

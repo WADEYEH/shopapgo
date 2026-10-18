@@ -37,5 +37,5 @@ test("the dashboard lists packages going back to the sender, in Chinese too", as
   const row = page.locator('[data-attention="returned"]');
   await expect(row).toContainText("包裹被退回寄件人");
   await expect(row).toContainText("USPS 9400SECOND · RETURNED");
-  await expect(row).toContainText("联络客户");
+  await expect(row).toContainText("聯絡客戶");
 });

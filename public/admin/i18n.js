@@ -30,7 +30,7 @@ export function setLang(next) {
   } catch {
     // private window: the choice lasts until the page is closed
   }
-  document.documentElement.lang = next === "zh" ? "zh-Hans" : "en";
+  document.documentElement.lang = next === "zh" ? "zh-Hant-TW" : "en";
   for (const listener of listeners) listener(next);
 }
 
@@ -48,13 +48,13 @@ export function t(key, values = {}) {
 
 // The static page's words: elements marked data-t (text), data-t-label (aria-label) or data-t-placeholder.
 export function applyStatic(root = document) {
-  document.documentElement.lang = current === "zh" ? "zh-Hans" : "en";
+  document.documentElement.lang = current === "zh" ? "zh-Hant-TW" : "en";
   for (const node of root.querySelectorAll("[data-t]")) node.textContent = t(node.dataset.t);
   for (const node of root.querySelectorAll("[data-t-label]")) node.setAttribute("aria-label", t(node.dataset.tLabel));
   for (const node of root.querySelectorAll("[data-t-placeholder]")) node.setAttribute("placeholder", t(node.dataset.tPlaceholder));
 }
 
-const locale = () => (current === "zh" ? "zh-CN" : "en-US");
+const locale = () => (current === "zh" ? "zh-TW" : "en-US");
 
 // Dates in the viewer's own time zone.
 export function formatDate(iso, { time = true } = {}) {
