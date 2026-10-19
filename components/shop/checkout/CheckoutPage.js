@@ -51,6 +51,12 @@ const SHIPPING_FIELDS = ["firstName", "lastName", "street", "street2", "city", "
 const ADDRESS_FIELDS = ["street", "street2", "city", "state", "zip"];
 // The quote refused something in the cart (the Worker's codes; commerce/worker/catalog.js): the message's title.
 const CART_REFUSALS = { product_unavailable: "Not available right now", out_of_stock: "Out of stock", not_enough_stock: "Not enough in stock" };
+// The total the shopper last saw differs from what the payment would charge (C21; a price or the shipping changed
+// meanwhile): the words for it, or null when it is the same.
+function priceChange(before, quote) {
+  if (!Number.isInteger(before) || !quote || before === quote.totalCents) return null;
+  return `The total is now ${money(quote.totalCents, quote.currency)} (it was ${money(before, quote.currency)}): a price or the shipping changed. Review your order before you pay.`;
+}
 const EMPTY_CONTACT = { email: "", phone: "", marketingOptIn: false };
 const EMPTY_SHIPPING = Object.fromEntries(SHIPPING_FIELDS.map((name) => [name, ""]));
 const CARD_FIELDS = [
@@ -426,7 +432,8 @@ export default function CheckoutPage() {
 
   // ---------- checkout session: order + PaymentIntent, shared by every Airwallex method ----------
 
-  async function ensureSession() {
+  // stopIfChanged: the shopper pressed Pay; a new total stops it so they can look first (C21).
+  async function ensureSession({ stopIfChanged = false } = {}) {
     const payload = { items: cartItems(), contact: s.contact, shipping: s.shipping, method: s.method, addressReview: s.addressReview };
     // The cache key is the order content only: attribution (cookies, URL) must never force a new PaymentIntent.
     const key = JSON.stringify(payload);
@@ -444,7 +451,12 @@ export default function CheckoutPage() {
     }
     s.session = { ...session, createdAt: Date.now() };
     s.sessionKey = key;
+    const changed = priceChange(s.quote?.totalCents, session.quote);
     showQuote(session.quote);
+    if (changed) {
+      showMessage("warning", "Price updated", changed);
+      if (stopIfChanged) throw Object.assign(new Error(changed), { priceChanged: true });
+    }
     // The order (merchant_order_id) now exists: this is the InitiateCheckout moment for Meta.
     track("checkout_session_created", {
       order_id: session.orderId,
@@ -617,6 +629,7 @@ export default function CheckoutPage() {
 
   async function createPaypalOrder() {
     if (!s.contact?.email) throw new Error("Enter a valid email address.");
+    const before = s.quote?.totalCents;
     const data = await api("/api/checkout/paypal/order", {
       method: "POST",
       body: paypalOrderPayload({
@@ -633,6 +646,11 @@ export default function CheckoutPage() {
     storePaypalOrder(data);
     s.paypal.order = data;
     if (data.quote) showQuote(data.quote);
+    const changed = priceChange(before, data.quote);
+    if (changed) {
+      showMessage("warning", "Price updated", changed);
+      throw Object.assign(new Error(changed), { priceChanged: true });
+    }
     // Same InitiateCheckout moment as the card session: eventID ic_<orderId> (data.eventIds.initiateCheckout).
     track("checkout_session_created", {
       order_id: data.orderId,
@@ -703,6 +721,12 @@ export default function CheckoutPage() {
             } catch (error) {
               setPlacing(false);
               if (returnToFix(error)) throw error;
+              // A new total: PayPal does not open; the shopper looks, then presses PayPal again (C21).
+              if (error?.priceChanged) {
+                s.paypal.priceChanged = true;
+                showPaymentMessage("warning", "Price updated", error.message);
+                throw error;
+              }
               showPaymentMessage("warning", "PayPal unavailable", error.message || "Could not start PayPal.");
               throw error;
             }
@@ -728,6 +752,10 @@ export default function CheckoutPage() {
           },
           onError: () => {
             setPlacing(false);
+            if (s.paypal.priceChanged) {
+              s.paypal.priceChanged = false;
+              return;
+            }
             showPaymentMessage("warning", "PayPal unavailable", `PayPal couldn't complete checkout. Try again or ${otherWayToPay(s.config)}.`);
           },
         })
@@ -773,13 +801,18 @@ export default function CheckoutPage() {
 
     setPlacing(true);
     try {
-      const session = await ensureSession();
+      const session = await ensureSession({ stopIfChanged: true });
       track("add_payment_info", { payment_type: "card", value: session.quote.totalCents / 100, currency: session.quote.currency });
       await s.card.cardNumber.confirm({ intent_id: session.intent.id, client_secret: session.intent.clientSecret });
       window.history.replaceState(null, "", orderUrl(session.orderId));
       await showOrder(session.orderId);
     } catch (error) {
       if (returnToFix(error)) return;
+      if (error?.priceChanged) {
+        setPlacing(false);
+        showPaymentMessage("warning", "Price updated", error.message);
+        return;
+      }
       showPaymentMessage("warning", "Payment not completed", "Your payment wasn't completed. Check your card details or try another payment method.");
       setPlacing(false);
     }
@@ -830,11 +863,18 @@ export default function CheckoutPage() {
     }
     setSummary(result);
     if (result.status === "paid") {
-      clearCheckoutDraft();
-      clearCheckoutId();
-      clearCart();
+      // Only right after paying for it: opening an older order later (the link in the confirmation email, C21) must
+      // not empty a cart the shopper has started since.
+      if (readCheckoutId() === result.id) {
+        clearCheckoutDraft();
+        clearCheckoutId();
+        clearCart();
+      }
       trackPurchaseOnce(result);
       setOrder({ kind: "paid", order: result });
+    } else if (result.status === "cancelled" && result.paid) {
+      setTitle("Order cancelled.");
+      setOrder({ kind: "cancelled", order: result });
     } else if (result.status === "review") {
       clearCheckoutDraft();
       clearCheckoutId();

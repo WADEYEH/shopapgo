@@ -26,6 +26,7 @@
 // Starting a payment, the address check and quotes are limited per client address (worker/rate-limit.js): 429 when over.
 
 import { QuoteError, publicConfig, quote, toMajor } from "./catalog.js";
+import { getFulfillment } from "./fulfillment.js";
 import { PricingConfigError, storeReadiness, taxStatus } from "./pricing.js";
 import { livePricing } from "./products.js";
 import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociation } from "./wallets.js";
@@ -434,7 +435,18 @@ async function handleOrder(orderId, env, services) {
       }
     }
   }
-  return json({ ...publicOrder(order), paymentFailure: await publicPaymentFailure(env.DB, order) });
+  return json({ ...publicOrder(order), paymentFailure: await publicPaymentFailure(env.DB, order), shipment: await publicShipment(env.DB, order) });
+}
+
+// Where a paid order is on its way, for its page (C21): not shipped yet, or the carrier and tracking of each package.
+// Nothing else about the shipment (no address).
+async function publicShipment(db, order) {
+  if (order.status !== "paid") return null;
+  const shipped = await getFulfillment(db, order.id).catch(() => null);
+  if (!shipped) return { shipped: false };
+  const packages = (shipped.packages ?? []).filter((p) => p.trackingNumber)
+    .map(({ carrier, trackingNumber, trackingUrl, status, deliveredAt }) => ({ carrier, trackingNumber, trackingUrl: trackingUrl || null, status: status || null, deliveredAt: deliveredAt || null }));
+  return { shipped: true, shippedAt: shipped.shippedAt, carrier: shipped.carrier, trackingNumber: shipped.trackingNumber, trackingUrl: shipped.trackingUrl || null, packages };
 }
 
 async function handleWebhook(request, env, services) {

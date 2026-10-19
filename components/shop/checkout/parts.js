@@ -124,7 +124,32 @@ export function OrderSummary({ source, estimate, note }) {
   );
 }
 
-// The order page (/checkout?order=…). state.kind: pending | error | paid | review | paypal_pending | failed | processing.
+// Where a paid order is (C21; the Worker's shipment on GET /api/orders/:id): not shipped yet, or each package's carrier,
+// tracking number and link.
+function Shipment({ shipment }) {
+  if (!shipment) return null;
+  if (!shipment.shipped) {
+    return <p className="body body--sm" data-shipment="waiting">Not shipped yet. We'll email you the tracking number as soon as it ships. Most orders arrive within 3–5 business days.</p>;
+  }
+  const packages = shipment.packages?.length ? shipment.packages : [{ carrier: shipment.carrier, trackingNumber: shipment.trackingNumber, trackingUrl: shipment.trackingUrl }];
+  return (
+    <div data-shipment="shipped">
+      <h3 className="label">Shipped</h3>
+      <ul className="body body--sm">
+        {packages.map((pkg, index) => (
+          <li key={pkg.trackingNumber} data-tracking={pkg.trackingNumber}>
+            {packages.length > 1 ? `Package ${index + 1}: ` : ""}{pkg.carrier} {pkg.trackingNumber}
+            {pkg.deliveredAt ? " · Delivered" : ""}
+            {pkg.trackingUrl ? <> · <a href={pkg.trackingUrl} target="_blank" rel="noopener noreferrer">Track package</a></> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// The order page (/checkout?order=…). state.kind: pending | error | paid | review | paypal_pending | cancelled | failed |
+// processing.
 export function OrderStatus({ state }) {
   const home = (
     <a className="btn" href="/">
@@ -139,7 +164,17 @@ export function OrderStatus({ state }) {
       <>
         <Notice tone="success" title="Order confirmed">{`Order ${order.id} · Payment received.`}</Notice>
         <h2 className="heading-guide-h2">Thanks for your order.</h2>
+        <Shipment shipment={order.shipment} />
         <p className="body body--sm">{`Keep your order number for support. Order details are linked to ${order.email}.`}</p>
+        <div className="actions">{home}</div>
+      </>
+    );
+  }
+  // Paid, then cancelled (C21): not a failed payment.
+  if (kind === "cancelled") {
+    return (
+      <>
+        <Notice tone="info" title="Order cancelled">{`Order ${order.id} · This order was cancelled. Any refund goes back to your original payment method; we email you when it's made.`}</Notice>
         <div className="actions">{home}</div>
       </>
     );

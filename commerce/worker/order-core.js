@@ -14,7 +14,7 @@
 //
 // Cooling-off (M4 §3.6, D23): ORDER_COOLING_OFF_MINUTES after payment (default 60) before an order goes to Amazon.
 // Holds (M4 §3.5): review, a registered refund (failed ones excepted), an open dispute (worker/disputes.js).
-import { cancelFulfillmentOrder, McfError, mcfReadiness } from "./amazon-mcf.js";
+import { CANCEL_REQUESTED, cancelFulfillmentOrder, getFulfillmentOrder, McfError, mcfReadiness } from "./amazon-mcf.js";
 import { getFulfillment, recordAudit } from "./fulfillment.js";
 import { getOrder, getOrderPayment } from "./orders.js";
 import { refundView } from "./refunds.js";
@@ -202,6 +202,22 @@ export const CANCEL_REASONS = {
   other: "Other",
 };
 
+// After asking Amazon to cancel, it is read back up to CANCEL_CHECKS times, MCF_CANCEL_CHECK_MS apart (default 2 s;
+// tests set 0), until it shows CANCELLED.
+const CANCEL_CHECKS = 3;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const cancelCheckMs = (env) => {
+  const value = Number(env.MCF_CANCEL_CHECK_MS);
+  return env.MCF_CANCEL_CHECK_MS !== undefined && env.MCF_CANCEL_CHECK_MS !== "" && Number.isFinite(value) && value >= 0 ? value : 2000;
+};
+async function amazonCancelled(env, amazonId) {
+  try {
+    return (await getFulfillmentOrder(env, amazonId))?.status === "CANCELLED";
+  } catch {
+    return false;
+  }
+}
+
 // notify: false = the customer is not emailed (a refund from the order page with "don't email the customer", D55).
 // refundFollows: the plain Cancel in the back office, which does not refund (the email then says the refund follows).
 export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }, { nowMs = Date.now(), adminUrl = null, notify = true, refundFollows = false } = {}) {
@@ -216,13 +232,22 @@ export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }
   if (stage === "checkout") throw new OrderError(409, "not_an_order", "This checkout was never paid, so there is no order to cancel.");
   if (stage === "shipped") return refuse(env, { orderId, from: stage, to: "cancelled", actor, message: "This order has shipped, so it cannot be cancelled. Handle it as a return." });
 
-  // With Amazon already: ask Amazon first; the order is only cancelled when Amazon agrees (M4-06).
+  // With Amazon already: ask Amazon first; the order is only cancelled once Amazon shows the shipment as cancelled
+  // (M4-06, C19). Accepting the request is not enough: Amazon can still ship what it is already picking.
   let amazonCancel = "";
   if (stage === "fulfilling") {
+    const amazonId = state.mcf.seller_order_id;
+    let confirmed = await amazonCancelled(env, amazonId);
     try {
-      await cancelFulfillmentOrder(env, state.mcf.seller_order_id);
+      if (!confirmed) {
+        await cancelFulfillmentOrder(env, amazonId);
+        await db.prepare("UPDATE order_mcf SET note = ?, updated_at = ? WHERE order_id = ?").bind(CANCEL_REQUESTED, iso(nowMs), orderId).run();
+        for (let check = 0; check < CANCEL_CHECKS && !confirmed; check += 1) {
+          await sleep(cancelCheckMs(env));
+          confirmed = await amazonCancelled(env, amazonId);
+        }
+      }
       amazonCancel = "requested";
-      await db.prepare("UPDATE order_mcf SET note = ?, updated_at = ? WHERE order_id = ?").bind("Cancellation requested with the order.", iso(nowMs), orderId).run();
     } catch (error) {
       const why = error instanceof McfError ? error.message : "Amazon could not be reached.";
       await recordAudit(db, { orderId, action: "order.cancel_failed", actor: actor.id, detail: { reason: reasonCode, amazon: clip(why, 200) } });
@@ -235,6 +260,10 @@ export async function cancelOrder(env, orderId, { actor, reasonCode, note = "" }
         lines: [`The order was asked to be cancelled (${CANCEL_REASONS[reasonCode]}), but Amazon refused or did not answer: ${clip(why, 200)}`, "The order is still with Amazon and may ship. Check it in the back office and with Amazon."],
       });
       throw new OrderError(502, "amazon_cancel_failed", `Amazon could not cancel this shipment (${clip(why, 160)}). The order stays with Amazon; the team was told.`);
+    }
+    if (!confirmed) {
+      await recordAudit(db, { orderId, action: "order.cancel_pending", actor: actor.id, detail: { reason: reasonCode } });
+      throw new OrderError(409, "amazon_cancel_pending", "Amazon received the cancellation but has not confirmed it yet, so the order is not cancelled and nothing was refunded. Press it again in a minute.");
     }
   }
 

@@ -257,6 +257,8 @@ export function publicOrder(order) {
     taxCents: order.tax_cents,
     totalCents: order.total_cents,
     createdAt: order.created_at,
+    // It was paid at some point: a cancelled order then says "cancelled", not "payment not completed" (C21).
+    paid: Boolean(order.paid_at),
   };
 }
 

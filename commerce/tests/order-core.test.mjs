@@ -9,7 +9,7 @@ import test from "node:test";
 import worker from "../worker/index.js";
 import { resetAirwallexTokenCache } from "../worker/airwallex.js";
 import { TRANSITIONS, coolingOff, orderStage, transitionFor } from "../worker/order-core.js";
-import { submitDueOrders } from "../worker/mcf.js";
+import { submitDueOrders, syncAllMcf } from "../worker/mcf.js";
 import { markShipped } from "../worker/fulfillment.js";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
 import { FAKE_AMAZON_ENV, FAKE_BASE_URL, createFakeAmazon } from "./helpers/fake-amazon-mcf.mjs";
@@ -284,6 +284,80 @@ test("M4-06: with Amazon already, the order is cancelled only when Amazon cancel
     assert.equal(ok.body.order.core.cancellation.amazonCancel, "requested");
     assert.equal(audit(db2, second).at(-1).detail.transition, "T10");
   });
+});
+
+test("C19: a cancellation Amazon has not confirmed leaves the order paid and refunds nothing; pressed again once Amazon shows it cancelled, it cancels", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db, { ORDER_COOLING_OFF_MINUTES: "0" });
+  await withWorld(async ({ amazon, mails }) => {
+    const orderId = await placeOrder(env);
+    assert.equal((await view(env, orderId)).core.stage, "fulfilling");
+    const cancelMails = () => mails.filter((m) => /has been cancelled/.test(m.subject));
+    const pending = await action(env, orderId, "cancel", { reason: "customer_request" });
+    assert.equal(pending.status, 409);
+    assert.equal(pending.body.error.code, "amazon_cancel_pending");
+    assert.match(pending.body.error.message, /not cancelled and nothing was refunded/);
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", orderId).status, "paid");
+    assert.equal(row(db, "SELECT note FROM order_mcf WHERE order_id = ?", orderId).note, "Cancellation requested; sync to confirm.");
+    assert.equal(audit(db, orderId).at(-1).action, "order.cancel_pending");
+    assert.equal(amazon.count("cancel"), 1);
+    assert.ok(amazon.count("get") >= 3, "read back after the request");
+    assert.equal(cancelMails().length, 0, "the customer is not told yet");
+
+    amazon.setStatus(orderId, "CANCELLED"); // Amazon confirms
+    const ok = await action(env, orderId, "cancel", { reason: "customer_request" });
+    assert.equal(ok.status, 200);
+    assert.equal(amazon.count("cancel"), 1, "already cancelled at Amazon: not asked again");
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", orderId).status, "cancelled");
+    assert.equal(cancelMails().length, 1);
+  }, { amazon: createFakeAmazon({ slowCancel: Infinity }) });
+
+  // Amazon shows it cancelled on the second read after the request: confirmed within the same press.
+  const db2 = await createD1();
+  const env2 = baseEnv(db2, { ORDER_COOLING_OFF_MINUTES: "0" });
+  await withWorld(async () => {
+    const orderId = await placeOrder(env2);
+    const ok = await action(env2, orderId, "cancel", { reason: "customer_request" });
+    assert.equal(ok.status, 200);
+    assert.equal(row(db2, "SELECT status FROM orders WHERE id = ?", orderId).status, "cancelled");
+  }, { amazon: createFakeAmazon({ slowCancel: 2 }) });
+});
+
+test("C19: Amazon ships an order that is cancelled here: no shipment record or email, the team is told once", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db, { ORDER_COOLING_OFF_MINUTES: "0" });
+  await withWorld(async ({ amazon, mails, alerts }) => {
+    const orderId = await placeOrder(env);
+    assert.equal((await action(env, orderId, "cancel", { reason: "customer_request" })).status, 200);
+    amazon.ship(orderId, { carrierCode: "UPS", trackingNumber: "1Z999AA10123456784" }); // shipped anyway
+    for (let i = 0; i < 2; i += 1) await syncAllMcf(env, { actor: "mcf-cron" });
+    assert.equal(row(db, "SELECT COUNT(*) AS n FROM order_fulfillments WHERE order_id = ?", orderId).n, 0);
+    assert.equal(mails.filter((m) => /has shipped/.test(m.subject)).length, 0);
+    const told = alerts().filter((m) => /Amazon shipped an order that is cancelled/.test(m.subject));
+    assert.equal(told.length, 1);
+    assert.match(told[0].text, /UPS 1Z999AA10123456784/);
+    const mcf = row(db, "SELECT status, error_message FROM order_mcf WHERE order_id = ?", orderId);
+    assert.equal(mcf.status, "shipped", "no more syncing");
+    assert.match(mcf.error_message, /order is cancelled here/);
+    assert.equal(audit(db, orderId).at(-1).action, "mcf.shipped_not_paid");
+  });
+});
+
+test("C19: Amazon refuses the order at once for lack of stock: the out-of-stock steps, not 'sending failed'", { skip }, async () => {
+  const db = await createD1();
+  const env = baseEnv(db, { ORDER_COOLING_OFF_MINUTES: "0" });
+  const refusal = { status: 400, error: "SP-API error", spapiStatus: 400, details: JSON.stringify({ errors: [{ code: "InvalidInput", message: "Unfulfillable items: AMZ-SKU-D204" }] }) };
+  await withWorld(async ({ mails, alerts }) => {
+    const orderId = await placeOrder(env);
+    const mcf = row(db, "SELECT status, mcf_status, stockout_at FROM order_mcf WHERE order_id = ?", orderId);
+    assert.equal(mcf.status, "rejected");
+    assert.equal(mcf.mcf_status, "UNFULFILLABLE");
+    assert.ok(mcf.stockout_at);
+    assert.equal(alerts().filter((m) => /out of stock at Amazon/.test(m.subject)).length, 1);
+    assert.equal(alerts().filter((m) => /sending to Amazon failed/.test(m.subject)).length, 0);
+    assert.equal(mails.filter((m) => /is delayed/.test(m.subject)).length, 1, "the customer gets the delay email");
+    assert.equal((await view(env, orderId)).core.stage, "paid");
+  }, { amazon: createFakeAmazon({ failCreate: [refusal] }) });
 });
 
 test("M4-07 / M4-11: a shipped order cannot be cancelled; the refusal is logged and the team told once", { skip }, async () => {
