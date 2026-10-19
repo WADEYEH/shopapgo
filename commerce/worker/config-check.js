@@ -75,8 +75,7 @@ export const CONFIG_MANIFEST = {
       MCF_AUTO_SUBMIT: "true",
       MCF_SYNC_CRON: "true",
     },
-    // 10/12: the live store (landing's) has none of RESEND_*, PAYPAL_WEBHOOK_ID, the Amazon shipping connection or the
-    // address check key yet; they are set at the cutover (docs/commerce-plan.md §8.1), and this check says so if not.
+    // All set since the cutover (10/16; names listed in docs/ops/production-config.md); this check says so if one goes.
     secrets: [
       "ADMIN_TOKEN", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET",
       "PAYPAL_WEBHOOK_ID", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "META_CAPI_ACCESS_TOKEN",

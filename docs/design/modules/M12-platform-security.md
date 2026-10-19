@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文件版本 | v0.1 草稿，待你审核 |
+| 文件版本 | 定稿（随实作更新，最后更新 10/19） |
 | 日期 | 2026-10-06 |
 | 上层文件 | `docs/commerce-plan.md`、`docs/design/scenarios.md` |
 | 对应情境 | C14、J1–J6 |
@@ -21,14 +21,14 @@
 |---|---|---|---|---|
 | 本机 | localhost | 本机 D1 | 假服务 | 不寄 |
 | staging | staging.shopapgo.com（要密码） | `apgo-us-store-staging` | Airwallex sandbox、PayPal sandbox | 只寄测试信箱 |
-| 正式 | 依 D9 决定（www 或 store） | `apgo-us-store`（沿用现有的正式数据库） | Airwallex、PayPal 正式帐户 | 正式寄出 |
+| 正式 | www.shopapgo.com（D37；shopapgo.com、store.shopapgo.com 都 301 到 www），后台 admin.shopapgo.com | `apgo-us-store`（沿用现有的正式数据库） | Airwallex、PayPal 正式帐户 | 正式寄出 |
 
 ---
 
 ## 2. 部署规则
 
 - 只从 GitHub 的 `main` 经 CI 部署。合并进 `main` 会自动部署 staging；正式部署要在 GitHub 手动触发，并由你核准。
-- 禁止从本机直接部署正式环境。合并完成、切换到新版之后开始执行；在那之前，landing 那边每次同步时都要比对线上设定（D22）。
+- 禁止从本机直接部署正式环境。合并完成、切换到新版之后开始执行；在那之前，landing 那边每次同步时都要比对线上设定（D22）。（10/19 更新：10/16 切换起已执行：正式环境只从 GitHub 手动部署，要 anpuuuuu 核准（D65）；WADEYEH 也能核准还没做（C16）。）
 - CI：每个 PR 都要跑品牌站测试、后端测试、建置、打包检查、端到端测试，全部通过才能合并。
 - 部署后自动比对线上设定和 repo 是否一致，不一致就通知团队（J6）。
 - 正式环境的设定和密钥名称记在 `docs/ops/production-config.md`，只记名称和用途，不记值。
@@ -40,13 +40,14 @@
 - 改用 D1 迁移文件（`commerce/migrations/`），部署时自动套用。
 - 正式环境迁移前先记下还原点；D1 可以还原到过去任一分钟（保留天数依方案而定）。
 - 上线前在 staging 演练一次还原（J3）。
+- （10/19 更新）D1 Time Travel 保留 30 天。另外每天把正式数据库加密备份到 GitHub Actions、保留 90 天（D77，#90 等合并；第一次备份实跑和还原测试在合并后做，C23）。
 
 ---
 
 ## 4. 回退
 
 - Worker 可以直接回到上一个版本；上线前在 staging 演练，目标 10 分钟内完成（J2）。
-- 网站切换期间，旧网站保留两周，必要时可以切回（企划第 6 章阶段 4）。
+- 网站切换期间，旧网站保留两周，必要时可以切回（企划第 6 章阶段 4）。（10/19 更新：旧的 Cloudflare Pages 专案保留到 10/30 之后才删，C30；回退步骤在营运手册第 24 节。）
 
 ---
 
@@ -59,7 +60,7 @@
 | 结账、联络表单 | 限制同一来源的送出次数；联络表单加防机器人验证（Turnstile） | C14、J4 |
 | 大量恶意请求 | Cloudflare 的防护规则 | J4 |
 | 日志 | 不记个人资料（地址、email、电话、卡号）；卡号本来就不经过我们 | — |
-| 密钥 | 只放在 Worker 的 secrets，不进代码和文件；没在用的移除（企划 O10） | — |
+| 密钥 | 只放在 Worker 的 secrets，不进代码和文件；没在用的移除（企划 O10：`META_TEST_EVENT_CODE` 10/16 已删除） | — |
 | 密钥外泄 | 换新密钥的步骤写成文件：在哪个服务换、换完要更新哪个设定、怎么确认 | J5 |
 | 外部服务故障 | 一个服务出问题不影响其他功能；寄信、送单、Meta 事件都由排程事后补做 | J1 |
 | 监控 | 错误、验证失败、重试失败都通知团队；每日异常摘要（M8） | — |
@@ -87,11 +88,11 @@
 | 项目 | 现在 | 要做的 |
 |---|---|---|
 | CI | ✓ 品牌站、后端、端到端测试都会跑（阶段 1） | — |
-| 正式部署 | ✓ 程式完成（PR 3-1，`.github/workflows/deploy.yml`）：staging 在 CI 通过后自动部署，正式环境手动执行并要核准 | 你建 Cloudflare 金钥和 GitHub 的 production 环境（`docs/ops/runbook.md` 第 2 节） |
+| 正式部署 | ✓ 程式完成（PR 3-1，`.github/workflows/deploy.yml`）：staging 在 CI 通过后自动部署，正式环境手动执行并要核准 | 完成：Cloudflare 金钥和 GitHub 的 production 环境 10/15 设好（M5，D65）；10/16 切换当天三次正式部署都成功。WADEYEH 也能核准（C16） |
 | 数据库迁移文件 | ✓ `commerce/migrations/` 编号档，只增不改（D45，PR 3-1） | — |
 | 设定比对 | ✓ PR 3-11：Worker 每天和每次新版本上线后比对自己的设定，不一致寄团队信（D59）；10/12 在 staging 演练 | — |
 | 密钥外泄步骤 | ✓ PR 3-11：营运手册第 21 节，10/12 在 staging 换过 `ADMIN_TOKEN`（D60） | — |
-| 回退、还原演练 | ✗ | 上线前演练 |
-| 限速、防机器人 | △ 结账、地址检查、报价 API 每个来源每分钟限次（PR 3-1）；联络表单（10/8）：机器人栏位、同一来源每小时 5 则（只存每天换的杂凑值，不存 IP）、全站每小时 60 则；Turnstile 程式完成，设好 `TURNSTILE_SITE_KEY` 和密钥 `TURNSTILE_SECRET_KEY` 才启用 | 你建 Turnstile 金钥 |
-| 设定清单文件 | ✗ | 阶段 0 写好 |
-| 两个 repo 部署到同一个 staging | 会互相覆盖 | 合并后只剩 shopapgo 部署 |
+| 回退、还原演练 | ✓ 回退：测试站演练 10 秒（G14，10/12）；正式环境步骤在营运手册第 24 节（切换前的版本 `f62194a4` ＋ `npm run rollback:routes`）和第 5 节（wrangler rollback）。还原：D1 Time Travel 30 天，加上每日加密备份 90 天（D77，#90 等合并） | 备份第一次实跑和还原测试（合并 #90 后，C23） |
+| 限速、防机器人 | △ 结账、地址检查、报价 API 每个来源每分钟限次（PR 3-1）；联络表单（10/8）：机器人栏位、同一来源每小时 5 则（只存每天换的杂凑值，不存 IP）、全站每小时 60 则；Turnstile 程式完成，设好 `TURNSTILE_SITE_KEY` 和密钥 `TURNSTILE_SECRET_KEY` 才启用 | 完成：Turnstile 金钥 10/15 设好，两个环境的联络表单都有机器人检查（M11） |
+| 设定清单文件 | ✓ `docs/ops/production-config.md`（10/19 更新为切换后的版本） | — |
+| 两个 repo 部署到同一个 staging | 会互相覆盖 | 已解决（D38：landing 冻结、不再部署，只剩 shopapgo 部署测试站） |

@@ -185,16 +185,16 @@ test("wrangler.toml binds both staging custom domains and sets ADMIN_HOST; produ
   assert.match(staging, /pattern = "store-staging\.shopapgo\.com", custom_domain = true/, "a stand-in for the old store host");
   assert.match(staging, /^SITE_HOST = "staging\.shopapgo\.com"$/m);
   assert.match(staging, /^MOVED_HOSTS = "store-staging\.shopapgo\.com"$/m);
-  // The same site in production, which takes effect with the cutover deploy (www moves to this Worker then).
+  // The same site in production: all of www on this Worker since the cutover (2026-10-16).
   assert.match(production, /^directory = "\.\.\/out"/m);
   assert.match(production, /^not_found_handling = "404-page"/m);
-  assert.match(toml, /# Do NOT deploy main here before the cutover/);
+  assert.match(toml, /since the cutover \(2026-10-16\) all of www runs on this Worker/);
   for (const section of [toml.slice(0, toml.indexOf("[env.")), staging, production]) {
     assert.match(section, /run_worker_first = true/, "all assets must pass the Worker host/auth gates");
   }
   // MCF_AUTO_SUBMIT is on in production since 10/16 (after the Hold test passed; commerce-mcf.test.mjs checks it).
   assert.ok(!/^\s*(PRICING_APPROVED|EXPRESS_CHECKOUT|SITE_ENV|MCF_FAKE)\s*=/m.test(production), "no flag that would open payments, fake Amazon or add the staging gate in production");
-  assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production),"production has no website Basic login; admin uses ADMIN_LOGIN_* + ADMIN_TOKEN");
+  assert.ok(!/^\s*ADMIN_ACCEPT_SITE_BASIC\s*=/m.test(production),"production has no website Basic login; admin is Cloudflare Access only (C17)");
 });
 
 const basicOf = (user, pass) => ({ Authorization: "Basic " + Buffer.from(`${user}:${pass}`).toString("base64") });
