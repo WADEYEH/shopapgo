@@ -284,7 +284,7 @@ test.describe("structured data", () => {
         { shippingRate: { value: "7.99", currency: "USD" }, deliveryTime: { transitTime: { minValue: 3, maxValue: 5 } } },
         { doesNotShip: true, shippingDestination: { addressRegion: ["AK", "HI"] } },
       ],
-      hasMerchantReturnPolicy: { merchantReturnDays: 30, merchantReturnLink: `${SITE}/returns` },
+      hasMerchantReturnPolicy: { merchantReturnDays: 30, merchantReturnLink: `${SITE}/returns`, returnFees: "https://schema.org/ReturnFeesCustomerResponsibility" },
     });
     await expect(page.locator("[data-price-note]")).toHaveCount(0);
   });

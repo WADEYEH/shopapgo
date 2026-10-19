@@ -33,7 +33,7 @@ We do not offer direct exchanges. Please return the product under this policy an
 
 ## Refunds
 
-- Refunds go back to the original payment method (card, Apple Pay, Google Pay, Airwallex Pay, or PayPal).
+- Refunds go back to the original payment method (PayPal, Airwallex Pay, or the card, Apple Pay, or Google Pay you paid with).
 - Once we issue a refund, your bank or PayPal usually takes 5–10 business days to show it.
 - If a refund cannot be completed (for example, your card was closed), we will contact you to arrange another way to refund you.
 

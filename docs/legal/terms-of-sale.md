@@ -23,7 +23,7 @@ We sell to customers with a shipping address in the 48 contiguous United States 
 
 ## Payment
 
-We accept credit and debit cards, Apple Pay, Google Pay, and Airwallex Pay (processed by Airwallex), and PayPal. We do not store your full card number. You agree that you are authorized to use the payment method you provide.
+We accept PayPal (where you can also pay with a credit or debit card) and Airwallex Pay (processed by Airwallex). Where checkout shows them, we also accept credit and debit cards, Apple Pay, and Google Pay, processed by Airwallex. We do not store your full card number. You agree that you are authorized to use the payment method you provide.
 
 ## Shipping and delivery
 

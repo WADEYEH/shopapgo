@@ -2,7 +2,7 @@
 // product prices, shipping methods/fees, tax, quantity limit and currency.
 //
 // Product prices are the owner's decision (D204 $59.99, D215 $29.99), and so is shipping ($7.99 per order, D31).
-// Tax below is still undecided (O1). To change any of them,
+// Sales tax is $0 at launch by the owner's decision (D68, reviewed every quarter, C13). To change any of them,
 // either edit DEFAULT_PRICING or (no code change) set the optional `PRICING_JSON`
 // Worker variable to a partial override, e.g.
 //
@@ -22,7 +22,7 @@ export const DEFAULT_PRICING = {
   currency: "USD",
   maxQtyPerLine: 10,
 
-  // D204 $59.99, D215 $29.99 (owner's decision, 2026-10-05). Shipping and tax below are still undecided.
+  // D204 $59.99, D215 $29.99 (owner's decision, 2026-10-05). Owners change prices in the back office (D52).
   products: {
     d204: {
       sku: "D204",
@@ -47,15 +47,15 @@ export const DEFAULT_PRICING = {
   },
   defaultShippingMethod: "standard",
 
-  // TAX IS UNDECIDED. Default 0 everywhere, so every order is taxed $0.00.
-  // Do not infer a tax regime from this structure; it only makes one configurable.
+  // $0 everywhere (D68: no sales tax collected at launch, the owner's decision without an accountant; reviewed every
+  // quarter, C13). Do not infer a tax regime from this structure; it only makes one configurable.
   tax: {
     // Rate for any destination state without its own entry below.
     defaultRateBps: 0,
-    // Per-state override, e.g. { CA: 725 }. Empty until the nexus/registration
-    // position is decided (or replace this calculation with a tax service).
+    // Per-state override, e.g. { CA: 725 }. Empty while no state registration is needed (D68, C13), or replace this
+    // calculation with a tax service.
     stateRatesBps: {},
-    // Whether the shipping fee is part of the taxable base. Varies by state; undecided.
+    // Whether the shipping fee is part of the taxable base. Varies by state; decided per state when a rate is added.
     shippingTaxable: false,
   },
 };
@@ -189,15 +189,15 @@ export function resolvePricing(env = {}) {
 
 export const pricingApproved = (env = {}) => String(env.PRICING_APPROVED ?? "").toLowerCase() === "true";
 
-// "tax undecided" = every rate is still 0.
+// "undecided" = every rate is 0 (today, by D68); "configured" once any state has a rate.
 export function taxStatus(pricing) {
   const { defaultRateBps, stateRatesBps } = pricing.tax;
   return defaultRateBps > 0 || Object.values(stateRatesBps).some((rate) => rate > 0) ? "configured" : "undecided";
 }
 
-// Production safety: with AIRWALLEX_ENV=prod the store refuses to take payment until
-// the owner sets PRICING_APPROVED=true, so placeholder numbers cannot go live by
-// accident. Sandbox ("demo") is never blocked.
+// Production safety: with AIRWALLEX_ENV=prod the store refuses to take payment unless
+// PRICING_APPROVED=true (set in production since launch), so numbers nobody approved can
+// never go live by accident. Sandbox ("demo") is never blocked.
 export function storeReadiness(env = {}) {
   const prod = env.AIRWALLEX_ENV === "prod";
   return { ready: !prod || pricingApproved(env), prod, approved: pricingApproved(env) };

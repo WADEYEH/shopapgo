@@ -35,7 +35,7 @@
 | 已开封的退货不退款、不寄回 | D18 |
 | 不直接换货 | D18 |
 | 客服 2 个工作日内回复，联络方式是信箱和联络表单 | D27、D28 |
-| 付款方式：信用卡、Apple Pay、Google Pay、Airwallex Pay、PayPal | D14、D21 |
+| 付款方式：PayPal（可以在 PayPal 里刷卡）、Airwallex Pay；结帐页有显示时才有信用卡、Apple Pay、Google Pay（Airwallex 开通刷卡后，C14） | D14、D21、D70 |
 
 ---
 
