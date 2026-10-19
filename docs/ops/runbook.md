@@ -599,6 +599,7 @@ Amazon 建单当下就回缺货（Amazon 拒收、单子没建起来）也照这
 | 2026-10-14 | 演练第 12 项：送单失败（C10） | staging | 部署 #60（版本 f462b7e2）后，你刷一张收件人 `Rehearsal REJECT` 的测试卡单；把 `orders.paid_at` 和 `mcf_submission_queue.due_at` 调到 61 分钟前 → 下一次排程送单被拒（invalid），`order_mcf` 状态 failed，`team_alerts` 有 mcf_failed（sent） | 约 5 分钟 |
 | 2026-10-15 | 旧 store 网址转址（C12） | staging | 部署 #62（版本 08b8706b，自动建好 `store-staging.shopapgo.com`）。网页 301 到 `staging.shopapgo.com` 的同一页，旧商品网址和 `checkout.html` 一次到位、查询参数保留；`/api/*`、`/.well-known/*` 不转址。部署后头几十秒有请求还由旧版本处理（得到 401），约 1 分钟后全部正确 | 约 3 分钟 |
 | 2026-10-16 | 合并 #67、#68、#69 后测试站停在 #68 | staging | 三个 CI 几乎同时跑完，#69 的部署在排队时被 #68 的部署挤掉（排队中的部署会被后来的取消），测试站的政策页还是旧版。手动 Run workflow → staging 部署 `main`（cedcd4e）补上；Deploy 工作加了「只部署 main 最新版本」的检查 | 约 5 分钟 |
+| 2026-10-19 | 每日备份第一次实跑与还原测试（第 6 节，C23、D77） | production、staging | 手动执行「Database backup」：正式 `apgo-us-store-production-2026-10-19`（125 KB）、测试站 `apgo-us-store-staging-2026-10-19`（269 KB），都加密、保留到 2027-01-17，执行纪录不含资料。下载测试站那份 → 用私钥解密（检查档头 APGO-BACKUP-1）→ 汇入全新的空 SQLite 数据库 → 45 张表 571 笔跟测试站现况逐表比对完全一样 → 删除解密档。另外发现：`wrangler d1 execute --remote --file` 会走上传汇入的路，只读的计数请用 `--command`，而且一个查询里的 UNION 不能太多（改用子查询） | 下载到比对完约 5 分钟 |
 
 ---
 
