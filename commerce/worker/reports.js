@@ -3,7 +3,8 @@
 //
 // Counted the way the dashboard counts (worker/dashboard.js): an order on the day it was paid, at its full total, also
 // when it was refunded or cancelled later; a refund on the day the provider made it (failed ones never). Unpaid
-// checkouts never count (D36). Net = paid − refunded.
+// checkouts never count (D36). Net = paid − refunded. Fees (C20, M15): what PayPal or Airwallex kept of each payment and
+// what they pay out (worker/payment-fees.js); a payment whose fee is not read yet is counted apart, never guessed.
 //
 //   GET /admin/api/reports/sales?preset=&from=&to=          the numbers, per product, per payment method, per day,
 //                                                            shipping charged vs Amazon's fee estimate
@@ -63,8 +64,9 @@ export async function salesReport(env, period) {
   const db = env.DB;
   const orders = await all(db,
     `SELECT o.id, o.paid_at, o.lines_json, o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents, ${PROVIDER} AS provider,
-       f.fee_cents AS fee_cents
+       f.fee_cents AS fee_cents, pf.fee_cents AS payment_fee_cents, pf.net_cents AS payment_net_cents
      FROM orders o LEFT JOIN order_mcf_fees f ON f.order_id = o.id
+       LEFT JOIN payment_fees pf ON pf.ref = o.payment_intent_id AND pf.order_id = o.id AND pf.status != 'unknown'
      WHERE o.paid_at IS NOT NULL AND o.paid_at >= ? AND o.paid_at < ?`, ...paidIn(period));
   const refunds = await all(db,
     "SELECT order_id, amount_cents, provider, provider_created_at FROM order_refunds WHERE status != 'FAILED' AND provider_created_at >= ? AND provider_created_at < ?",
@@ -108,6 +110,7 @@ export async function salesReport(env, period) {
     if (day) day.refundedCents += refund.amount_cents;
   }
   const withFee = orders.filter((order) => order.fee_cents !== null && order.fee_cents !== undefined);
+  const withPaymentFee = orders.filter((order) => order.payment_fee_cents !== null && order.payment_fee_cents !== undefined);
   const grossCents = sum(orders, "total_cents");
   const refundedCents = sum(refunds, "amount_cents");
   return {
@@ -123,6 +126,13 @@ export async function salesReport(env, period) {
     products: [...products.values()].sort((a, b) => b.salesCents - a.salesCents || a.sku.localeCompare(b.sku)),
     payments: [...payments.values()].sort((a, b) => b.paidCents - a.paidCents),
     days: (period.toMs - period.fromMs) / DAY <= 92 ? [...days.values()] : null,
+    // What the payment providers kept (C20): only payments whose fee was read; the others are counted apart.
+    paymentFees: {
+      orders: withPaymentFee.length,
+      notYetKnown: orders.length - withPaymentFee.length,
+      feeCents: sum(withPaymentFee, "payment_fee_cents"),
+      netCents: sum(withPaymentFee, "payment_net_cents"),
+    },
     // Only orders with an estimate are compared (it is read when the order goes to Amazon).
     shippingVsAmazon: {
       orders: withFee.length,
@@ -177,8 +187,10 @@ export async function paymentsCsv(env, actor, period) {
   const db = env.DB;
   const [from, to] = paidIn(period);
   const payments = await all(db,
-    `SELECT o.id, o.paid_at AS at, o.total_cents AS cents, o.currency, o.payment_intent_id AS ref, ${PROVIDER} AS provider
-     FROM orders o WHERE o.paid_at IS NOT NULL AND o.paid_at >= ? AND o.paid_at < ?`, from, to);
+    `SELECT o.id, o.paid_at AS at, o.total_cents AS cents, o.currency, o.payment_intent_id AS ref, ${PROVIDER} AS provider,
+       pf.provider_ref, pf.fee_cents, pf.net_cents, pf.currency AS fee_currency
+     FROM orders o LEFT JOIN payment_fees pf ON pf.ref = o.payment_intent_id AND pf.order_id = o.id AND pf.status != 'unknown'
+     WHERE o.paid_at IS NOT NULL AND o.paid_at >= ? AND o.paid_at < ?`, from, to);
   const refunds = await all(db,
     `SELECT order_id AS id, provider_created_at AS at, amount_cents AS cents, currency, id AS ref, provider, status
      FROM order_refunds WHERE status != 'FAILED' AND provider_created_at >= ? AND provider_created_at < ?`, from, to);
@@ -186,17 +198,23 @@ export async function paymentsCsv(env, actor, period) {
     `SELECT checkout_id AS id, created_at, updated_at, amount_cents AS cents, currency, ref, provider, status FROM checkout_payments
      WHERE status IN ('duplicate_refunded', 'duplicate_refund_failed', 'duplicate_refunding') AND created_at >= ? AND created_at < ?`, from, to);
   const lines = [
-    ...payments.map((row) => ({ at: row.at, type: "payment", order: row.id, provider: row.provider, ref: row.ref, cents: row.cents, currency: row.currency, status: "paid" })),
+    ...payments.map((row) => ({ at: row.at, type: "payment", order: row.id, provider: row.provider, ref: row.ref, cents: row.cents, currency: row.currency, status: "paid",
+      providerRef: row.provider_ref, feeCents: row.fee_cents, netCents: row.net_cents, feeCurrency: row.fee_currency })),
     ...refunds.map((row) => ({ at: row.at, type: "refund", order: row.id, provider: row.provider, ref: row.ref, cents: -row.cents, currency: row.currency, status: row.status.toLowerCase() })),
     ...duplicates.flatMap((row) => [
       { at: row.created_at, type: "second payment", order: row.id, provider: row.provider, ref: row.ref, cents: row.cents, currency: row.currency, status: "paid" },
       ...(row.status === "duplicate_refunded" ? [{ at: row.updated_at, type: "second payment refund", order: row.id, provider: row.provider, ref: row.ref, cents: -row.cents, currency: row.currency, status: "refunded" }] : []),
     ]),
   ].sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.order.localeCompare(b.order));
-  const header = [`date (${period.zone})`, "date (UTC)", "type", "order", "provider", "reference", "amount", "currency", "status"];
+  // fee / net received: what the provider kept and pays out for a payment (blank: not read yet). provider reference: the
+  // id in the provider's own report (PayPal capture id, Airwallex payment attempt id), for matching line by line (M15).
+  const header = [`date (${period.zone})`, "date (UTC)", "type", "order", "provider", "reference", "amount", "currency", "status",
+    "fee", "net received", "fee currency", "provider reference"];
+  const known = (line) => line.feeCents !== null && line.feeCents !== undefined;
   const body = lines.map((line) => [
     text(localTime(env, Date.parse(line.at))), text(line.at), text(line.type), text(line.order), text(line.provider === "paypal" ? "PayPal" : "Airwallex"),
     text(line.ref), amount(line.cents), text(line.currency), text(line.status),
+    known(line) ? amount(line.feeCents) : "", known(line) ? amount(line.netCents) : "", text(known(line) ? line.feeCurrency : ""), text(line.providerRef ?? ""),
   ]);
   await recordAdminAudit(db, { actor, action: "export.payments", target: `${period.from}..${period.to}`, detail: { rows: body.length } });
   return { filename: `apgo-payments-${period.from}-to-${period.to}.csv`, body: csv(header, body) };

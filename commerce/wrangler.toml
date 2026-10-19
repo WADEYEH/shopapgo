@@ -320,7 +320,8 @@ MCF_SYNC_CRON = "true"
 # admin login is Cloudflare Access only; ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD and ADMIN_TOKEN would open /admin again
 # only if ADMIN_ACCESS were switched off.
 # PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
-# prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
+# prices / shipping / tax and sets PRICING_APPROVED = "true" (it is set as a secret; worker/config-check.js checks it is
+# "true", and PAYPAL_ENV "live", every day, C23). SITE_ENV is deliberately not set either (no staging gate).
 # Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
 # AIRWALLEX_WEBHOOK_SECRET, ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, META_CAPI_ACCESS_TOKEN,
 # plus the optional notification / email / MCF secrets.

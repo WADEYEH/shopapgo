@@ -3,6 +3,7 @@
 // 23 hours an ambiguous send stops for review instead of risking a duplicate.
 import { claimOrderEmail, finishOrderEmail } from './orders.js';
 import { fail, json } from './http.js';
+import { noteBadSignature } from './webhook-signatures.js';
 
 const iso = (ms) => new Date(ms).toISOString();
 const MAX_ATTEMPTS = 6;
@@ -221,7 +222,10 @@ async function limitedBody(request, limit = 64 * 1024) {
 export async function handleResendWebhook(request, env) {
   const raw = await limitedBody(request);
   if (raw === null) return fail(413, 'payload_too_large', 'Webhook payload too large.');
-  if (!(await verifyResendSignature(request, env.RESEND_WEBHOOK_SECRET, raw))) return fail(400, 'invalid_signature', 'Webhook signature verification failed.');
+  if (!(await verifyResendSignature(request, env.RESEND_WEBHOOK_SECRET, raw))) {
+    await noteBadSignature(env, 'resend');
+    return fail(400, 'invalid_signature', 'Webhook signature verification failed.');
+  }
   let event;
   try { event = JSON.parse(raw); } catch { return fail(400, 'invalid_payload', 'Invalid webhook payload.'); }
   if (!EVENT_STATUS[event?.type]) return json({ ignored: true });

@@ -152,6 +152,27 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 
 **演练纪录（staging）**：见第 22 节。
 
+**每日备份（Cloudflare 以外，C23）**：Time Travel 是 Cloudflare 自己的，万一 Cloudflare 帐号出事就一起没了，所以每天另外汇出一份放到 GitHub（你 10/19 选的）。
+- GitHub Actions「**Database backup**」每天 09:17 UTC（台湾 17:17、美国半夜）汇出正式环境的数据库，**加密后**存成那次执行的档案，保留 **90 天**；也可以手动按 Run workflow 选 production 或 staging。
+- repo 是公开的，任何登录 GitHub 的人都下载得到这个档案，所以一定先加密：只有你的**私钥**打得开（RSA-4096 + AES-256-GCM，`commerce/scripts/backup-crypt.mjs`）。repo 里只有公钥 `commerce/backup/backup-public-key.pem`（指纹 `96654cf0903a1510`）。执行纪录和摘要不写任何资料表、笔数或顾客资料。
+- **私钥**：10/19 产生在这台电脑的 `C:UserschiazDocumentsAPGO-backup-keyapgo-backup-private-key.pem`，只在这里，没有上传、没有进 Git（`.gitignore` 挡住所有 `.pem`，只放行公钥）。请另外存一份在安全的地方（例如密码管理器的附件或离线 USB）。**私钥不见了，备份就打不开**；那时要重新产生一对钥匙、换掉公钥，之后的备份才用得到。私钥外流的话也一样换掉，旧的备份 90 天后自然消失。
+- 备份失败：自动在 repo 开一个 issue「Database backup failed (日期)」，你会收到 GitHub 通知。打开那次执行看原因（多半是 Cloudflare 金钥过期或权限变了），修好后手动再跑一次。
+
+**从备份还原**（Time Travel 不能用时才用；会建一个新的数据库，不会动到现有的）：
+1. GitHub → Actions → Database backup → 选那一天的执行 → 下载档案（zip，里面是 `apgo-us-store-production-日期.sql.enc`），解压到一个新资料夹。
+2. 解密（用你的私钥，结果是 SQL 档，含顾客资料，用完要删）：
+   ```bash
+   node commerce/scripts/backup-crypt.mjs decrypt <私钥路径> apgo-us-store-production-日期.sql.enc restore.sql
+   ```
+3. 在 Cloudflare 建一个空的数据库并汇入：
+   ```bash
+   cd commerce
+   npx wrangler d1 create apgo-us-store-restore
+   npx wrangler d1 execute apgo-us-store-restore --remote --file ../restore.sql
+   ```
+4. 检查订单数、最近几张订单（只读查询）。要让网站改用它：开 PR 把 `wrangler.toml` 正式环境的 `database_id` 换成新数据库的，照第 4 节部署（会再跑一次迁移，不会重复建表）。
+5. 删除解密出来的 `restore.sql` 和下载的档案。
+
 ---
 
 ## 7. 数据库迁移（只增不改，D45）
@@ -180,7 +201,7 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 
 ## 9. 排程与健康检查
 
-- 排程：正式环境**每 5 分钟**、staging 每 2 分钟。每次执行这些工作：结账失效与 30 天删除（`checkouts`，第 13 节）、争议期限提醒与每日对帐（`payments`，第 14 节）、缺货重送与出货提醒（`fulfillment`，第 15 节）、每日摘要（`digest`，第 16 节）、冷静期后送 Amazon（`mcf_submit`）、Amazon 出货状态同步（`mcf_sync`）、顾客信重寄（`email_retry`）、Meta 事件重送（`meta_retry`）。一件失败不影响其他件。
+- 排程：正式环境**每 5 分钟**、staging 每 2 分钟。每次执行这些工作：结账失效与 30 天删除（`checkouts`，第 13 节）、争议期限提醒与每日对帐（`payments`，第 14 节）、缺货重送与出货提醒（`fulfillment`，第 15 节）、每日摘要（`digest`，第 16 节）、冷静期后送 Amazon（`mcf_submit`）、Amazon 出货状态同步（`mcf_sync`）、顾客信重寄（`email_retry`）、Meta 事件重送（`meta_retry`）、包裹追踪（`tracking`）、GA4 退款事件（`ga4`）、线上设定比对（`config`，第 21 节）、Amazon 库存（`stock`，第 26 节）、资料保存期限（`retention`，每天一次，第 19 节）、每笔收款的手续费（`fees`，第 19 节）。一件失败不影响其他件。
 - 每次执行写进 `cron_runs` 资料表（`_tick` 代表整次执行），记录开始、结束、最后成功时间和最后的错误。
 - `GET /api/health`：
   - 200 `{"ok":true,...}`：30 分钟内有执行完的排程
@@ -299,6 +320,12 @@ Amazon 出货服务没有测试环境，staging 的订单如果真的送出去�
 
 PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个按钮只查 Airwallex），PayPal 的退款由通知自动进来。
 
+**PayPal 拒绝卡片（C20）**：顾客在 PayPal 选的卡被拒（PayPal 回 INSTRUMENT_DECLINED）时，结帐页说「PayPal declined that payment method」，PayPal 视窗自动再打开，让顾客换一张卡或用 PayPal 余额，再按一次就会重新请款（每次用新的请求编号，不会拿到上一次被拒的结果）。被拒的纪录写在付款失败纪录：订单页和「未完成结账」看得到原因（`paypal_declined`、PayPal 的 debug id），顾客的订单页也会说明。订单页自己不会再拿被拒的卡去请款，只有顾客换了付款方式才会。
+
+**两个分页同时付款（C20）**：结账一旦付款成功，它的付款编号就不会再被另一个分页换掉；另一个分页那时才建立的付款会被取消，画面直接带到订单。同一个结账收到第二笔成功的付款时，看付款纪录判断哪一笔是付款的那笔，只退第二笔（付款的那笔永远不会被当成重复退掉）。
+
+**通知签名验证失败（C20）**：Airwallex、PayPal、Resend 的通知签名对不上时，系统拒收、记下来（每天每家一个计数，保留 30 天）。同一天同一家第 3 次就寄团队信「… notifications are being refused (signature check failed)」，一天一封。处理：最近换过那一家的通知密钥（`AIRWALLEX_WEBHOOK_SECRET`、`PAYPAL_WEBHOOK_ID`、`RESEND_WEBHOOK_SECRET`）的话，多半是贴错了，照第 21 节重设；对方后台的通知纪录也看得到失败的传送。没换过的话，可能是有人在乱送假通知，系统已经拒收，不用做什么。
+
 **拒付与争议（两家）**
 
 - 顾客向银行或 PayPal 申请争议时：记下哪一家、原因、金额、回应期限；**未出货的订单冻结**；寄信给拥有者，含回应期限。
@@ -372,7 +399,7 @@ Amazon 建单当下就回缺货（Amazon 拒收、单子没建起来）也照这
 
 **团队信谁收**：每个人在后台左下角（自己的名字下方）按「**团队邮件：开 / 关**」自己开关。拥有者预设收，一般成员预设不收；最后一个收的人不能关。成员加入、移除、改角色的通知照样寄给所有拥有者。
 
-**团队信有哪些**：需人工确认、重复付款已自动退还、结账失效后才付款、送单失败、Amazon 关单或缺货（第 3 天再提醒）、Amazon 的版本跟订单不一致、Amazon 出货了已取消或已退款的订单（新）、送出 2 个工作日没追踪号、拒付（开启、期限前 3 天、结果）、部分退款冻结出货、退款失败、PayPal 撤款或拒绝请款、每日对帐有发现、**地址没检查到**（新：结账当下地址检查服务连不上，出货前请看一下地址）、不合法的状态变更、Hold 测试单没取消成功、每日摘要。
+**团队信有哪些**：需人工确认、重复付款已自动退还、结账失效后才付款、送单失败、Amazon 关单或缺货（第 3 天再提醒）、Amazon 的版本跟订单不一致、Amazon 出货了已取消或已退款的订单（新）、付款服务的通知签名验证失败（新，第 14 节）、送出 2 个工作日没追踪号、拒付（开启、期限前 3 天、结果）、部分退款冻结出货、退款失败、PayPal 撤款或拒绝请款、每日对帐有发现、**地址没检查到**（新：结账当下地址检查服务连不上，出货前请看一下地址）、不合法的状态变更、Hold 测试单没取消成功、每日摘要。
 
 **每日摘要**（新）：每天台湾时间早上 8 点后的第一次排程，寄一封「Daily summary」，列出还没处理的：需人工确认、没送到 Amazon、Amazon 缺货（第几天）、送出 2 个工作日没追踪号、进行中的拒付和期限、没成功的退款、前一天没送达的顾客信、前一天地址没检查到的订单。都没有就不寄。
 
@@ -470,8 +497,23 @@ Amazon 建单当下就回缺货（Amazon 拒收、单子没建起来）也照这
 
 **CSV 汇出**（报表页右下，期间跟画面一样）：
 - 订单 CSV：每张订单一行（付款时间、状态、客户、州、商品、金额、退款、净额、付款方式与编号、出货与追踪、Amazon 出货费估算）。
-- 收款与退款 CSV：每笔收款、每笔退款一行；同一个结账被付两次、系统自动退回的那笔也列出。每月月初下载上个月的给会计，并跟 Airwallex、PayPal 后台的月报对一次总额（M9-06）。
+- 收款与退款 CSV：每笔收款、每笔退款一行；同一个结账被付两次、系统自动退回的那笔也列出；收款那行有手续费、实收和付款服务自己的编号（C20）。每月月初下载上个月的给会计，并照下面的「每月对帐」跟 Airwallex、PayPal 的报表逐笔对（M9-06、M15）。
 - 用 Excel 打开没问题（中文和以 = 开头的内容都处理过）。下载会记在操作纪录。
+
+**付款服务手续费与实收（C20、M15）**：每笔收款付款后，系统自己向 PayPal 或 Airwallex 读这笔的手续费和实收（扣掉手续费后付给我们的金额），存起来（排程 `fees`：PayPal 付款后马上读得到；Airwallex 要等它入帐，没入帐前每 6 小时再读一次，最多看 60 天内的收款）。报表页右边「付款服务手续费」显示期间内的手续费合计和实收；还没读到的笔数另外写，不会用猜的。收款与退款 CSV 多了「fee」「net received」「fee currency」「provider reference」四栏，provider reference 是付款服务自己报表上的编号（PayPal 的 capture id、Airwallex 的 payment attempt id）。
+
+**每月对帐（M15）**：每月月初做一次上个月的：
+1. 报表页选「上个月」，下载收款与退款 CSV。
+2. PayPal 后台 → 活动 → 下载报表（Activity download，上个月、已完成的付款），Airwallex 后台 → 报表 → 结算报表（Settlement report，上个月）。
+3. 用 provider reference 逐笔对：金额、手续费、实收要一样。CSV 里手续费空白的那几笔，是系统还没读到，以付款服务的报表为准。
+4. 对不起来的写进下面的演练纪录或事故纪录，告诉我。
+
+**资料保存期限（C23，D67）**：照隐私权政策自动执行，每天一次（排程 `retention`）：
+- 订单：付款满 **7 年**，把人从订单拿掉，做法跟「删除客户资料」一样（Email、姓名、地址、电话、广告资料、邮件副本、订单备注拿掉；金额、商品、寄送的州留着报税和对帐）。
+- 联络表单留言和客户备注：那个人最后一次付款或留言满 **2 年**就删除。
+- 通知签名失败的计数：30 天。
+- 未完成结账：30 天（第 13 节，本来就有）。
+客户要求删除时还是马上删（上面的隐私请求），这个只处理没人提出要求的。
 
 **付款查询**（「未完成结账」页最下方）：客户说付不了款时，输入 Airwallex 付款编号（`int_` 开头）或 PayPal 订单编号，看状态和失败原因。只读，不显示卡号和付款人资料。
 
@@ -497,7 +539,7 @@ Amazon 建单当下就回缺货（Amazon 拒收、单子没建起来）也照这
 
 ## 21. 密钥外泄与线上设定比对（J5、J6，D59、D60）
 
-**线上设定比对**：网站每天一次，以及每次新版本上线后，把自己的设定跟 repo 的 `commerce/wrangler.toml` 比对：一般设定的值、必须有的密钥（只看有没有，不看值）、数据库和限速的绑定。不一样就寄团队信「Live settings differ from the repo」，写出哪一项、应该是什么、现在是什么。处理：故意改的，就把改动写进 `wrangler.toml`、经 PR 部署；不是故意的，重新部署一次就恢复。在 Cloudflare 后台「新增」的一般设定、排程和网域路由，网站本身看不到，靠「只从 CI 部署」管住。
+**线上设定比对**：网站每天一次，以及每次新版本上线后，把自己的设定跟 repo 的 `commerce/wrangler.toml` 比对：一般设定的值、必须有的密钥（只看有没有，不看值）、数据库和限速的绑定。不一样就寄团队信「Live settings differ from the repo」，写出哪一项、应该是什么、现在是什么。10/19 起（C23）正式环境也检查：在 Cloudflare 后台用密钥设的开关值要对（`PRICING_APPROVED` 要是 true、`PAYPAL_ENV` 要是 live；信里只写名称，不写现在的值）、`GA4_API_SECRET` 和 `HEALTHCHECK_PING_URL` 要有，以及测试用的设定**不能**出现在正式环境（`META_TEST_EVENT_CODE`、`MCF_FAKE`、`CUSTOMER_EMAIL_TEST_RECIPIENTS`、`CUSTOMER_EMAIL_POLICY_NOTE`、`STAGING_BASIC_AUTH_*`、`SITE_ENV`、`ADMIN_ACCEPT_SITE_BASIC`），出现就在信里写「must not be here」，到 Cloudflare 后台删掉。旧的 `ADMIN_LOGIN_*` 依你 10/18 的决定留着，不检查。处理：故意改的，就把改动写进 `wrangler.toml`、经 PR 部署；不是故意的，重新部署一次就恢复。在 Cloudflare 后台「新增」的一般设定、排程和网域路由，网站本身看不到，靠「只从 CI 部署」管住。
 
 正式环境必须有的密钥（10/12 起）还包括 Amazon 出货连线（`AMAZON_OUTBOUND_BASE_URL`、`OUTBOUND_INTERNAL_TOKEN`、`MCF_SKU_MAP_JSON`）、`RESEND_WEBHOOK_SECRET` 和 `GOOGLE_ADDRESS_VALIDATION_KEY`。目前的正式环境（landing 的店）还没有这些和 `RESEND_API_KEY`、`PAYPAL_WEBHOOK_ID`，切换时要设好，否则会收到提醒信（总表在 `docs/commerce-plan.md` 第 8.1 节）。
 

@@ -1,0 +1,93 @@
+# Daily database backup outside Cloudflare (C23; docs/ops/runbook.md section 6). Owner's choice 10/19: kept as an
+# encrypted file on this repository's workflow runs for 90 days.
+#
+# The repository is public: anyone signed in to GitHub can download a run's files and read its log. So the export is
+# encrypted before it is stored (commerce/scripts/backup-crypt.mjs, with the owner's public key
+# commerce/backup/backup-public-key.pem; only the owner's private key opens it), the plain export never leaves the
+# runner, and the log and summary name no table, row count or customer detail.
+#
+# - Every day 09:17 UTC (night in the US, little traffic: D1 pauses other queries while it exports), production.
+# - By hand (Run workflow): production or staging, from main only.
+# - A failure opens an issue, so the owner is told (GitHub tells only the last editor of this file about failed runs).
+#
+# Uses the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (the same as the staging deploy).
+name: Database backup
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which database
+        type: choice
+        options: [production, staging]
+        default: production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-database
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: commerce
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TARGET: ${{ inputs.target || 'production' }}
+    outputs:
+      name: ${{ steps.encrypt.outputs.name }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: commerce/package-lock.json
+      - run: npm ci
+      - name: Export the database (plain copy stays on the runner)
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not set."
+            exit 1
+          fi
+          npx wrangler d1 export DB --env "$TARGET" --remote --output "$RUNNER_TEMP/export.sql" > /dev/null
+          test -s "$RUNNER_TEMP/export.sql"
+      - name: Encrypt with the owner's public key
+        id: encrypt
+        run: |
+          name="apgo-us-store-$TARGET-$(date -u +%Y-%m-%d)"
+          node scripts/backup-crypt.mjs encrypt backup/backup-public-key.pem "$RUNNER_TEMP/export.sql" "$RUNNER_TEMP/$name.sql.enc"
+          rm -f "$RUNNER_TEMP/export.sql"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "file=$RUNNER_TEMP/$name.sql.enc" >> "$GITHUB_OUTPUT"
+          echo "Backup $name: encrypted, kept 90 days. To restore: docs/ops/runbook.md section 6." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.encrypt.outputs.name }}
+          path: ${{ steps.encrypt.outputs.file }}
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error
+
+  tell:
+    needs: backup
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create --repo "${{ github.repository }}" \
+            --title "Database backup failed ($(date -u +%Y-%m-%d))" \
+            --body "The daily database backup did not finish: $RUN. What to do: docs/ops/runbook.md section 6."

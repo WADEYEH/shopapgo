@@ -6,3 +6,8 @@ out
 .DS_Store
 .claude/
 !.env.example
+
+# Backup keys (C23): only the public key belongs in the repo; the private key stays with the owner.
+*.pem
+!commerce/backup/backup-public-key.pem
+*private-key*

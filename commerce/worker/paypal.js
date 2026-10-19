@@ -129,7 +129,8 @@ function paypalErrorFrom(status, body, path) {
   const issue = body?.details?.[0];
   const code = issue?.issue ?? body?.name ?? body?.error ?? "api_error";
   const message = issue?.description ?? body?.message ?? body?.error_description ?? `PayPal ${path} failed.`;
-  return new PaypalError(status, code, message, body?.details);
+  // debug_id is what PayPal support asks for; kept for the back office (C20).
+  return Object.assign(new PaypalError(status, code, message, body?.details), { debugId: typeof body?.debug_id === "string" ? body.debug_id : "" });
 }
 
 async function request(env, method, path, payload, { idempotent = false, requestId } = {}) {

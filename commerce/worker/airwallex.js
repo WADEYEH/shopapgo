@@ -182,6 +182,12 @@ export function retrievePaymentDispute(env, disputeId) {
   return request(env, "GET", `/api/v1/pa/payment_disputes/${encodeURIComponent(disputeId)}`, undefined, { idempotent: true });
 }
 
+// The balance entries of one payment attempt, with Airwallex's fee and net (worker/payment-fees.js, C20). Read-only.
+export function listFinancialTransactions(env, sourceId) {
+  const query = new URLSearchParams({ source_id: sourceId, page_size: "100", page_num: "0" });
+  return request(env, "GET", `/api/v1/financial_transactions?${query}`, undefined, { idempotent: true });
+}
+
 export function retrieveRefund(env, refundId) {
   return request(env, 'GET', `/api/v1/pa/refunds/${encodeURIComponent(refundId)}`, undefined, { idempotent:true });
 }

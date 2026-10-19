@@ -44,6 +44,7 @@ const ADDED = [
   "order_privacy",
   "order_refund_requests",
   "order_refunds",
+  "payment_fees",
   "privacy_requests",
   "product_content",
   "product_images",
