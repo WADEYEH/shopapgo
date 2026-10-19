@@ -635,6 +635,12 @@ test("C21: the public order page says where a paid order is (not shipped yet, th
   assert.equal(page.shipment.trackingNumber, "1Z999AA10123456784");
   assert.equal(page.shipment.trackingUrl, "https://www.ups.com/track?tracknum=1Z999AA10123456784");
   assert.ok(!JSON.stringify(page).includes("100 Example Ave"), "no address on the public page");
+  // Shipped before tracking links were stored: the carrier's own tracking page is offered all the same.
+  db.raw.prepare("UPDATE order_fulfillments SET tracking_url = NULL WHERE order_id = ?").run(orderId);
+  db.raw.prepare("UPDATE order_packages SET tracking_url = '' WHERE order_id = ?").run(orderId);
+  page = await (await call(env, `/api/orders/${orderId}`)).json();
+  assert.equal(page.shipment.trackingUrl, "https://www.ups.com/track?tracknum=1Z999AA10123456784");
+  assert.ok(page.shipment.packages.every((p) => p.trackingUrl === null || p.trackingUrl.startsWith("https://")));
 
   const unpaid = await createOrder(env);
   const open = await (await call(env, `/api/orders/${unpaid.orderId}`)).json();
