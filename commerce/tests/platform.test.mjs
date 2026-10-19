@@ -460,6 +460,22 @@ test("Amazon gateway: its code and config are in the repo, CI dry-runs it, deplo
   assert.match(code, /seg\.length === 1 && seg\[0\] === "inventory"\) \{[\s\S]{0,400}?if \(method !== "GET"\)/);
   assert.ok(code.includes("fulfillable: count(d2.fulfillableQuantity)"), "the sellable stock");
   assert.match(deploy, /deployments status[\s\S]*GITHUB_STEP_SUMMARY[\s\S]*deploy\n[\s\S]*amazon-mcp\.apgo\.tw\/health/, "records the version before, deploys, checks the new one answers");
+  // The two other Amazon Workers (C32): their live code and config, built by CI, deployed by the same workflow.
+  assert.match(deploy, /options: \[amazon-spapi-mcp, amazon-connect, amazon-review-cron\]/);
+  assert.match(deploy, /working-directory: \$\{\{ inputs\.worker \}\}/);
+  for (const [dir, name] of [["amazon-connect", "apgo-amazon-mcp-gateway"], ["amazon-review-cron", "amazon-review-solicitation-cron"]]) {
+    const config = await readFile(new URL(`${dir}/wrangler.toml`, root), "utf8");
+    assert.match(config, new RegExp(`^name = "${name}"$`, "m"));
+    assert.match(config, /^main = "src\/index\.js"$/m);
+    assert.match(config, /^no_bundle = true$/m, `${dir}: the live bundle is deployed as it is`);
+    assert.ok(!/secret|token|password/i.test(config.replace(/^#.*$/gm, "")), `${dir}: no secret in the config`);
+    const ignored = await readFile(new URL(`${dir}/.gitignore`, root), "utf8");
+    for (const entry of [".dev.vars", ".env", "dist/"]) assert.ok(ignored.includes(entry), `${dir}: ${entry}`);
+    assert.match(ci, new RegExp(`deploy --dry-run --outdir dist\\n\\s+working-directory: ${dir}`));
+  }
+  const cron = await readFile(new URL("amazon-review-cron/wrangler.toml", root), "utf8");
+  assert.match(cron, /crons = \["30 16 \* \* \*"\]/);
+  assert.match(cron, /service = "amazon-spapi-mcp"\nentrypoint = "ReviewSolicitationJob"/);
 });
 
 test("deploy workflow: staging after CI on main; production only by hand, from main, switched on, confirmed and approved", async () => {

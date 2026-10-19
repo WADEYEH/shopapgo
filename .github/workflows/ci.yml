@@ -60,3 +60,8 @@ jobs:
           node-version: 22
       # The Amazon gateway Worker (amazon-spapi-mcp/README.md): its config and code still build. No login, nothing uploaded.
       - run: npx --yes wrangler@4.144.0 deploy --dry-run --outdir dist
+      # The Amazon tools' sign-in front and the review-request backup trigger (C32): the same check.
+      - run: npx --yes wrangler@4.144.0 deploy --dry-run --outdir dist
+        working-directory: amazon-connect
+      - run: npx --yes wrangler@4.144.0 deploy --dry-run --outdir dist
+        working-directory: amazon-review-cron

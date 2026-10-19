@@ -1,0 +1,37 @@
+# The backup trigger for the daily Amazon review requests (Cloudflare Worker "amazon-review-solicitation-cron"): every
+# day at 16:30 UTC it calls the Amazon gateway's ReviewSolicitationJob.runDaily (amazon-spapi-mcp/, service binding),
+# 30 minutes after the gateway's own 16:00 alarm, in case the alarm did not run. The job itself skips orders already
+# asked, so a second run does nothing extra.
+#
+# The code (src/index.js) is the live bundle downloaded from Cloudflare on 2026-10-19, unchanged (C32; README.md).
+# Settings below are copied from the live Worker; a dry run bundles exactly the same file. No secrets.
+# Deploy only from GitHub (Actions -> Deploy Amazon gateway, worker "amazon-review-cron"; docs/ops/runbook.md section 25).
+name = "amazon-review-solicitation-cron"
+main = "src/index.js"
+compatibility_date = "2026-09-22"
+no_bundle = true
+workers_dev = false
+preview_urls = false
+
+[triggers]
+crons = ["30 16 * * *"]
+
+[[services]]
+binding = "SPAPI"
+service = "amazon-spapi-mcp"
+entrypoint = "ReviewSolicitationJob"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1

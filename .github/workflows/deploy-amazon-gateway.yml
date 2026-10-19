@@ -1,6 +1,8 @@
-# Deploys the Amazon gateway Worker (amazon-spapi-mcp/, https://amazon-mcp.apgo.tw): the store's Amazon fulfillment
-# API, the Amazon MCP tools and the review-request scheduler. See amazon-spapi-mcp/README.md and docs/ops/runbook.md
-# section 25.
+# Deploys one of the Amazon Workers (docs/ops/runbook.md section 25):
+#   amazon-spapi-mcp     the Amazon gateway (https://amazon-mcp.apgo.tw): the store's Amazon fulfillment API, the Amazon
+#                        MCP tools and the review-request scheduler (amazon-spapi-mcp/README.md)
+#   amazon-connect       the Amazon tools' GitHub sign-in front (https://amazon-connect.apgo.tw; amazon-connect/README.md)
+#   amazon-review-cron   the daily review-request backup trigger (amazon-review-cron/README.md)
 #
 # Only by hand (Run workflow, from main, confirm "deploy amazon gateway") and only after a reviewer approves the
 # "production" environment. Needs the environment secret AMAZON_GATEWAY_DEPLOY_TOKEN (a Cloudflare token that can edit
@@ -10,6 +12,11 @@ name: Deploy Amazon gateway
 on:
   workflow_dispatch:
     inputs:
+      worker:
+        description: Which Worker
+        type: choice
+        options: [amazon-spapi-mcp, amazon-connect, amazon-review-cron]
+        default: amazon-spapi-mcp
       confirm:
         description: 'Type "deploy amazon gateway"'
         required: true
@@ -28,7 +35,7 @@ jobs:
       cancel-in-progress: false
     defaults:
       run:
-        working-directory: amazon-spapi-mcp
+        working-directory: ${{ inputs.worker }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.AMAZON_GATEWAY_DEPLOY_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -58,6 +65,7 @@ jobs:
       - name: Deploy
         run: $WRANGLER deploy
       - name: Check it answers with this version
+        if: inputs.worker == 'amazon-spapi-mcp'
         run: |
           expected=$(grep -o 'version: "[0-9][0-9.]*"' src/worker.js | tail -1 | grep -o '[0-9][0-9.]*')
           for i in 1 2 3 4 5 6; do
