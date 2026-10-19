@@ -10,7 +10,10 @@
 //   CUSTOMER_EMAIL_REPLY_TO               optional reply-to address
 //   CUSTOMER_EMAIL_POLICY_NOTE            optional plain-text paragraph appended to all messages
 //                                         (e.g. the approved return-policy sentence). Omitted when unset:
-//                                         this code never invents policy or delivery promises.
+//                                         this code never invents policy or delivery promises. The one
+//                                         delivery line in the confirmation is the published shipping
+//                                         policy's, and only once prices and policies are approved
+//                                         (PRICING_APPROVED; confirmationExtras).
 //   CUSTOMER_EMAIL_ENABLED                "false" switches customer emails off
 //   REFUND_ALERT_EMAIL_TO                  one approved staff recipient (separate from customer mail)
 //   REFUND_ALERT_EMAIL_ENABLED             "false" switches staff alerts off independently
@@ -18,7 +21,13 @@
 //
 // Durable delivery state and provider idempotency are in email-delivery.js.
 
-import { getOrder, claimOrderEmail, finishOrderEmail } from "./orders.js";
+import { getOrder, getOrderPayment, claimOrderEmail, finishOrderEmail } from "./orders.js";
+import { cardPaymentsEnabled } from "./wallets.js";
+import { pricingApproved } from "./pricing.js";
+import { company } from "../../lib/us/company.js";
+
+// The shipping policy's promise (docs/legal/shipping-policy.md, the /shipping page).
+export const DELIVERY_ESTIMATE = "Most orders arrive within 3–5 business days.";
 import { getFulfillment } from "./fulfillment.js";
 import { refundNoticeMuted } from "./refunds.js";
 import { noticeKind, sendOutboxEmail, getDelivery, validEmailKind, refundEmailKind } from "./email-delivery.js";
@@ -125,15 +134,55 @@ ${policyNote ? `<p style="color:#555">${escapeHtml(policyNote)}</p>` : ""}
   return { text, html };
 }
 
-export function buildConfirmationEmail(order, { policyNote } = {}) {
+// extras (C21; worker/customer-email.js confirmationExtras): { payment, delivery, orderUrl, support }, each optional.
+export function buildConfirmationEmail(order, { policyNote, extras = {} } = {}) {
   const subject = `We received your APGO order ${order.id}`;
+  const extraRows = [];
+  const extraText = [];
+  if (extras.payment) {
+    extraRows.push(["Paid with", escapeHtml(extras.payment)]);
+    extraText.push(`Paid with: ${extras.payment}`);
+  }
+  if (extras.delivery) {
+    extraRows.push(["Delivery", escapeHtml(extras.delivery)]);
+    extraText.push(`Delivery: ${extras.delivery}`);
+  }
+  const html = [];
+  if (extras.orderUrl) {
+    extraText.push(`View your order: ${extras.orderUrl}`);
+    html.push(`<p><a href="${escapeHtml(extras.orderUrl)}">View your order</a></p>`);
+  }
+  if (extras.support) {
+    extraText.push(`Questions? Reply to this email or write to ${extras.support}.`);
+    html.push(`<p style="color:#555">Questions? Reply to this email or write to <a href="mailto:${escapeHtml(extras.support)}">${escapeHtml(extras.support)}</a>.</p>`);
+  }
   const body = render({
     heading: "Thanks for your order",
-    intro: "Thanks for your order. Your payment was received. We'll email you with updates about your order.",
+    intro: "Thanks for your order. Your payment was received. We'll email you the tracking number as soon as it ships.",
     order,
+    extraRows,
+    extraText,
+    extraHtml: html.join("\n"),
     policyNote,
   });
   return { subject, ...body };
+}
+
+// What the confirmation adds (C21): how it was paid, the shipping policy's delivery estimate, a link to the order's
+// page on the site, and the support address. Never throws: a part that cannot be read is left out.
+export async function confirmationExtras(env, order) {
+  const extras = { support: company.email };
+  if (pricingApproved(env)) extras.delivery = DELIVERY_ESTIMATE;
+  try {
+    const payment = await getOrderPayment(env.DB, order.id);
+    if (payment?.provider === "paypal") extras.payment = "PayPal";
+    else if (payment?.provider === "airwallex") extras.payment = cardPaymentsEnabled(env) ? "Card or Airwallex Pay" : "Airwallex Pay";
+  } catch {
+    // left out
+  }
+  const host = String(env.SITE_HOST ?? "").trim().toLowerCase();
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)) extras.orderUrl = `https://${host}/checkout?order=${encodeURIComponent(order.id)}`;
+  return extras;
 }
 
 export function buildShipmentEmail(order, shipment, { policyNote } = {}) {
@@ -282,6 +331,7 @@ export async function sendCustomerEmail(env, order, kind, options = {}) {
     const config = parsed?.team ? refundAlertConfig(env) : customerEmailConfig(env);
     const notice = noticeKind(kind);
     const payload = notice ? await noticePayload(env.DB, order.id, kind) : null;
+    const extras = kind === "confirmation" ? await confirmationExtras(env, order) : null;
     const build = () => {
       const policy = { policyNote: config.policyNote };
       if (parsed?.failed) return buildRefundFailureEmail(order, refund, { ...policy, team: parsed.team, adminUrl: refundAdminUrl(env, order.id) });
@@ -291,7 +341,7 @@ export async function sendCustomerEmail(env, order, kind, options = {}) {
       if (notice?.type === "cancelled") return buildCancellationEmail(order, payload, policy);
       if (notice?.type === "address") return buildAddressChangeEmail(order, policy);
       if (notice?.type === "duplicate") return buildDuplicateRefundEmail(order, payload, policy);
-      return buildConfirmationEmail(order, policy);
+      return buildConfirmationEmail(order, { ...policy, extras });
     };
     return await sendOutboxEmail(env, order, kind, config, build, options);
   } catch {

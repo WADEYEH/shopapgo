@@ -607,6 +607,41 @@ test("payment success sends exactly one customer confirmation with order id, ite
   assert.deepEqual(rows.map((r) => ({ ...r })), [{ kind: "confirmation", status: "sent" }]);
 });
 
+test("C21: with prices and policies approved, the confirmation says how it was paid, the delivery estimate, the order's link and where to ask", { skip }, async () => {
+  const db = await createD1();
+  const env = mailEnv(db, { PRICING_APPROVED: "true", SITE_HOST: "www.shopapgo.com", CARD_PAYMENTS_ENABLED: "false" });
+  const { orderId, mails } = await paidOrder(env);
+  const mail = mails[0];
+  assert.match(mail.text, /Paid with: Airwallex Pay/);
+  assert.ok(mail.text.includes("Delivery: Most orders arrive within 3–5 business days."));
+  assert.ok(mail.text.includes(`View your order: https://www.shopapgo.com/checkout?order=${orderId}`));
+  assert.ok(mail.text.includes("Questions? Reply to this email or write to services@apgo.com.tw."));
+  assert.ok(mail.html.includes(`href="https://www.shopapgo.com/checkout?order=${orderId}"`));
+  assert.ok(mail.html.includes('href="mailto:services@apgo.com.tw"'));
+  assert.ok(mail.text.includes("We'll email you the tracking number as soon as it ships."));
+});
+
+test("C21: the public order page says where a paid order is (not shipped yet, then carrier and tracking) and that a cancelled one was paid", { skip }, async () => {
+  const db = await createD1();
+  const env = mailEnv(db);
+  const { orderId } = await paidOrder(env);
+  let page = await (await call(env, `/api/orders/${orderId}`)).json();
+  assert.equal(page.paid, true);
+  assert.deepEqual(page.shipment, { shipped: false });
+  await ship(env, orderId);
+  page = await (await call(env, `/api/orders/${orderId}`)).json();
+  assert.equal(page.shipment.shipped, true);
+  assert.equal(page.shipment.carrier, "UPS");
+  assert.equal(page.shipment.trackingNumber, "1Z999AA10123456784");
+  assert.equal(page.shipment.trackingUrl, "https://www.ups.com/track?tracknum=1Z999AA10123456784");
+  assert.ok(!JSON.stringify(page).includes("100 Example Ave"), "no address on the public page");
+
+  const unpaid = await createOrder(env);
+  const open = await (await call(env, `/api/orders/${unpaid.orderId}`)).json();
+  assert.equal(open.paid, false);
+  assert.equal(open.shipment, null);
+});
+
 test("customer emails are skipped safely (and logged) when Resend is not configured", { skip }, async () => {
   const db = await createD1();
   const env = baseEnv(db); // no RESEND_API_KEY / sender

@@ -17,6 +17,8 @@
 //   listPages     list endpoint pages: how many empty pages (each with a nextToken) come before the real one
 //   failCancel    number of cancel calls answered 400 (Amazon already picking it)
 //   busyCancel    number of cancel calls answered 400 "System is busy" (a cancel right after the create, 10/16)
+//   slowCancel    a cancel is accepted but the order reads as cancelled only after this many more reads (C19: the
+//                 store waits for Amazon to show it cancelled); Infinity = never within the test
 //   ignoreHold    store every order as "Ship" even when "Hold" was asked for (a connection that drops the flag)
 //   stock         { sellerSku: { fulfillable, inbound?, reserved? } } for the stock read (gateway 1.8.3); a seller SKU
 //                 not listed is left out of the reply, as the gateway does for one Amazon has no record of. Without
@@ -32,6 +34,7 @@ export const FAKE_AMAZON_ENV = {
   MCF_AUTO_SUBMIT: "true",
   MCF_SKU_MAP_JSON: JSON.stringify({ D204: "AMZ-SKU-D204", D215: "AMZ-SKU-D215" }),
   MCF_RETRY_DELAY_MS: "0",
+  MCF_CANCEL_CHECK_MS: "0", // no wait between reading back a cancellation (worker/order-core.js)
   MCF_TIMEOUT_MS: "2000",
   ORDER_COOLING_OFF_MINUTES: "0", // no cooling-off in these tests: a paid order goes to Amazon right away
 };
@@ -49,6 +52,7 @@ export function createFakeAmazon(options = {}) {
   let emptyPagesLeft = options.listPages ?? 0;
   let failCancel = options.failCancel ?? 0;
   let busyCancel = options.busyCancel ?? 0;
+  const pendingCancels = new Map(); // id -> reads left before it shows CANCELLED
   const copyEdits = new Map();
   const stock = new Map(Object.entries(options.stock ?? {}));
   const plenty = options.stock ? null : { fulfillable: 100 };
@@ -133,6 +137,14 @@ export function createFakeAmazon(options = {}) {
         record("get");
         if (networkErrors.get > 0) { networkErrors.get -= 1; throw new TypeError("fetch failed"); }
         if (!stored) return reply(404, { error: "Order not found", spapiStatus: 404 });
+        if (pendingCancels.has(id)) {
+          const left = pendingCancels.get(id) - 1;
+          if (left <= 0) {
+            pendingCancels.delete(id);
+            stored.status = "CANCELLED";
+            stored.updatedAt = new Date().toISOString();
+          } else pendingCancels.set(id, left);
+        }
         const edit = copyEdits.get(id);
         return reply(200, edit ? edit(structuredClone(view(stored))) : view(stored));
       }
@@ -145,6 +157,10 @@ export function createFakeAmazon(options = {}) {
         }
         if (failCancel > 0) { failCancel -= 1; return reply(400, { error: "Order cannot be cancelled", spapiStatus: 400, details: "PICKING" }); }
         if (!["RECEIVED", "PLANNING", "PROCESSING"].includes(stored.status)) return reply(400, { error: "Order cannot be cancelled", spapiStatus: 400, details: stored.status });
+        if (options.slowCancel) {
+          pendingCancels.set(id, options.slowCancel);
+          return reply(200, { payload: {} });
+        }
         stored.status = "CANCELLED";
         stored.updatedAt = new Date().toISOString();
         return reply(200, { payload: {} });

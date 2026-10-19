@@ -98,7 +98,7 @@ stateDiagram-v2
   paid --> fulfilling: 冷静期后送 Amazon
   paid --> cancelled: 顾客取消、全额退款、缺货
   fulfilling --> shipped: 拿到追踪号
-  fulfilling --> cancelled: Amazon 取消成功
+  fulfilling --> cancelled: Amazon 读回已取消
   shipped --> [*]
   cancelled --> [*]
 ```

@@ -474,7 +474,8 @@ test("sync: when Amazon reports shipped with carrier + tracking, the order is ma
     assert.equal(synced.order.fulfillmentStatus, "shipped");
     assert.equal(synced.order.fulfillment.carrier, "Amazon Logistics");
     assert.equal(synced.order.fulfillment.trackingNumber, "TBA123456789000");
-    assert.equal(synced.order.fulfillment.trackingUrl, null, "Amazon gives no link here; none is invented");
+    // Amazon gives no link here: the carrier's own tracking page (C19), so the shipment email can say "Track your package".
+    assert.equal(synced.order.fulfillment.trackingUrl, "https://track.amazon.com/tracking/TBA123456789000");
     assert.equal(synced.order.fulfillment.shippedBy, "mcf");
     assert.equal(synced.order.mcf.record.status, "shipped");
     assert.equal(synced.order.mcf.canSync, false);
