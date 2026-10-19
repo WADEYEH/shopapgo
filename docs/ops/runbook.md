@@ -152,6 +152,27 @@ D1 会自动保留过去每一分钟的状态（Workers 付费方案 **30 天**�
 
 **演练纪录（staging）**：见第 22 节。
 
+**每日备份（Cloudflare 以外，C23）**：Time Travel 是 Cloudflare 自己的，万一 Cloudflare 帐号出事就一起没了，所以每天另外汇出一份放到 GitHub（你 10/19 选的）。
+- GitHub Actions「**Database backup**」每天 09:17 UTC（台湾 17:17、美国半夜）汇出正式环境的数据库，**加密后**存成那次执行的档案，保留 **90 天**；也可以手动按 Run workflow 选 production 或 staging。
+- repo 是公开的，任何登录 GitHub 的人都下载得到这个档案，所以一定先加密：只有你的**私钥**打得开（RSA-4096 + AES-256-GCM，`commerce/scripts/backup-crypt.mjs`）。repo 里只有公钥 `commerce/backup/backup-public-key.pem`（指纹 `96654cf0903a1510`）。执行纪录和摘要不写任何资料表、笔数或顾客资料。
+- **私钥**：10/19 产生在这台电脑的 `C:UserschiazDocumentsAPGO-backup-keyapgo-backup-private-key.pem`，只在这里，没有上传、没有进 Git（`.gitignore` 挡住所有 `.pem`，只放行公钥）。请另外存一份在安全的地方（例如密码管理器的附件或离线 USB）。**私钥不见了，备份就打不开**；那时要重新产生一对钥匙、换掉公钥，之后的备份才用得到。私钥外流的话也一样换掉，旧的备份 90 天后自然消失。
+- 备份失败：自动在 repo 开一个 issue「Database backup failed (日期)」，你会收到 GitHub 通知。打开那次执行看原因（多半是 Cloudflare 金钥过期或权限变了），修好后手动再跑一次。
+
+**从备份还原**（Time Travel 不能用时才用；会建一个新的数据库，不会动到现有的）：
+1. GitHub → Actions → Database backup → 选那一天的执行 → 下载档案（zip，里面是 `apgo-us-store-production-日期.sql.enc`），解压到一个新资料夹。
+2. 解密（用你的私钥，结果是 SQL 档，含顾客资料，用完要删）：
+   ```bash
+   node commerce/scripts/backup-crypt.mjs decrypt <私钥路径> apgo-us-store-production-日期.sql.enc restore.sql
+   ```
+3. 在 Cloudflare 建一个空的数据库并汇入：
+   ```bash
+   cd commerce
+   npx wrangler d1 create apgo-us-store-restore
+   npx wrangler d1 execute apgo-us-store-restore --remote --file ../restore.sql
+   ```
+4. 检查订单数、最近几张订单（只读查询）。要让网站改用它：开 PR 把 `wrangler.toml` 正式环境的 `database_id` 换成新数据库的，照第 4 节部署（会再跑一次迁移，不会重复建表）。
+5. 删除解密出来的 `restore.sql` 和下载的档案。
+
 ---
 
 ## 7. 数据库迁移（只增不改，D45）

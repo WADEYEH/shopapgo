@@ -525,3 +525,42 @@ test("production site build: refused unless the analytics values are given, and 
     assert.equal(pattern(script, scriptName), pattern(site, siteName), siteName);
   }
 });
+
+// ---------- C23: the daily database backup (the repository is public) ----------
+
+test("C23: a backup opens only with the private key; any changed byte, or another key, fails", async () => {
+  const { decrypt, encrypt, generateKeys } = await import("../scripts/backup-crypt.mjs");
+  const owner = generateKeys();
+  const other = generateKeys();
+  const plain = Buffer.from("PRAGMA defer_foreign_keys=TRUE;\nINSERT INTO orders VALUES ('APGO-US-1','ada@example.com');\n");
+  const sealed = encrypt(owner.publicKey, plain);
+  assert.ok(!sealed.includes(Buffer.from("ada@example.com")), "nothing readable in the file");
+  assert.deepEqual(decrypt(owner.privateKey, sealed), plain);
+  assert.notDeepEqual(encrypt(owner.publicKey, plain), sealed, "a new key and nonce every time");
+  assert.throws(() => decrypt(other.privateKey, sealed));
+  const tampered = Buffer.from(sealed);
+  tampered[tampered.length - 1] ^= 1;
+  assert.throws(() => decrypt(owner.privateKey, tampered), /unable to authenticate|auth/i);
+  const header = Buffer.from(sealed);
+  header[header.indexOf(Buffer.from('"iv":"')) + 6] ^= 1;
+  assert.throws(() => decrypt(owner.privateKey, header));
+  // The repo holds only the public key.
+  const published = await readFile(new URL("../backup/backup-public-key.pem", import.meta.url), "utf8");
+  assert.match(published.trim(), /^-----BEGIN PUBLIC KEY-----[\s\S]+-----END PUBLIC KEY-----$/);
+  assert.doesNotMatch(published, /PRIVATE/);
+});
+
+test("C23: the backup workflow runs daily from main, encrypts before storing for 90 days, never prints the data and opens an issue when it fails", async () => {
+  const workflow = await readFile(new URL("../../.github/workflows/backup-database.yml", import.meta.url), "utf8");
+  assert.match(workflow, /schedule:\n\s+- cron: "17 9 \* \* \*"/);
+  assert.ok(workflow.includes("if: github.ref == 'refs/heads/main'"));
+  assert.match(workflow, /wrangler d1 export DB --env "\$TARGET" --remote --output "\$RUNNER_TEMP\/export\.sql" > \/dev\/null/);
+  assert.match(workflow, /backup-crypt\.mjs encrypt backup\/backup-public-key\.pem "\$RUNNER_TEMP\/export\.sql"[\s\S]*rm -f "\$RUNNER_TEMP\/export\.sql"/);
+  const upload = workflow.slice(workflow.indexOf("actions/upload-artifact"));
+  assert.match(upload, /path: \$\{\{ steps\.encrypt\.outputs\.file \}\}/, "only the encrypted file is stored");
+  assert.match(upload, /retention-days: 90/);
+  assert.ok(!/cat |head |tail |wc |sqlite3|SELECT/i.test(workflow.replace(/^#.*$/gm, "")), "no step shows what is in the database");
+  assert.match(workflow, /tell:\n\s+needs: backup\n\s+if: failure\(\)[\s\S]*gh issue create/);
+  const ignore = await readFile(new URL("../../.gitignore", import.meta.url), "utf8").catch(() => "");
+  assert.match(ignore, /\*\.pem\n!commerce\/backup\/backup-public-key\.pem|private-key/, "a private key can never be committed by accident");
+});
