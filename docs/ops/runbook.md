@@ -640,6 +640,12 @@ PayPal 订单的后台「Refunds」区块没有「Sync refunds」按钮（那个
 
 **回退**：`cd amazon-spapi-mcp && npx --yes wrangler@4.144.0 rollback <版本号>`。版本号在部署执行摘要；10/16 改版前是 `ce267b34-956c-4821-8cce-c14a3cc42fda`。
 
+**另外两个 Amazon 相关的 Worker**（10/19 也收进 repo，C32；程序码跟线上一模一样）：
+- `amazon-connect/`：`apgo-amazon-mcp-gateway`，`https://amazon-connect.apgo.tw`，Amazon 工具（MCP）的 GitHub 登录入口，通过后转给本节的转接程序。
+- `amazon-review-cron/`：`amazon-review-solicitation-cron`，每天 16:30 UTC 呼叫转接程序的请评论工作，当 16:00 那次的备援。
+
+部署方式一样，只是 Run workflow 时 Worker 选 `amazon-connect` 或 `amazon-review-cron`（只有转接程序会检查 `/health` 版本）。**三个 Worker 都只从 GitHub 部署**：Mac 或其他电脑上的旧程式不要再用 `wrangler deploy`，否则会把 GitHub 上的版本盖回旧版（C31）。
+
 **金钥**（都在 Cloudflare，repo 里没有）：`AMAZON_SP_API_CLIENT_ID`、`AMAZON_SP_API_CLIENT_SECRET`、`AMAZON_SP_API_REFRESH_TOKEN`、`MCP_API_KEY`、`OUTBOUND_INTERNAL_TOKEN`（网站也有一份，换的话两边要一起换，见 M8）、`SHORTLINKS_INTERNAL_TOKEN`。
 
 ---

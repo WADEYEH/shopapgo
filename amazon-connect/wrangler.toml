@@ -1,0 +1,30 @@
+# The Amazon tools' sign-in front (Cloudflare Worker "apgo-amazon-mcp-gateway", https://amazon-connect.apgo.tw): an OAuth
+# server that lets Claude (and ChatGPT) use the Amazon MCP tools after a GitHub sign-in by the one allowed GitHub user, then
+# passes each MCP request to the Amazon gateway (amazon-spapi-mcp/, https://amazon-mcp.apgo.tw/mcp) with its key.
+#
+# The code (src/index.js, version 0.2.2) is the live bundle downloaded from Cloudflare on 2026-10-19, unchanged (C32;
+# README.md). Settings below are copied from the live Worker; a dry run bundles exactly the same file.
+# Deploy only from GitHub (Actions -> Deploy Amazon gateway, worker "amazon-connect"; docs/ops/runbook.md section 25).
+#
+# Secrets (in Cloudflare, never here): AMAZON_MCP_API_KEY (the gateway's MCP_API_KEY), GITHUB_CLIENT_ID,
+# GITHUB_CLIENT_SECRET (the GitHub OAuth app).
+name = "apgo-amazon-mcp-gateway"
+main = "src/index.js"
+compatibility_date = "2026-10-04"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+no_bundle = true
+workers_dev = false
+preview_urls = false
+
+routes = [
+  { pattern = "amazon-connect.apgo.tw", custom_domain = true },
+]
+
+[vars]
+# The only GitHub account allowed to sign in (a public numeric user id, not a secret).
+GITHUB_OWNER_ID = "151181337"
+
+# OAuth clients, grants and tokens (workers-oauth-provider).
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "6fd774a7c0be4f509af4fdc1d87cb25e"

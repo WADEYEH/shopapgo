@@ -502,8 +502,8 @@ wrangler.toml            Worker 设定（staging / production）
 | C28 | 组合包（M2-05、O9）：价格、库存（各组件可售量 ÷ 每包数量取最小值）、送 Amazon 拆单 | 你决定要卖什么组合 | 等 |
 | C29 | 上线检查 G13：在正式网址重新截图，确认手机、平板、电脑都没破版（切换前只在测试站做过）；G8 等 C17 做完后再验 | 尽快（G13） | 等 |
 | C30 | 清理：删除旧的 Cloudflare Pages 专案（apgo-us-store.pages.dev，切换时说好保留两周）；删除测试站旧的 Resend 金钥 `shopapgo-staging`（已换新的） | 10/30 之后（Pages）；有空时（Resend） | 等 |
-| C31 | Amazon 转接程序以后只从 GitHub 部署（D75）：请 Mac 的使用者**不要再从 Mac 部署**，否则会把 1.8.3（含库存入口）盖回旧版 | 尽快告诉 Mac 的使用者 | 等 |
-| C32 | 另外两个跟 Amazon 有关的 Worker 原始码也不在 GitHub：`apgo-amazon-mcp-gateway`（Amazon 工具的登录入口 amazon-connect.apgo.tw）、`amazon-review-solicitation-cron`（评论排程备援，每天 16:30 UTC）。照 D75 的方式搬进 repo | 有空时 | 等 |
+| C31 | Amazon 转接程序以后只从 GitHub 部署（D75）：请 Mac 的使用者**不要再从 Mac 部署**，否则会把 1.8.3（含库存入口）盖回旧版 | 尽快告诉 Mac 的使用者 | 等你告诉 Mac 的使用者（10/19 起三个 Amazon Worker 都在 repo：`amazon-spapi-mcp/`、`amazon-connect/`、`amazon-review-cron/`，都只从 GitHub 部署） |
+| C32 | 另外两个跟 Amazon 有关的 Worker 原始码也不在 GitHub：`apgo-amazon-mcp-gateway`（Amazon 工具的登录入口 amazon-connect.apgo.tw）、`amazon-review-solicitation-cron`（评论排程备援，每天 16:30 UTC）。照 D75 的方式搬进 repo | 有空时 | **完成（等合并）**（10/19）：两个都下载线上版本放进 repo（`amazon-connect/`、`amazon-review-cron/`），dry-run 打包跟线上一模一样；CI 每个 PR 都检查能打包；GitHub 部署流程加一个「Worker」选项，三个都从同一个流程部署（要核准）。营运手册第 25 节 |
 
 ---
 
@@ -637,6 +637,7 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/18 | #84 合并：测试站读到的库存跟 Amazon 一样（D204 67、D215 187），用模拟数字跑演练第 9 项通过（缺货显示、挡结账、团队通知、自动恢复）；你说部署后正式部署（e2df20a6），11:55 第一次读到库存（D204 67、D215 188），两个商品照常卖。补进 C26–C32。开始 C17：你决定先只有你、Google 和 email 验证码、脚本不给权限、旧帐密留着；在 Cloudflare 建好正式环境的名单、应用（admin.shopapgo.com）和名单金钥，设定 PR 等合并部署 |
 | 10/18 | C17 完成：#85 合并部署（45745f11），你用 Google 登录正式后台成功，名单外的 email 被挡（G8、演练第 11 项）。你发现后台载入要几秒：量过是程式在亚洲执行、资料库在美东（正式）或大阪（测试站），一页要查十几次资料库、每次都跨洋。测试站把程式放到资料库旁边（Cloudflare 的 placement 设定）后，订单页从约 2.5 秒变约 0.7 秒；正式环境同样设定放到美东，PR 等合并部署 |
 | 10/18 | #86 合并部署（8d8bfe6e）：正式环境的程式改在美东执行（资料库旁边），后台不用每次查询都跨太平洋。你发现后台是简体中文，决定改成繁体（台湾用语）：后台的中文全部转成繁体，日期改台湾格式（zh-TW）；英文不变 |
+| 10/19 | #87 合并部署（06ff7c07），后台是繁体了；正式后台载入实测：订单约 0.5 秒（之前约 2.5–3 秒）。评论排程在转接程序换版后照常跑（10/18 16:00 和 16:30 UTC）。C32：另外两个 Amazon Worker 收进 repo，部署流程可以选 Worker |
 
 ---
 
