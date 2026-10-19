@@ -172,6 +172,20 @@ test.describe("PayPal checkout button", () => {
     expect(stored.paypal.id).toBe(PAYPAL_ID);
   });
 
+  test("PayPal declining the card opens PayPal again to choose another way to pay; the next try is paid (C20)", async ({ page }) => {
+    const calls = await mockStore(page, {
+      paypal: ENABLED_PAYPAL,
+      paypalCaptureError: { once: true, status: 402, error: { code: "paypal_declined", message: "PayPal declined that payment method. Choose another card or your PayPal balance, or another way to pay." } },
+    });
+    await toPaypalPayment(page);
+    await choosePaypal(page);
+    await page.locator("[data-stub-paypal]").click();
+
+    await expect(page.locator("[data-confirmation]")).toContainText("Order confirmed");
+    expect(calls.paypalCapture).toHaveLength(2);
+    expect(await page.evaluate(() => window.__paypalRestarts)).toBe(1);
+  });
+
   test("review capture is not treated as a Purchase", async ({ page }) => {
     const calls = await mockStore(page, { paypal: ENABLED_PAYPAL, paypalCaptureStatus: "review" });
     await toPaypalPayment(page);

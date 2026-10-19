@@ -211,7 +211,7 @@ export async function refundDuplicate(env, { order, provider, ref, amountCents, 
   try {
     await recordPayment(db, { provider, ref, checkoutId: order.id, amountCents, currency });
     const claimed = await db
-      .prepare("UPDATE checkout_payments SET status = 'duplicate_refunding', updated_at = ? WHERE provider = ? AND ref = ? AND status NOT IN ('duplicate_refunding', 'duplicate_refunded')")
+      .prepare("UPDATE checkout_payments SET status = 'duplicate_refunding', updated_at = ? WHERE provider = ? AND ref = ? AND status NOT IN ('succeeded', 'duplicate_refunding', 'duplicate_refunded')")
       .bind(new Date().toISOString(), provider, ref)
       .run();
     if (!(claimed.meta?.changes > 0)) return { outcome: "duplicate_already_handled" };

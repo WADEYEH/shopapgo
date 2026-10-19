@@ -14,6 +14,7 @@ import { scheduledPackageTracking } from "../worker/package-tracking.js";
 import { digestSections } from "../worker/team-digest.js";
 import { ga4Body, gaClientIdFrom, scheduledGa4Events } from "../worker/ga4.js";
 import { CONFIG_MANIFEST, configProblems, scheduledConfigCheck } from "../worker/config-check.js";
+import { scheduledRetention } from "../worker/retention.js";
 import { createD1, sqliteAvailable } from "./helpers/d1.mjs";
 import { FAKE_AMAZON_ENV, FAKE_BASE_URL, createFakeAmazon } from "./helpers/fake-amazon-mcf.mjs";
 
@@ -247,7 +248,7 @@ test("M12-03: a changed var, a missing secret or binding is found; the team is t
     const db = await createD1();
     const manifest = CONFIG_MANIFEST.production;
     const live = (extra = {}) => ({
-      ...env0(db), ...manifest.vars, ...Object.fromEntries(manifest.secrets.map((name) => [name, "set"])),
+      ...env0(db), ...manifest.vars, ...Object.fromEntries(manifest.secrets.map((name) => [name, "set"])), ...manifest.switches,
       CHECKOUT_LIMITER: {}, ADDRESS_LIMITER: {}, QUOTE_LIMITER: {}, PRODUCT_IMAGES: {}, CF_VERSION_METADATA: { id: "v1" }, ...extra,
     });
     assert.deepEqual(configProblems(live(), manifest), []);
@@ -256,6 +257,14 @@ test("M12-03: a changed var, a missing secret or binding is found; the team is t
       { kind: "secret", name: "RESEND_API_KEY" },
       { kind: "binding", name: "QUOTE_LIMITER" },
     ]);
+    // C23: switches set outside the repo must have their value; test-only settings must not exist in production.
+    assert.deepEqual(configProblems(live({ PRICING_APPROVED: "false", PAYPAL_ENV: undefined, META_TEST_EVENT_CODE: "TEST123", CUSTOMER_EMAIL_TEST_RECIPIENTS: "a@b.example" }), manifest), [
+      { kind: "switch", name: "PRICING_APPROVED", expected: "true" },
+      { kind: "switch", name: "PAYPAL_ENV", expected: "live" },
+      { kind: "absent", name: "META_TEST_EVENT_CODE" },
+      { kind: "absent", name: "CUSTOMER_EMAIL_TEST_RECIPIENTS" },
+    ]);
+    for (const name of ["GA4_API_SECRET", "HEALTHCHECK_PING_URL"]) assert.ok(manifest.secrets.includes(name), name);
     assert.deepEqual(await scheduledConfigCheck(live()), { ran: true, problems: 0 });
     assert.deepEqual(await scheduledConfigCheck(live()), { ran: false }, "once a day per version");
 
@@ -267,7 +276,142 @@ test("M12-03: a changed var, a missing secret or binding is found; the team is t
     assert.doesNotMatch(alerts()[0].text, /"set"/, "secret values are never in the email");
     assert.deepEqual(await scheduledConfigCheck(live({ AIRWALLEX_ENV: "demo", CF_VERSION_METADATA: { id: "v2" } })), { ran: false });
     assert.equal(alerts().length, 1);
+    // C23: a test setting left in production, or a switch set wrong, is reported by name only.
+    await scheduledConfigCheck(live({ META_TEST_EVENT_CODE: "TEST123", PAYPAL_ENV: "sandbox", CF_VERSION_METADATA: { id: "v3" } }));
+    assert.equal(alerts().length, 2);
+    assert.match(alerts()[1].text, /META_TEST_EVENT_CODE is set but must not be here/);
+    assert.match(alerts()[1].text, /PAYPAL_ENV is not "live"/);
+    assert.doesNotMatch(alerts()[1].text, /TEST123|sandbox/, "the live values are not in the email");
     // Local dev (no CONFIG_PROFILE) is never checked.
     assert.deepEqual(await scheduledConfigCheck({ DB: db }), { ran: false });
   });
+});
+
+// ---------- C20: notifications refused for their signature ----------
+
+test("C20: refused notifications are counted per provider and day; the third in a day tells the team once, without the key", { skip }, async () => {
+  await withWorld(async (world) => {
+    const db = await createD1();
+    const env = env0(db, { AIRWALLEX_WEBHOOK_SECRET: "whsec-airwallex-real", RESEND_WEBHOOK_SECRET: "whsec_c2VjcmV0" });
+    const post = (provider, headers = {}) => call(env, `/api/webhooks/${provider}`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ id: "evt_1", name: "payment_intent.succeeded", event_type: "PAYMENT.CAPTURE.COMPLETED", data: {} }),
+    });
+    const alerts = (label) => world.calls.mails.filter((m) => m.subject === `${label} notifications are being refused (signature check failed)`);
+    const today = new Date().toISOString().slice(0, 10);
+
+    for (let i = 0; i < 2; i += 1) assert.equal((await post("airwallex", { "x-timestamp": String(Date.now()), "x-signature": "00" })).status, 400);
+    assert.equal(alerts("Airwallex").length, 0, "one or two refusals are no alert (anyone can post junk)");
+    assert.equal(row(db, "SELECT value FROM ops_state WHERE key = ?", `webhook.bad_signature.airwallex.${today}`).value, "2");
+    for (let i = 0; i < 2; i += 1) assert.equal((await post("airwallex", { "x-timestamp": String(Date.now()), "x-signature": "00" })).status, 400);
+    assert.equal(alerts("Airwallex").length, 1, "the third tells the team, once a day");
+    assert.match(alerts("Airwallex")[0].text, /3 notifications from Airwallex were refused because their signature did not match AIRWALLEX_WEBHOOK_SECRET/);
+    assert.match(alerts("Airwallex")[0].text, /pasted wrong/);
+    assert.doesNotMatch(alerts("Airwallex")[0].text, /whsec-airwallex-real/, "the key itself is never in the email");
+
+    // PayPal (no webhook id here, so every notification is refused) and Resend are counted on their own.
+    for (let i = 0; i < 3; i += 1) assert.equal((await post("paypal")).status, 400);
+    assert.equal(alerts("PayPal").length, 1);
+    assert.equal((await post("resend", { "svix-id": "msg_1", "svix-timestamp": String(Math.floor(Date.now() / 1000)), "svix-signature": "v1,AAAA" })).status, 400);
+    assert.equal(alerts("Resend").length, 0);
+    assert.equal(row(db, "SELECT value FROM ops_state WHERE key = ?", `webhook.bad_signature.resend.${today}`).value, "1");
+  });
+});
+
+// ---------- C23, D67: how long data is kept ----------
+
+test("C23: 7 years after payment an order loses the person but keeps its amounts; messages and notes go 2 years after the person's last order or message", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db);
+  const nowMs = Date.parse("2033-11-01T03:00:00Z");
+  const old = insertOrder(db, "APGO-US-KEEP00000001", { paidAt: "2026-10-20T10:00:00Z", email: "old@example.com" });
+  const kept = insertOrder(db, "APGO-US-KEEP00000002", { paidAt: "2027-01-05T10:00:00Z", email: "newer@example.com" });
+  insertOrder(db, "APGO-US-KEEP00000003", { paidAt: "2032-06-01T10:00:00Z", email: "busy@example.com" });
+  db.raw.prepare("INSERT INTO order_notes (order_id, author, body, created_at) VALUES (?, 'owner', 'Called Ada at home', '2026-10-21T00:00:00Z')").run(old);
+  const message = (id, email, at) => db.raw.prepare("INSERT INTO contact_messages (id, created_at, name, email, message, ip_hash, email_status) VALUES (?, ?, 'Someone', ?, 'Hello', 'h', 'sent')").run(id, at, email);
+  message("CM-1", "old@example.com", "2031-01-01T00:00:00Z");      // nothing since: deleted
+  message("CM-2", "busy@example.com", "2031-01-01T00:00:00Z");     // an order in 2032: kept
+  message("CM-3", "talk@example.com", "2031-01-01T00:00:00Z");     // wrote again in 2033: both kept
+  message("CM-4", "Talk@Example.com ", "2033-01-01T00:00:00Z");
+  message("CM-5", "", "2031-06-01T00:00:00Z");                     // already erased: deleted by its date
+  const note = (customer, at) => db.raw.prepare("INSERT INTO customer_notes (customer, author, body, created_at) VALUES (?, 'owner', 'note', ?)").run(customer, at);
+  note("old@example.com", "2031-01-01T00:00:00Z");
+  note("busy@example.com", "2031-01-01T00:00:00Z");
+  const counter = (key, at) => db.raw.prepare("INSERT INTO ops_state (key, value, updated_at) VALUES (?, '4', ?)").run(key, at);
+  counter("webhook.bad_signature.paypal.2033-09-01", "2033-09-01T12:00:00Z");
+  counter("webhook.bad_signature.paypal.2033-10-25", "2033-10-25T12:00:00Z");
+
+  assert.deepEqual(await scheduledRetention(env, { nowMs }), { ran: true, orders: 1, messages: 2, notes: 1, counters: 1 });
+  assert.deepEqual(await scheduledRetention(env, { nowMs: nowMs + 3_600_000 }), { ran: false }, "once a day");
+
+  const gone = row(db, "SELECT email, shipping_json, total_cents, lines_json FROM orders WHERE id = ?", old);
+  assert.equal(gone.email, "");
+  assert.deepEqual(JSON.parse(gone.shipping_json), { state: "TX", erased: 1 }, "the state stays for sales tax");
+  assert.equal(gone.total_cents, 12797, "the amounts stay for the books");
+  assert.equal(JSON.parse(gone.lines_json)[0].sku, "D204");
+  assert.equal(row(db, "SELECT body FROM order_notes WHERE order_id = ?", old).body, "[Removed after 7 years]");
+  assert.equal(row(db, "SELECT email FROM orders WHERE id = ?", kept).email, "newer@example.com", "under 7 years: untouched");
+  assert.deepEqual(rows(db, "SELECT id FROM contact_messages ORDER BY id").map((r) => r.id), ["CM-2", "CM-3", "CM-4"]);
+  assert.deepEqual(rows(db, "SELECT customer FROM customer_notes").map((r) => r.customer), ["busy@example.com"]);
+  assert.deepEqual(rows(db, "SELECT key FROM ops_state WHERE key LIKE 'webhook.%'").map((r) => r.key), ["webhook.bad_signature.paypal.2033-10-25"]);
+
+  // The next day finds nothing more to do.
+  assert.deepEqual(await scheduledRetention(env, { nowMs: nowMs + DAY }), { ran: true, orders: 0, messages: 0, notes: 0, counters: 0 });
+});
+
+// ---------- C20, M15: each payment's fee and net ----------
+
+test("C20: the fees job reads PayPal's fee at once and Airwallex's until it settles; a fee not found is never shown and not asked for again within 6 hours", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db, { PAYPAL_CLIENT_ID: "pp_cid", PAYPAL_CLIENT_SECRET: "pp_secret", PAYPAL_RETRY_DELAY_MS: "0" });
+  const nowMs = Date.now();
+  const card = insertOrder(db, "APGO-US-FEES00000001", { paidAt: iso(nowMs - DAY) });
+  const paypal = insertOrder(db, "APGO-US-FEES00000002", { paidAt: iso(nowMs - DAY + 1000) });
+  db.raw.prepare("INSERT INTO checkout_payments (provider, ref, checkout_id, amount_cents, currency, status, created_at, updated_at) VALUES ('paypal', ?, ?, 12797, 'USD', 'succeeded', ?, ?)")
+    .run(`int_${paypal}`, paypal, iso(nowMs - DAY), iso(nowMs - DAY));
+  const missing = insertOrder(db, "APGO-US-FEES00000003", { paidAt: iso(nowMs - DAY + 2000) });
+  let settled = false;
+  const asked = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    asked.push(href.replace(/^https:\/\/[^/]+/, ""));
+    if (href.endsWith("/authentication/login")) return json(201, { token: "tok", expires_at: new Date(Date.now() + 1_800_000).toISOString().replace(/\.\d+Z$/, "+0000") });
+    if (href.endsWith("/v1/oauth2/token")) return json(200, { access_token: "pp_tok", expires_in: 32400 });
+    const intent = href.match(/\/payment_intents\/(int_[^/?]+)$/);
+    if (intent) return json(200, { id: intent[1], status: "SUCCEEDED", latest_payment_attempt: { id: `att_${intent[1].slice(-2)}` } });
+    if (href.includes("/financial_transactions?")) {
+      const source = new URL(href).searchParams.get("source_id");
+      if (source !== "att_01") return json(200, { items: [], has_more: false });
+      return json(200, { items: [{ id: "ft_1", source_id: "att_01", source_type: "PAYMENT_ATTEMPT", transaction_type: "PAYMENT", amount: 127.97, fee: 4.03, net: 123.94, currency: "USD", status: settled ? "SETTLED" : "PENDING" }] });
+    }
+    if (href.endsWith(`/v2/checkout/orders/int_${paypal}`)) {
+      return json(200, { id: `int_${paypal}`, status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: "CAP77", status: "COMPLETED", amount: { value: "127.97", currency_code: "USD" },
+        seller_receivable_breakdown: { gross_amount: { value: "127.97", currency_code: "USD" }, paypal_fee: { value: "4.95", currency_code: "USD" }, net_amount: { value: "123.02", currency_code: "USD" } } }] } }] });
+    }
+    throw new Error(`unexpected network call: ${href}`);
+  };
+  resetAirwallexTokenCache();
+  try {
+    const { scheduledPaymentFees } = await import("../worker/payment-fees.js");
+    assert.deepEqual(await scheduledPaymentFees(env, { nowMs }), { read: 3, stored: 2 });
+    const fees = () => rows(db, "SELECT order_id, provider, provider_ref, gross_cents, fee_cents, net_cents, status FROM payment_fees ORDER BY order_id");
+    assert.deepEqual(fees(), [
+      { order_id: card, provider: "airwallex", provider_ref: "att_01", gross_cents: 12797, fee_cents: 403, net_cents: 12394, status: "pending" },
+      { order_id: paypal, provider: "paypal", provider_ref: "CAP77", gross_cents: 12797, fee_cents: 495, net_cents: 12302, status: "final" },
+      { order_id: missing, provider: "airwallex", provider_ref: "", gross_cents: 0, fee_cents: 0, net_cents: 0, status: "unknown" },
+    ]);
+    const { salesReport, periodOf } = await import("../worker/reports.js");
+    const report = await salesReport(env, periodOf(env, { preset: "30d" }, nowMs));
+    assert.deepEqual(report.paymentFees, { orders: 2, notYetKnown: 1, feeCents: 898, netCents: 24696 });
+
+    asked.length = 0;
+    assert.deepEqual(await scheduledPaymentFees(env, { nowMs: nowMs + 60_000 }), { read: 0, stored: 0 }, "nothing is asked again within 6 hours");
+    assert.deepEqual(asked, []);
+    settled = true;
+    assert.deepEqual(await scheduledPaymentFees(env, { nowMs: nowMs + 7 * 60 * 60_000 }), { read: 2, stored: 1 }, "the pending one and the missing one, again");
+    assert.equal(fees()[0].status, "final");
+  } finally {
+    globalThis.fetch = original;
+  }
 });

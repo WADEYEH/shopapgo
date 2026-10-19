@@ -19,6 +19,8 @@ import { scheduledPackageTracking } from "./package-tracking.js";
 import { scheduledGa4Events } from "./ga4.js";
 import { scheduledConfigCheck } from "./config-check.js";
 import { scheduledStock } from "./inventory.js";
+import { scheduledRetention } from "./retention.js";
+import { scheduledPaymentFees } from "./payment-fees.js";
 
 export const CRON_JOBS = {
   checkouts: scheduledCheckouts,
@@ -34,6 +36,10 @@ export const CRON_JOBS = {
   config: scheduledConfigCheck,
   // Amazon's stock every 15 minutes (worker/inventory.js).
   stock: scheduledStock,
+  // How long data is kept (C23, D67): once a day (worker/retention.js).
+  retention: scheduledRetention,
+  // Each payment's fee and net from PayPal or Airwallex (C20, M15; worker/payment-fees.js).
+  fees: scheduledPaymentFees,
 };
 export const TICK = "_tick";
 const DEFAULT_STALE_MINUTES = 30;

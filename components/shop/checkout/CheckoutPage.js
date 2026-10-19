@@ -723,19 +723,32 @@ export default function CheckoutPage() {
               if (returnToFix(error)) throw error;
               // A new total: PayPal does not open; the shopper looks, then presses PayPal again (C21).
               if (error?.priceChanged) {
-                s.paypal.priceChanged = true;
+                s.paypal.handled = true;
                 showPaymentMessage("warning", "Price updated", error.message);
+                throw error;
+              }
+              // Paid in another tab meanwhile (C20): PayPal does not open; the order is shown instead.
+              const paidId = readCheckoutId();
+              if (error?.code === "checkout_closed" && paidId) {
+                s.paypal.handled = true;
+                window.history.replaceState(null, "", orderUrl(paidId));
+                await showOrder(paidId);
                 throw error;
               }
               showPaymentMessage("warning", "PayPal unavailable", error.message || "Could not start PayPal.");
               throw error;
             }
           },
-          onApprove: async (data) => {
+          onApprove: async (data, actions) => {
             try {
               await onPaypalApprove(data);
             } catch (error) {
               setPlacing(false);
+              // PayPal declined that card (C20): PayPal opens again so the shopper can choose another way to pay in it.
+              if (error.code === "paypal_declined" && actions?.restart) {
+                showPaymentMessage("warning", "Payment declined", `${error.message} PayPal opens again for you to choose.`);
+                return actions.restart();
+              }
               // Paid another way meanwhile (another tab): PayPal was not charged; show the order instead.
               const orderId = s.paypal.order?.orderId ?? readPaypalOrder()?.orderId;
               if (error.code === "checkout_closed" && orderId) {
@@ -752,8 +765,8 @@ export default function CheckoutPage() {
           },
           onError: () => {
             setPlacing(false);
-            if (s.paypal.priceChanged) {
-              s.paypal.priceChanged = false;
+            if (s.paypal.handled) {
+              s.paypal.handled = false;
               return;
             }
             showPaymentMessage("warning", "PayPal unavailable", `PayPal couldn't complete checkout. Try again or ${otherWayToPay(s.config)}.`);

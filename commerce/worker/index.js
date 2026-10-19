@@ -33,7 +33,7 @@ import { APPLE_PAY_DOMAIN_PATH, paymentMethodOptions, serveAppleDomainAssociatio
 import { ORDER_ID_PATTERN, newOrderId, validateCheckout, validatePaypalCheckout } from "./checkout.js";
 import { ADDRESS_MESSAGES, checkAddress, enforceAddress } from "./address-check.js";
 import { checkShipping } from "../../lib/shop/address-rules.mjs";
-import { recordPaymentFailure, publicPaymentFailure } from "./payment-failures.js";
+import { PAYPAL_RETRY_ISSUES, paypalDeclines, recordPaymentFailure, recordPaypalFailure, publicPaymentFailure } from "./payment-failures.js";
 import {
   AirwallexError,
   createPaymentIntent,
@@ -88,6 +88,7 @@ import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 import { rateLimited } from "./rate-limit.js";
 import { cronHealth, runScheduled } from "./cron.js";
+import { noteBadSignature } from "./webhook-signatures.js";
 import { checkoutIdForPayment, checkoutPayments, nextRequestId, paymentBelongsTo, recordPayment, reusableCheckout, updateCheckout, voidPayments } from "./checkouts.js";
 
 async function readBody(request) {
@@ -229,7 +230,11 @@ async function handleCheckoutSession(request, env, services) {
     });
     // A failure above leaves the checkout open: the next try reuses it (and it expires after 24 hours if never paid).
     await recordPayment(env.DB, { provider: "airwallex", ref: intent.id, checkoutId: orderId, amountCents: priced.totalCents, currency: priced.currency });
-    await attachPaymentIntent(env.DB, orderId, intent.id);
+    // Paid in another tab while this one was creating its payment (C20): this one is cancelled, the page goes to the order.
+    if (!(await attachPaymentIntent(env.DB, orderId, intent.id))) {
+      await voidPayments(env, orderId, { provider: "airwallex" });
+      return json({ orderId, quote: priced, settled: (await getOrder(env.DB, orderId)).status });
+    }
   }
   await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
 
@@ -269,7 +274,11 @@ async function handlePaypalCreate(request, env, services) {
     await nextRequestId(env.DB, orderId, "paypal"),
   );
   await recordPayment(env.DB, { provider: "paypal", ref: paypalOrder.id, checkoutId: orderId, amountCents: priced.totalCents, currency: priced.currency });
-  await attachPaypalOrder(env.DB, orderId, paypalOrder.id);
+  // Paid in another tab meanwhile (C20): this PayPal order is never shown.
+  if (!(await attachPaypalOrder(env.DB, orderId, paypalOrder.id))) {
+    await voidPayments(env, orderId, { provider: "paypal" });
+    return fail(409, "checkout_closed", "This order is already paid.");
+  }
   await deferred(services, runMetaEvent(env, orderId, "InitiateCheckout"));
 
   return json({
@@ -296,7 +305,9 @@ async function settleFromPaypalSnapshot(env, db, paypalOrder, services) {
   );
 }
 
-async function captureAndSettle(env, storeOrder, paypalOrderId, services) {
+// poll: the order page asking (GET /api/orders/:id). It never tries again after PayPal declined: only the shopper
+// choosing another way to pay in PayPal does (C20).
+async function captureAndSettle(env, storeOrder, paypalOrderId, services, { poll = false } = {}) {
   let paypalOrder = await retrievePaypalOrder(env, paypalOrderId);
   let inspected = inspectPaypalOrder(paypalOrder);
 
@@ -305,8 +316,32 @@ async function captureAndSettle(env, storeOrder, paypalOrderId, services) {
     if (!isUsableUsShipping(inspected.shipping)) {
       return { error: fail(400, "missing_shipping_address", "PayPal did not return a usable US shipping address."), inspected, order: storeOrder };
     }
-    paypalOrder = await capturePaypalOrder(env, paypalOrderId, `${storeOrder.id}-capture`);
+    const declines = await paypalDeclines(env.DB, paypalOrderId);
+    if (poll && declines) return { inspected, order: storeOrder, paypalOrder };
+    try {
+      // A new key after each decline: the same one would get PayPal's answer to the declined try again.
+      paypalOrder = await capturePaypalOrder(env, paypalOrderId, `${storeOrder.id}-capture${declines ? `-${declines}` : ""}`);
+    } catch (error) {
+      if (!(error instanceof PaypalError) || error.status !== 422) throw error;
+      if (error.code === "ORDER_ALREADY_CAPTURED") {
+        paypalOrder = await retrievePaypalOrder(env, paypalOrderId);
+      } else {
+        // Declined at once (C20): recorded (PayPal sends no event for it); the page lets the shopper pick another way.
+        await recordPaypalFailure(env.DB, { orderId: storeOrder.id, paypalOrderId, attempt: declines + 1, issue: error.code, message: error.message, debugId: error.debugId });
+        const retry = PAYPAL_RETRY_ISSUES.has(error.code);
+        return {
+          error: retry
+            ? fail(402, "paypal_declined", "PayPal declined that payment method. Choose another card or your PayPal balance, or another way to pay.")
+            : fail(402, "paypal_not_completed", "PayPal could not complete this payment. Nothing was charged. Try again, or choose another way to pay."),
+          inspected, order: storeOrder,
+        };
+      }
+    }
     inspected = inspectPaypalOrder(paypalOrder);
+    // A capture PayPal made but refused (DECLINED or FAILED): recorded too.
+    if (inspected.status === "DENIED") {
+      await recordPaypalFailure(env.DB, { orderId: storeOrder.id, paypalOrderId, attempt: declines + 1, issue: inspected.captureStatus, message: "PayPal declined the capture.", debugId: inspected.captureId, eventName: "paypal.capture_denied" });
+    }
   }
   // Still pending at PayPal: the checkout stays unpaid and the team is told why (once).
   if (inspected.status === "PENDING") await paypalPaymentPending(env, storeOrder, inspected, { adminUrl: `${services.adminOrigin}/admin/` });
@@ -355,6 +390,7 @@ async function handlePaypalCapture(request, env, services) {
 
   const result = await captureAndSettle(env, storeOrder, paypalId, services);
   if (result.error) return result.error;
+  if (result.inspected.status === "DENIED") return fail(402, "paypal_not_completed", "PayPal could not complete this payment. Nothing was charged. Try again, or choose another way to pay.");
   return json({
     orderId: result.order.id,
     status: result.order.status,
@@ -414,7 +450,7 @@ async function handleOrder(orderId, env, services) {
     const payment = await getOrderPayment(env.DB, orderId);
     if (payment?.provider === "paypal") {
       try {
-        const result = await captureAndSettle(env, order, order.payment_intent_id, services);
+        const result = await captureAndSettle(env, order, order.payment_intent_id, services, { poll: true });
         if (!result.error && result.order) order = result.order;
         return json({ ...publicOrder(order), paymentProvider: "paypal", paymentStatus: result.inspected?.status || order.status, paymentFailure: await publicPaymentFailure(env.DB, order) });
       } catch (error) {
@@ -462,7 +498,10 @@ async function handleWebhook(request, env, services) {
   // its age means the body can't be trusted as current state: use it only to find the
   // PaymentIntent and read the real state from the Retrieve API.
   const late = !fresh && (await verifyWebhookSignature({ ...signed, toleranceMs: Infinity }));
-  if (!fresh && !late) return fail(400, "invalid_signature", "Webhook signature verification failed.");
+  if (!fresh && !late) {
+    await noteBadSignature(env, "airwallex");
+    return fail(400, "invalid_signature", "Webhook signature verification failed.");
+  }
 
   let event;
   try {
@@ -519,7 +558,10 @@ async function handlePaypalWebhook(request, env, services) {
   }
 
   const verified = await verifyPaypalWebhook(env, { headers: paypalWebhookHeaders(request), event });
-  if (!verified) return fail(400, "invalid_signature", "Webhook signature verification failed.");
+  if (!verified) {
+    await noteBadSignature(env, "paypal");
+    return fail(400, "invalid_signature", "Webhook signature verification failed.");
+  }
 
   if (PAYPAL_SETTLE_EVENTS.has(String(event.event_type))) {
     const paypalOrderId = paypalOrderIdFromWebhook(event);

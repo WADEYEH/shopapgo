@@ -129,7 +129,14 @@ window.paypal = {
               options.onCancel?.({ orderID: id });
               return;
             }
-            await options.onApprove({ orderID: id });
+            // actions.restart(): PayPal opens again and the shopper picks another way to pay (at most twice here).
+            const actions = {
+              restart: async () => {
+                window.__paypalRestarts = (window.__paypalRestarts || 0) + 1;
+                if (window.__paypalRestarts <= 2) return options.onApprove({ orderID: id }, actions);
+              },
+            };
+            await options.onApprove({ orderID: id }, actions);
           } catch (error) {
             options.onError?.(error);
           }
@@ -209,7 +216,8 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
       }
       if (pathname === "/api/checkout/paypal/capture") {
         calls.paypalCapture.push(body);
-        if (paypalCaptureError) {
+        // once: only the first capture fails (the shopper's next try goes through).
+        if (paypalCaptureError && !(paypalCaptureError.once && calls.paypalCapture.length > 1)) {
           return reply(paypalCaptureError.status ?? 400, {
             error: paypalCaptureError.error ?? { code: "invalid_request", message: "Payment could not be completed." },
           });

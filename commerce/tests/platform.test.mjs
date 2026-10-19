@@ -184,6 +184,9 @@ test("staging order: payment sends it to the fake, the sync marks it shipped wit
     // The staging cron (MCF_SYNC_CRON=true) picks it up. (Today's payment check already ran: tests/payment-events.test.mjs
     // covers it, and it would ask Airwallex, which this world does not answer.)
     db.raw.prepare("INSERT INTO ops_state (key, value, updated_at) VALUES ('payments.reconciled_at', ?, ?)").run(new Date().toISOString(), new Date().toISOString());
+    // Its fee is already read too (the "fees" job asks Airwallex; tests/hardening.test.mjs covers it).
+    db.raw.prepare(`INSERT INTO payment_fees (provider, ref, order_id, gross_cents, fee_cents, net_cents, currency, status, fetched_at)
+      SELECT 'airwallex', payment_intent_id, id, total_cents, 0, total_cents, 'USD', 'final', ? FROM orders WHERE id = ?`).run(new Date().toISOString(), orderId);
     const ctx = ctxStub();
     await worker.scheduled({}, env, ctx);
     await ctx.settled();
@@ -393,7 +396,7 @@ test("cron: no ping without an https HEALTHCHECK_PING_URL; a failing ping or mis
   } finally {
     console.error = original;
   }
-  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "config", "digest", "email_retry", "fulfillment", "ga4", "mcf_submit", "mcf_sync", "meta_retry", "payments", "stock", "tracking"]);
+  assert.deepEqual(Object.keys(CRON_JOBS).sort(), ["checkouts", "config", "digest", "email_retry", "fees", "fulfillment", "ga4", "mcf_submit", "mcf_sync", "meta_retry", "payments", "retention", "stock", "tracking"]);
 });
 
 test("health: 503 until the cron has run, 200 after, 503 again once the last run is older than 30 minutes", { skip }, async () => {

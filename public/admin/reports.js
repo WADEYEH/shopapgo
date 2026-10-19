@@ -69,6 +69,7 @@ export async function renderReports(host, { route, adminApi, isCurrent, navigate
     el("tbody", {}, ...(rows.length ? rows : [el("tr", {}, el("td", { colspan: String(columns.length), class: "table-empty" }, t("reports.nothing")))]))));
 
   const ship = report.shippingVsAmazon;
+  const fees = report.paymentFees ?? { orders: 0, notYetKnown: 0, feeCents: 0, netCents: 0 };
   const exportMessage = el("div", { "aria-live": "polite", "data-export-message": true });
   const exportButton = (kind) => {
     const button = el("button", { class: "btn btn--ghost", type: "button", "data-export": kind }, icon("download", 16), t(`reports.export.${kind}`));
@@ -130,6 +131,14 @@ export async function renderReports(host, { route, adminApi, isCurrent, navigate
             ], `${ship.differenceCents < 0 ? "−" : ""}${money(Math.abs(ship.differenceCents))}`, t("reports.difference"))
             : el("p", { class: "hint" }, t("reports.noEstimates")),
           ship.withoutEstimate > 0 && el("p", { class: "hint" }, t("reports.withoutEstimate", { n: ship.withoutEstimate }))),
+        // What Airwallex and PayPal kept, and what they pay out (C20, M15).
+        card({ "data-report-fees": true },
+          cardHead(t("reports.fees")),
+          fees.orders
+            ? priceRows([{ label: t("reports.fee", { n: fees.orders }), value: `−${money(fees.feeCents)}` }], money(fees.netCents), t("reports.feeNet"))
+            : el("p", { class: "hint" }, t("reports.noFees")),
+          fees.notYetKnown > 0 && el("p", { class: "hint" }, t("reports.feeUnknown", { n: fees.notYetKnown })),
+          el("p", { class: "hint" }, t("reports.feesHint"))),
         card({ "data-report-exports": true },
           cardHead(t("reports.exports")),
           el("p", { class: "hint" }, t("reports.exportsHint", { range })),

@@ -466,13 +466,22 @@ test("M9-06: the payments CSV lists every payment and refund of the period and a
       VALUES ('rfd_csv', ?, ?, 700, 'USD', 'SETTLED', ?, ?, ?, 'airwallex')`).run(a.id, a.ref, iso(now), iso(now), iso(now));
     db.raw.prepare(`INSERT INTO checkout_payments (provider, ref, checkout_id, amount_cents, currency, status, created_at, updated_at)
       VALUES ('airwallex', 'int_dup', ?, ?, 'USD', 'duplicate_refunded', ?, ?)`).run(a.id, a.total, iso(now - 10_000), iso(now - 5_000));
+    // C20, M15: PayPal's fee and net for b are known; a's fee is not read yet (an "unknown" row is never shown).
+    const fee = db.raw.prepare(`INSERT INTO payment_fees (provider, ref, order_id, provider_ref, gross_cents, fee_cents, net_cents, currency, status, fetched_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'USD', ?, ?)`);
+    fee.run("paypal", b.ref, b.id, "CAPTURE-B", b.total, 312, b.total - 312, "final", iso(now));
+    fee.run("airwallex", a.ref, a.id, "", 0, 0, 0, "unknown", iso(now));
 
     const payments = await call(env, "/admin/api/exports/payments.csv?preset=today", { headers: ownerLogin });
     assert.equal(payments.status, 200);
     assert.match(payments.headers.get("Content-Type"), /^text\/csv/);
     assert.match(payments.headers.get("Content-Disposition"), /attachment; filename="apgo-payments-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.csv"/);
     const lines = (await payments.text()).replace(/^﻿/, "").trim().split("\r\n");
-    assert.match(lines[0], /^date \(Asia\/Taipei\),date \(UTC\),type,order,provider,reference,amount,currency,status$/);
+    assert.match(lines[0], /^date \(Asia\/Taipei\),date \(UTC\),type,order,provider,reference,amount,currency,status,fee,net received,fee currency,provider reference$/);
+    const paypalLine = lines.find((line) => line.includes(b.id) && line.includes('"payment"')).split(",");
+    assert.deepEqual(paypalLine.slice(9), ["3.12", ((b.total - 312) / 100).toFixed(2), '"USD"', '"CAPTURE-B"'], "fee, net received and PayPal's capture id");
+    const cardLine = lines.find((line) => line.includes(a.id) && line.includes('"payment"')).split(",");
+    assert.deepEqual(cardLine.slice(9), ["", "", '""', '""'], "a fee not read yet is blank, never 0");
     const amounts = lines.slice(1).map((line) => Number(line.split(",")[6]));
     assert.equal(lines.length - 1, 5, "2 payments, 1 refund, a second payment and its refund");
     assert.equal(Math.round(amounts.reduce((sum, value) => sum + value, 0) * 100), a.total + b.total - 700);
