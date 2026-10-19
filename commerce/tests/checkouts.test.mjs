@@ -41,8 +41,9 @@ function createProviders() {
   const intents = new Map();
   const byRequest = new Map();
   const paypal = new Map();
-  const calls = { creates: [], cancels: [], refunds: [], paypalCreates: 0, captures: [], paypalRefunds: [], mails: [] };
+  const calls = { creates: [], cancels: [], refunds: [], paypalCreates: 0, captures: [], captureKeys: [], paypalRefunds: [], mails: [] };
   let n = 0;
+  let declines = 0;
   const shipping = { name: { full_name: "Ada Lee" }, address: { address_line_1: "100 Example Ave", address_line_2: "Apt 4", admin_area_2: "Austin", admin_area_1: "TX", postal_code: "78701", country_code: "US" } };
   const paypalView = (id) => {
     const row = paypal.get(id);
@@ -87,14 +88,23 @@ function createProviders() {
       return json(201, paypalView(id));
     }
     const capture = href.match(/\/v2\/checkout\/orders\/([^/]+)\/capture$/);
-    if (capture) { calls.captures.push(capture[1]); paypal.get(capture[1]).status = "COMPLETED"; return json(201, paypalView(capture[1])); }
+    if (capture) {
+      calls.captures.push(capture[1]);
+      calls.captureKeys.push(init.headers?.["PayPal-Request-Id"]);
+      if (declines > 0) {
+        declines -= 1;
+        return json(422, { name: "UNPROCESSABLE_ENTITY", debug_id: `dbg-${calls.captures.length}`, details: [{ issue: "INSTRUMENT_DECLINED", description: "The instrument presented was either declined by the processor or bank." }] });
+      }
+      paypal.get(capture[1]).status = "COMPLETED";
+      return json(201, paypalView(capture[1]));
+    }
     const paypalGet = href.match(/\/v2\/checkout\/orders\/([^/?]+)$/);
     if (paypalGet) return paypal.has(paypalGet[1]) ? json(200, paypalView(paypalGet[1])) : json(404, { name: "RESOURCE_NOT_FOUND" });
     const paypalRefund = href.match(/\/v2\/payments\/captures\/([^/]+)\/refund$/);
     if (paypalRefund) { calls.paypalRefunds.push(paypalRefund[1]); return json(201, { id: "PPREF1", status: "COMPLETED" }); }
     throw new Error(`unexpected network call: ${method} ${href}`);
   }
-  return { intents, paypal, calls, handler, succeed: (id) => { intents.get(id).status = "SUCCEEDED"; } };
+  return { intents, paypal, calls, handler, succeed: (id) => { intents.get(id).status = "SUCCEEDED"; }, declineNext: (count = 1) => { declines = count; } };
 }
 
 async function withProviders(run) {
@@ -253,6 +263,75 @@ test("M5-08: card started, PayPal paid, then the card payment succeeds too: one 
     assert.equal(row(db, "SELECT status FROM checkout_payments WHERE ref = ?", card.intent.id).status, "duplicate_refunded");
     assert.equal(alerts(providers.calls).filter((m) => /was paid twice/.test(m.subject)).length, 1);
     assert.ok(rows(db, "SELECT action FROM order_audit").some((a) => a.action === "order.duplicate_payment_refunded"));
+  });
+});
+
+// ---------- C20: two tabs, PayPal declines ----------
+
+test("C20: a card payment started in a second tab while PayPal pays in the first never replaces the payment that paid", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db);
+  await withProviders(async (providers) => {
+    const pp = await paypalOrder(env, cart(1));
+    // The card session passes its checks while the checkout is unpaid; PayPal's capture lands while Airwallex makes the intent.
+    const handler = providers.handler;
+    let raced = false;
+    providers.handler = async (href, init) => {
+      if (!raced && href.endsWith("/payment_intents/create")) {
+        raced = true;
+        assert.equal((await (await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: pp.paypal.id }))).json()).status, "paid");
+      }
+      return handler(href, init);
+    };
+    const card = await session(env, cart(1, { checkoutId: pp.orderId }));
+    assert.deepEqual([card.orderId, card.settled, card.intent], [pp.orderId, "paid", undefined], "the page goes to the order");
+    assert.equal(row(db, "SELECT payment_intent_id FROM orders WHERE id = ?", pp.orderId).payment_intent_id, pp.paypal.id, "still the PayPal order that paid");
+    assert.equal(row(db, "SELECT status FROM checkout_payments WHERE provider = 'airwallex'").status, "voided");
+    assert.deepEqual(providers.calls.cancels, ["int_1"], "the new intent is cancelled, so it can never be paid");
+    assert.deepEqual([providers.calls.refunds, providers.calls.paypalRefunds], [[], []]);
+  });
+});
+
+test("C20: a duplicate is judged by the payment records: a redelivered success of the payment that paid is never refunded", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db);
+  await withProviders(async (providers) => {
+    const card = await session(env, cart(1));
+    await pay(env, providers, card.intent.id);
+    // An order whose reference a second tab replaced before this was fixed.
+    db.raw.prepare("UPDATE orders SET payment_intent_id = 'int_other' WHERE id = ?").run(card.orderId);
+    assert.equal((await call(env, "/api/webhooks/airwallex", webhook(providers.intents.get(card.intent.id)))).status, 200);
+    assert.deepEqual(providers.calls.refunds, [], "the payment that paid is not refunded");
+    assert.equal(row(db, "SELECT status FROM checkout_payments WHERE ref = ?", card.intent.id).status, "succeeded");
+  });
+});
+
+test("C20: PayPal declining the card is recorded and explained; the next try uses a new key; the order page does not try again by itself", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db);
+  await withProviders(async (providers) => {
+    const pp = await paypalOrder(env, cart(1));
+    providers.declineNext(1);
+    const declined = await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: pp.paypal.id }));
+    assert.equal(declined.status, 402);
+    assert.equal((await declined.json()).error.code, "paypal_declined");
+    assert.deepEqual(row(db, "SELECT attempt_id, order_id, event_name, failure_code, provider_code, trace_id FROM order_payment_failures"), {
+      attempt_id: `paypal:${pp.paypal.id}:1`, order_id: pp.orderId, event_name: "paypal.capture_declined",
+      failure_code: "paypal_declined", provider_code: "INSTRUMENT_DECLINED", trace_id: "dbg-1",
+    });
+    assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", pp.orderId).status, "pending");
+
+    // The order page asks: it says why, and does not send the declined card to PayPal again.
+    const page = await (await call(env, `/api/orders/${pp.orderId}`)).json();
+    assert.match(page.paymentFailure.message, /PayPal declined that payment method/);
+    assert.equal(providers.calls.captures.length, 1);
+    const unfinished = await adminGet(env, "/admin/api/checkouts");
+    assert.match(JSON.stringify(unfinished), /paypal_declined|INSTRUMENT_DECLINED/, "the Unfinished checkouts list shows why");
+
+    // The shopper chooses another card in PayPal: a new PayPal-Request-Id, and it goes through.
+    const paid = await (await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: pp.paypal.id }))).json();
+    assert.equal(paid.status, "paid");
+    assert.deepEqual(providers.calls.captureKeys, [`${pp.orderId}-capture`, `${pp.orderId}-capture-1`]);
   });
 });
 

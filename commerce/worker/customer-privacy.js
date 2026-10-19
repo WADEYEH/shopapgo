@@ -177,6 +177,28 @@ export async function exportCustomer(env, actor, ref) {
   };
 }
 
+// The statements that take the person out of these orders (D53): the order keeps its amounts, items and the state (sales
+// tax and bookkeeping); email, name, address, phone, marketing choice, ad data, email copies and notes go. Used by a
+// deletion request and, 7 years after payment, by the retention job (worker/retention.js). At most ~90 ids (D1 binds).
+export function anonymizeOrders(db, ids, at, { removed = REMOVED } = {}) {
+  const inIds = ids.map(() => "?").join(", ");
+  const forOrders = (sql, ...before) => db.prepare(sql.replace("(?)", `(${inIds})`)).bind(...before, ...ids);
+  return [
+    forOrders(`UPDATE orders SET email = '', marketing_opt_in = 0,
+      shipping_json = json_object('state', json_extract(shipping_json, '$.state'), 'erased', 1), updated_at = ? WHERE id IN (?)`, at),
+    forOrders("DELETE FROM order_attribution WHERE order_id IN (?)"),
+    forOrders("DELETE FROM order_analytics WHERE order_id IN (?)"),
+    forOrders("UPDATE order_packages SET events_json = '[]' WHERE order_id IN (?)"),
+    forOrders("UPDATE order_email_delivery SET payload_json = '{}' WHERE order_id IN (?)"),
+    forOrders("UPDATE order_notice_jobs SET payload_json = '{}' WHERE order_id IN (?)"),
+    forOrders("UPDATE order_audit SET detail_json = json_remove(detail_json, '$.before', '$.after', '$.note', '$.shipping', '$.email') WHERE order_id IN (?)"),
+    forOrders("UPDATE order_cancellations SET note = '' WHERE order_id IN (?)"),
+    forOrders("UPDATE order_notes SET body = ? WHERE order_id IN (?)", removed),
+    forOrders("UPDATE admin_refunds SET note = '' WHERE order_id IN (?)"),
+    forOrders("UPDATE staging_fake_mcf_orders SET request_json = '{}' WHERE seller_order_id IN (SELECT seller_order_id FROM order_mcf WHERE order_id IN (?))"),
+  ];
+}
+
 // POST /admin/api/customers/:ref/erase { confirm: the customer's email }
 export async function eraseCustomer(env, actor, ref, body, { nowMs = Date.now() } = {}) {
   const db = env.DB;
@@ -191,22 +213,8 @@ export async function eraseCustomer(env, actor, ref, body, { nowMs = Date.now() 
   const ids = results.map((row) => row.id);
   const marker = `deleted:${await hashOf(key)}`;
   const at = iso(nowMs);
-  const inIds = ids.map(() => "?").join(", ");
-  const forOrders = (sql, ...before) => db.prepare(sql.replace("(?)", `(${inIds})`)).bind(...before, ...ids);
   await db.batch([
-    // The order keeps its amounts, items and the state (sales tax); the person is gone.
-    forOrders(`UPDATE orders SET email = '', marketing_opt_in = 0,
-      shipping_json = json_object('state', json_extract(shipping_json, '$.state'), 'erased', 1), updated_at = ? WHERE id IN (?)`, at),
-    forOrders("DELETE FROM order_attribution WHERE order_id IN (?)"),
-    forOrders("DELETE FROM order_analytics WHERE order_id IN (?)"),
-    forOrders("UPDATE order_packages SET events_json = '[]' WHERE order_id IN (?)"),
-    forOrders("UPDATE order_email_delivery SET payload_json = '{}' WHERE order_id IN (?)"),
-    forOrders("UPDATE order_notice_jobs SET payload_json = '{}' WHERE order_id IN (?)"),
-    forOrders("UPDATE order_audit SET detail_json = json_remove(detail_json, '$.before', '$.after', '$.note', '$.shipping', '$.email') WHERE order_id IN (?)"),
-    forOrders("UPDATE order_cancellations SET note = '' WHERE order_id IN (?)"),
-    forOrders("UPDATE order_notes SET body = ? WHERE order_id IN (?)", REMOVED),
-    forOrders("UPDATE admin_refunds SET note = '' WHERE order_id IN (?)"),
-    forOrders("UPDATE staging_fake_mcf_orders SET request_json = '{}' WHERE seller_order_id IN (SELECT seller_order_id FROM order_mcf WHERE order_id IN (?))"),
+    ...anonymizeOrders(db, ids, at),
     db.prepare("UPDATE contact_messages SET name = '', email = '', message = ? WHERE lower(trim(email)) = ?").bind(REMOVED, key),
     db.prepare("DELETE FROM customer_notes WHERE customer = ?").bind(key),
     db.prepare("DELETE FROM customer_email_suppressions WHERE lower(trim(email)) = ?").bind(key),

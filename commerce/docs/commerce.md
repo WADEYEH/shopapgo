@@ -35,14 +35,14 @@ are built and covered by tests. **Staging is deployed; production is not.** Noth
 | Staging storefront (Basic-auth gate, noindex, Airwallex **sandbox**) | https://staging.shopapgo.com |
 | Staging back office (own host, email/password Basic, `ADMIN_TOKEN`, or the staging site login) | https://admin-staging.shopapgo.com/admin/ |
 | Staging fallback (same Worker, `workers_dev = true`) | `https://apgo-us-store-staging.<cloudflare-account>.workers.dev` (back office answers 404 here; use the admin host) |
-| Production (planned, **not deployed**) | `https://store.shopapgo.com`, back office `https://admin.shopapgo.com/admin/` |
+| Production (**live since the cutover on 2026-10-16**) | `https://www.shopapgo.com` (the bare domain and `store.shopapgo.com` answer 301 to www), back office `https://admin.shopapgo.com/admin/` (Cloudflare Access only since 2026-10-18) |
 
-The `www` host (Cloudflare Pages project `shopapgo`) is a separate site and is untouched by this repo's Worker.
+Before the cutover the `www` host (Cloudflare Pages project `shopapgo`) was a separate site. Since 2026-10-16 this Worker serves all of `www.shopapgo.com` and the bare domain (whole-host routes, `[env.production]` in `wrangler.toml`); the old Pages project is kept until after 10/30 (C30). Current production settings: `docs/ops/production-config.md`.
 
 ### Environments and secret names (names only)
 
-Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]`); the D1 `database_id` values there are identifiers, not secrets, and production is still the
-`00000000-…` placeholder. Secrets are set per environment with `npx wrangler secret put <NAME> --env staging|production` (local: `.dev.vars`, git-ignored; template: `.dev.vars.example`).
+Plain vars live in `wrangler.toml` (`[env.staging.vars]`, `[env.production.vars]`); the D1 `database_id` values there are identifiers, not secrets (only the top level, used for local dev, keeps the
+`00000000-…` placeholder). Secrets are set per environment with `npx wrangler secret put <NAME> --env staging|production` (local: `.dev.vars`, git-ignored; template: `.dev.vars.example`).
 
 | Secret name | Used for | Staging today |
 | --- | --- | --- |
@@ -78,6 +78,8 @@ governing law (準據法) in the Terms · customer-service copy (see `docs/custo
 whether Amazon also sends its own shipment notice (`MCF_NOTIFY_AMAZON_EMAIL`, default off, so only our email goes out).
 
 ### Production is not deployed: how to go live
+
+> Update 2026-10-19: done. Production went live on 2026-10-16 on `www.shopapgo.com` (not `store`); see `docs/ops/production-config.md`. The steps below are kept as written.
 
 Follow "Go-live checklist for production" under "Environments: staging and production" and "Before switching `AIRWALLEX_ENV` to `prod`". In short: create the production D1 and
 run the schema, set production secrets, register the Airwallex production webhook, bind `store.shopapgo.com` and `admin.shopapgo.com`, set `ADMIN_HOST`, approve the numbers and only then set
@@ -416,6 +418,8 @@ Code: `lib/shop/airwallex-pay.mjs`, wiring in
 Nothing below is decided; the store refuses production traffic until
 `PRICING_APPROVED=true`.
 
+> Update 2026-10-19: decided and live since 2026-10-16: D204 $59.99, D215 $29.99, shipping $7.99 flat (standard only, D31), sales tax $0 (D68), MCF auto-submit on, and `PRICING_APPROVED` is set (as a secret). The table below is the pre-launch snapshot.
+
 | Decision | Today (placeholder) | Where to set it |
 | --- | --- | --- |
 | D204 price | $59.99 | `products.d204.priceCents` |
@@ -454,7 +458,7 @@ dev server (e.g. `cloudflared tunnel --url http://127.0.0.1:8799`) and register
 
 ## Order back office (`/admin/`)
 
-On staging (and planned prod) the back office is served **only on its own hostname** (`https://admin-staging.shopapgo.com/admin/`, prod plan `admin.shopapgo.com`); the store domain answers 404 for `/admin*`. See "Separate back-office host".
+On staging and production the back office is served **only on its own hostname** (`https://admin-staging.shopapgo.com/admin/`, production `https://admin.shopapgo.com/admin/`); the store domain answers 404 for `/admin*`. See "Separate back-office host".
 
 A page for the team (read-only apart from **Mark as shipped** and the Amazon MCF buttons, see "Fulfilment" and "Amazon MCF"): order list (status tabs with counts, search by
 order id / email / name / address, "load older"), and a detail panel with the
@@ -861,14 +865,14 @@ paths), and all Worker logic is covered by `tests/commerce-backend.test.mjs`.
 `wrangler.toml` keeps the top level for local dev (`npm run dev`, placeholder D1 id, unchanged) and defines two environments.
 Wrangler does not inherit bindings/vars/assets into `[env.*]`, and secrets are stored per environment.
 
-| | local dev | `staging` (deployed) | `production` (planned, NOT deployed) |
+| | local dev | `staging` (deployed) | `production` (live since 2026-10-16) |
 |---|---|---|---|
 | Worker | `wrangler dev` | `apgo-us-store-staging` | `apgo-us-store` |
-| URL | http://127.0.0.1:8799 | `https://apgo-us-store-staging.<account>.workers.dev` (no custom domain; preview URLs off) | `https://store.shopapgo.com` (route commented out in `wrangler.toml`) |
-| D1 | local SQLite | `apgo-us-store-staging` (own database) | `apgo-us-store` (placeholder id until created) |
+| URL | http://127.0.0.1:8799 | `https://staging.shopapgo.com` (custom domain; workers.dev kept, preview URLs off) | `https://www.shopapgo.com` and the bare domain (whole-host routes); `store.shopapgo.com` answers 301 to www |
+| D1 | local SQLite | `apgo-us-store-staging` (own database) | `apgo-us-store` |
 | `AIRWALLEX_ENV` | `demo` | `demo` (Airwallex **sandbox**; `worker/airwallex.js` treats anything but `prod` as sandbox) | `prod` |
 | `SITE_ENV` | unset | `staging` | unset |
-| `PRICING_APPROVED` | unset | unset (only matters for prod) | **unset**: checkout answers 503 (payments closed) until the owner approves prices/shipping/tax |
+| `PRICING_APPROVED` | unset | unset (only matters for prod) | set to `"true"` as a secret (prices, shipping and tax approved 2026-10-16); without it checkout answers 503 |
 | Airwallex keys | sandbox (`.dev.vars`) | sandbox only | production keys, set by the owner |
 
 ### Staging protections (`worker/staging.js`, active only when `SITE_ENV=staging`)
@@ -933,7 +937,7 @@ hostnames, nothing else changes.
 |---|---|---|
 | `https://staging.shopapgo.com` (and workers.dev) | storefront, `/api/*`; **`/admin*` → 404** | Basic auth (`STAGING_BASIC_AUTH_*`), `X-Robots-Tag` noindex |
 | `https://admin-staging.shopapgo.com/admin/` | back office page + `/admin/api/*` + its css/js/logo only (everything else → 404) | `ADMIN_LOGIN_EMAIL`/`ADMIN_LOGIN_PASSWORD` **or** `ADMIN_TOKEN` **or** the website Basic login (`ADMIN_ACCEPT_SITE_BASIC="true"`, one prompt only), noindex on every response, `/robots.txt` Disallow |
-| planned prod `store.shopapgo.com` / `admin.shopapgo.com` | same split with `ADMIN_HOST = "admin.shopapgo.com"` | commented out in `wrangler.toml`; **not deployed** |
+| production `www.shopapgo.com` (+ bare domain; `store.shopapgo.com` answers 301) / `admin.shopapgo.com` | same split with `ADMIN_HOST = "admin.shopapgo.com"` | live since 2026-10-16; back office behind Cloudflare Access since 2026-10-18 |
 
 ### Separate back-office host (`worker/hosts.js`, `ADMIN_HOST`)
 
@@ -948,6 +952,9 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
   Empty/missing secrets never match. The site login works **only on the admin host**: the store host and workers.dev still answer 404 for `/admin*`.
   **Production:** `ADMIN_ACCEPT_SITE_BASIC` is deliberately not set (there is no website Basic login on prod). Production uses the same `ADMIN_LOGIN_EMAIL` /
   `ADMIN_LOGIN_PASSWORD` secrets, with `ADMIN_TOKEN` as the script/ops fallback.
+  (Update 2026-10-19: with `ADMIN_ACCESS = "true"`, on staging since 2026-10-15 and on production since 2026-10-18, the back office takes Cloudflare Access
+  sign-in. On production the shared login and `ADMIN_TOKEN` stay set but no longer open `/admin`, and there is no service token for scripts; on staging only
+  `ADMIN_TOKEN` still does, for scripts with a service token. See `docs/ops/runbook.md` section 11.)
 - Any other host (store domain, workers.dev): `/admin` and `/admin/*` (page and API) answer **404**, even with a valid token.
 - `ADMIN_HOST` unset (local `npm run dev`, tests): one host serves both, as before.
 - The admin page calls `/admin/api/*` same-origin, so the CSRF guard (`Origin` / `Sec-Fetch-Site` same-origin, JSON content type) is evaluated against the admin
@@ -955,7 +962,14 @@ The back office no longer shares the store's domain. With the plain var `ADMIN_H
 - "New paid order" notifications link to `https://<ADMIN_HOST>/admin/`.
 - Tests: `tests/hosts.test.mjs` (host split, 404s, admin host 401/200, CSRF, `wrangler.toml` routes).
 
-### Go-live checklist for production (none of this has been done)
+### Go-live checklist for production (done at the cutover, 2026-10-16)
+
+> Update 2026-10-19: all of this was done at or before the cutover on 2026-10-16, partly differently from the plan below: production serves
+> `www.shopapgo.com` (whole-host routes; `store.shopapgo.com` and the bare domain answer 301 to www), the Airwallex webhook
+> (`https://www.shopapgo.com/api/webhooks/airwallex`, version 2026-08-21, all events incl. refunds and disputes) and the PayPal webhook
+> (`https://www.shopapgo.com/api/webhooks/paypal`, `PAYPAL_WEBHOOK_ID` set) are on www, `PRICING_APPROVED` is set, MCF auto-submit and customer email are on,
+> and production deploys only from GitHub with approval (D65). Card, Apple Pay and Google Pay are hidden in production until Airwallex enables cards
+> (`CARD_PAYMENTS_ENABLED = "false"`, D70); the Apple Pay domain is registered then (C14). Current settings: `docs/ops/production-config.md`.
 
 - [ ] Create the production D1: `npx wrangler d1 create apgo-us-store`, paste the id into `[[env.production.d1_databases]]`, then
       apply the migrations (the Deploy workflow does it, after recording a restore point: `docs/ops/runbook.md`).
@@ -1016,6 +1030,8 @@ Payment failure history does not cover failed PaymentIntent creation (the existi
 Screenshots with synthetic local fixtures can be regenerated using `node scripts/capture-payment-failures.mjs`.
 
 ## Before switching `AIRWALLEX_ENV` to `prod`
+
+> Update 2026-10-19: done; production runs with `AIRWALLEX_ENV = "prod"` since the cutover on 2026-10-16 (prices, shipping $7.99, tax $0, MCF and emails decided; cards follow C14). The list is kept as written.
 
 These are placeholders copied from the design-system kits, not approved terms:
 

@@ -43,6 +43,9 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_ATTEMPTS = 3;
 const MAX_LIST_PAGES = 20;
 export const SERVICE_TIERS = ["STANDARD", "EXPEDITED"];
+// The note on an order's MCF row while a cancellation asked of Amazon waits for Amazon to confirm it (worker/mcf.js,
+// worker/order-core.js): Amazon closing the order then is expected, not news for the team.
+export const CANCEL_REQUESTED = "Cancellation requested; sync to confirm.";
 export const DEFAULT_SHIPPING_MAP = { standard: "STANDARD", express: "EXPEDITED" };
 export const CONNECTION_ENV = ["AMAZON_OUTBOUND_BASE_URL", "OUTBOUND_INTERNAL_TOKEN"];
 // Our tier -> the endpoint's shipping_speed_category (Amazon's ShippingSpeedCategory).
@@ -371,6 +374,8 @@ export function normalizeMcfOrder(body) {
     status: clip(order.fulfillmentOrderStatus, 40).toUpperCase(),
     statusUpdatedAt: order.statusUpdatedDate ?? null,
     action: clip(order.fulfillmentAction, 20),
+    // FillOrKill (all or nothing) is Amazon's default and what the store expects; the read-back check flags any other.
+    policy: clip(order.fulfillmentPolicy, 30),
     address: destination
       ? Object.fromEntries(["name", "addressLine1", "addressLine2", "city", "stateOrRegion", "postalCode"].map((key) => [key, clip(destination[key], 120)]))
       : null,
@@ -382,6 +387,23 @@ export function normalizeMcfOrder(body) {
 // v2020-07-01 spells the partial case COMPLETE_PARTIALLED.
 export const SHIPPED_STATUSES = ["COMPLETE", "COMPLETE_PARTIAL", "COMPLETE_PARTIALLED"];
 const CARRIER_NAMES = { AMZL: "Amazon Logistics", AMZN_US: "Amazon Logistics", AMZN: "Amazon Logistics", UPS: "UPS", USPS: "USPS", FEDEX: "FedEx", DHL: "DHL", ONTRAC: "OnTrac", LASERSHIP: "LaserShip" };
+
+// The carrier's own tracking page, for when Amazon gives a tracking number without a link (C19): the shipment email
+// then still has "Track your package". "" for a carrier without a known page.
+const TRACKING_PAGES = {
+  "Amazon Logistics": (n) => `https://track.amazon.com/tracking/${n}`,
+  UPS: (n) => `https://www.ups.com/track?tracknum=${n}`,
+  USPS: (n) => `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`,
+  FedEx: (n) => `https://www.fedex.com/fedextrack/?trknbr=${n}`,
+  DHL: (n) => `https://www.dhl.com/us-en/home/tracking.html?tracking-id=${n}`,
+  OnTrac: (n) => `https://www.ontrac.com/tracking/?number=${n}`,
+};
+export function carrierTrackingUrl(carrier, trackingNumber) {
+  const number = String(trackingNumber ?? "").trim();
+  if (!/^[A-Za-z0-9]{6,40}$/.test(number)) return "";
+  return TRACKING_PAGES[carrier]?.(encodeURIComponent(number)) ?? "";
+}
+const linkFor = (url, carrier, number) => (/^https:\/\//i.test(url ?? "") ? url : carrierTrackingUrl(carrier, number));
 
 // "Shipped with tracking" = Amazon says the whole order left (COMPLETE, or COMPLETE_PARTIAL when the rest was
 // cancelled) and at least one package has a tracking number. Returns null until then.
@@ -395,10 +417,11 @@ export function shipmentFromMcfOrder(normalized) {
     if (!numbers.includes(pkg.trackingNumber) && [...numbers, pkg.trackingNumber].join(", ").length <= 80) numbers.push(pkg.trackingNumber);
   }
   const code = first.carrierCode;
+  const carrier = CARRIER_NAMES[code.toUpperCase()] ?? (code || "Amazon Logistics");
   return {
-    carrier: CARRIER_NAMES[code.toUpperCase()] ?? (code || "Amazon Logistics"),
+    carrier,
     trackingNumber: numbers.join(", "),
-    trackingUrl: numbers.length === 1 && /^https:\/\//i.test(first.trackingUrl) ? first.trackingUrl : "",
+    trackingUrl: numbers.length === 1 ? linkFor(first.trackingUrl, carrier, first.trackingNumber) : "",
   };
 }
 
@@ -410,11 +433,12 @@ export function packagesFromMcfOrder(normalized) {
     if (!pkg.trackingNumber || seen.has(pkg.trackingNumber)) continue;
     seen.add(pkg.trackingNumber);
     const code = pkg.carrierCode ?? "";
+    const carrier = CARRIER_NAMES[code.toUpperCase()] ?? (code || "Amazon Logistics");
     packages.push({
       packageId: /^\d{1,20}$/.test(pkg.packageId ?? "") ? pkg.packageId : "",
-      carrier: CARRIER_NAMES[code.toUpperCase()] ?? (code || "Amazon Logistics"),
+      carrier,
       trackingNumber: pkg.trackingNumber,
-      trackingUrl: /^https:\/\//i.test(pkg.trackingUrl ?? "") ? pkg.trackingUrl : "",
+      trackingUrl: linkFor(pkg.trackingUrl, carrier, pkg.trackingNumber),
     });
   }
   return packages;

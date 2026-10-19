@@ -39,6 +39,25 @@ export async function recordPaymentFailure(db, event) {
       safeText(details.message), safeText(details.trace_id, 120), at, new Date().toISOString()).run();
 }
 
+// PayPal sends no event when it refuses a capture at once (C20): the capture records it here, one row per try
+// ("paypal:<PayPal order id>:<n>"), so the order page, the back office and the Unfinished checkouts list show it.
+// INSTRUMENT_DECLINED: the shopper can choose another way to pay inside PayPal (the page reopens PayPal).
+export const PAYPAL_RETRY_ISSUES = new Set(["INSTRUMENT_DECLINED", "PAYER_ACTION_REQUIRED"]);
+
+export async function paypalDeclines(db, paypalOrderId) {
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM order_payment_failures WHERE attempt_id LIKE ?").bind(`paypal:${paypalOrderId}:%`).first();
+  return Number(row?.n ?? 0);
+}
+
+export async function recordPaypalFailure(db, { orderId, paypalOrderId, attempt, issue, message = "", debugId = "", eventName = "paypal.capture_declined" }) {
+  const at = new Date().toISOString();
+  await db.prepare(`INSERT OR IGNORE INTO order_payment_failures
+    (attempt_id, order_id, event_id, event_name, failure_code, provider_code, message, trace_id, occurred_at, received_at)
+    VALUES (?, ?, ?, ?, 'paypal_declined', ?, ?, ?, ?, ?)`)
+    .bind(`paypal:${paypalOrderId}:${attempt}`, orderId, safeText(debugId || paypalOrderId, 180), eventName,
+      safeText(issue, 100), safeText(message), safeText(debugId, 120), at, at).run();
+}
+
 export async function listPaymentFailures(db, orderId) {
   const { results } = await db.prepare(`SELECT attempt_id AS attemptId, event_name AS event,
     failure_code AS code, provider_code AS providerCode, message, trace_id AS traceId,
@@ -57,6 +76,7 @@ export async function publicPaymentFailure(db, order) {
     provider_unavailable: "The payment service is temporarily unavailable. Please try again shortly.",
     system_unavailable: "The payment service is temporarily unavailable. Please try again shortly.",
     expired: "The payment attempt expired. Please return to checkout and try again.",
+    paypal_declined: "PayPal declined that payment method. Return to checkout and pay with PayPal again using another card or your balance, or choose another way to pay.",
   };
   // Provider messages, risk details and tracing identifiers are admin-only.
   return { message: messages[category] || "Your payment wasn't completed. Check your card details or try another payment method." };

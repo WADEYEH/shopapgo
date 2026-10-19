@@ -167,6 +167,9 @@ test("compareAmazonCopy: same items and address agree (case, spaces, ZIP+4); any
   assert.deepEqual(compareAmazonCopy(input, { ...copy, items: [{ sku: "A", qty: 3 }] }), ["A: sent 2, Amazon has 3"]);
   assert.match(compareAmazonCopy(input, { ...copy, address: { ...copy.address, city: "Dallas" } })[0], /^city: sent "Austin", Amazon has "Dallas"$/);
   assert.equal(compareAmazonCopy(input, { address: null, items: [] }), null, "nothing to compare");
+  // All or nothing (C19): FillOrKill or no policy in the copy agree; any other is named.
+  assert.deepEqual(compareAmazonCopy(input, { ...copy, policy: "FillOrKill" }), []);
+  assert.deepEqual(compareAmazonCopy(input, { ...copy, policy: "FillAllAvailable" }), ['Fulfillment policy: Amazon has "FillAllAvailable", expected "FillOrKill" (ship everything or nothing)']);
 });
 
 test("M6-16: each order is read back after sending; a matching copy is recorded as checked", { skip }, async () => {

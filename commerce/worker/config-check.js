@@ -7,6 +7,10 @@
 //   * Cron job "config": the first run of each UTC day, and the first run of every new version (CF_VERSION_METADATA),
 //     compares and, when something differs, emails the team once per version and difference. CONFIG_PROFILE says which
 //     environment this is; local dev has none and is not checked.
+//   * Switches set as secrets in the dashboard, outside the repo (C23: PRICING_APPROVED, PAYPAL_ENV), must have the
+//     value in `switches`; only the name is reported, never the value.
+//   * `absent` lists what must not exist there (C23): test-only settings such as META_TEST_EVENT_CODE, which would send
+//     production's Meta events to the test tool, or CUSTOMER_EMAIL_TEST_RECIPIENTS, which would stop customer email.
 //   * A var added only in the dashboard looks like a secret to the Worker and cannot be told apart; cron triggers and
 //     routes are not visible from inside either. Those are checked by deploying only from CI (M12).
 import { alertTeam } from "./team-alerts.js";
@@ -71,13 +75,18 @@ export const CONFIG_MANIFEST = {
       MCF_AUTO_SUBMIT: "true",
       MCF_SYNC_CRON: "true",
     },
-    // 10/12: the live store (landing's) has none of RESEND_*, PAYPAL_WEBHOOK_ID, the Amazon shipping connection or the
-    // address check key yet; they are set at the cutover (docs/commerce-plan.md §8.1), and this check says so if not.
+    // All set since the cutover (10/16; names listed in docs/ops/production-config.md); this check says so if one goes.
     secrets: [
       "ADMIN_TOKEN", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET",
       "PAYPAL_WEBHOOK_ID", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "META_CAPI_ACCESS_TOKEN",
       "AMAZON_OUTBOUND_BASE_URL", "OUTBOUND_INTERNAL_TOKEN", "MCF_SKU_MAP_JSON", "GOOGLE_ADDRESS_VALIDATION_KEY", "TURNSTILE_SECRET_KEY",
-      "ACCESS_LIST_API_TOKEN",
+      "ACCESS_LIST_API_TOKEN", "GA4_API_SECRET", "HEALTHCHECK_PING_URL",
+    ],
+    // Checkout takes payments only with prices approved, and PayPal is live only with PAYPAL_ENV "live" (sandbox otherwise).
+    switches: { PRICING_APPROVED: "true", PAYPAL_ENV: "live" },
+    absent: [
+      "META_TEST_EVENT_CODE", "MCF_FAKE", "CUSTOMER_EMAIL_TEST_RECIPIENTS", "CUSTOMER_EMAIL_POLICY_NOTE",
+      "STAGING_BASIC_AUTH_USER", "STAGING_BASIC_AUTH_PASSWORD", "SITE_ENV", "ADMIN_ACCEPT_SITE_BASIC",
     ],
     bindings: BINDINGS,
   },
@@ -87,13 +96,17 @@ const STATE_KEY = "config.checked";
 const iso = (ms) => new Date(ms).toISOString();
 const shown = (value) => (value === undefined ? "(not set)" : JSON.stringify(String(value)));
 
-// What differs from the manifest: [{ kind: "var" | "secret" | "binding", name, expected?, actual? }].
+// What differs from the manifest: [{ kind: "var" | "secret" | "switch" | "absent" | "binding", name, expected?, actual? }].
 export function configProblems(env, manifest) {
   const problems = [];
   for (const [name, expected] of Object.entries(manifest.vars)) {
     if (env[name] !== expected) problems.push({ kind: "var", name, expected, actual: env[name] === undefined ? undefined : String(env[name]) });
   }
   for (const name of manifest.secrets) if (!String(env[name] ?? "").trim()) problems.push({ kind: "secret", name });
+  for (const [name, expected] of Object.entries(manifest.switches ?? {})) {
+    if (String(env[name] ?? "").trim().toLowerCase() !== expected) problems.push({ kind: "switch", name, expected });
+  }
+  for (const name of manifest.absent ?? []) if (env[name] !== undefined) problems.push({ kind: "absent", name });
   for (const name of manifest.bindings) if (!env[name] || typeof env[name] !== "object") problems.push({ kind: "binding", name });
   return problems;
 }
@@ -127,7 +140,10 @@ export async function scheduledConfigCheck(env, { nowMs = Date.now() } = {}) {
     lines: [
       `The ${env.CONFIG_PROFILE} Worker (version ${version}) does not have the settings commerce/wrangler.toml gives it:`,
       ...problems.map((p) => p.kind === "var" ? `  - ${p.name}: expected ${shown(p.expected)}, live ${shown(p.actual)}`
-        : p.kind === "secret" ? `  - secret ${p.name} is missing` : `  - binding ${p.name} is missing`),
+        : p.kind === "secret" ? `  - secret ${p.name} is missing`
+          : p.kind === "switch" ? `  - ${p.name} is not ${shown(p.expected)} (set as a secret in the dashboard)`
+            : p.kind === "absent" ? `  - ${p.name} is set but must not be here (a test setting); delete it`
+              : `  - binding ${p.name} is missing`),
       "",
       "Settings change only through the repo and CI (docs/ops/runbook.md section 21). If the change was meant, put it in wrangler.toml and deploy; otherwise deploy again to undo it.",
     ],

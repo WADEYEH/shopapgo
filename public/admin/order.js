@@ -322,7 +322,7 @@ async function mcfAction(order, action, button, message, ctx) {
       : outcome.shipped ? t(outcome.email === "sent" ? "mcf.sync.shippedEmailed" : "mcf.sync.shipped", { email: outcome.email ?? "none" })
       : outcome.outcome === "failed" ? t("mcf.sync.failed", { reason: outcome.reason ?? "" })
       : t("mcf.sync.notYet");
-    ctx.show(result.order, notice(outcome.outcome === "failed" ? "warning" : "success", t(action === "sync" ? "mcf.statusTitle" : "mcf.title"), text));
+    ctx.show(result.order, notice(["failed", "stockout"].includes(outcome.outcome) ? "warning" : "success", t(action === "sync" ? "mcf.statusTitle" : "mcf.title"), text));
   } catch (error) {
     button.disabled = false;
     message.replaceChildren(notice("warning", t("mcf.requestFailed"), error.message));

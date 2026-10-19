@@ -129,7 +129,14 @@ window.paypal = {
               options.onCancel?.({ orderID: id });
               return;
             }
-            await options.onApprove({ orderID: id });
+            // actions.restart(): PayPal opens again and the shopper picks another way to pay (at most twice here).
+            const actions = {
+              restart: async () => {
+                window.__paypalRestarts = (window.__paypalRestarts || 0) + 1;
+                if (window.__paypalRestarts <= 2) return options.onApprove({ orderID: id }, actions);
+              },
+            };
+            await options.onApprove({ orderID: id }, actions);
           } catch (error) {
             options.onError?.(error);
           }
@@ -144,13 +151,16 @@ window.paypal = {
 
 // stopped: product ids an owner stopped selling (worker/products.js livePricing). stock: what Amazon can ship per product
 // id ({ d215: 3 }; worker/inventory.js), below 5 out of stock; products not listed were never read and sell.
-export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [], content = {}, stock = {} } = {}) {
+// orderExtra: more fields on GET /api/orders/:id (C21: paid, shipment). paymentPricing: a PRICING_JSON the payment
+// endpoints price with instead (the price changed between the quote the shopper saw and paying, C21).
+export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = "paid", paypalCaptureError, orderStatus, paymentFailure = null, addressCheck = "unverified", contactBusy = false, stopped = [], content = {}, stock = {}, orderExtra = {}, paymentPricing = null } = {}) {
   // content: what owners changed per product ({ [sku]: { name, priceCents, images, … } }; worker/product-content.js).
   const livePricing = () => {
     const pricing = Object.keys(content).length ? applyContent(resolvePricing(env), content) : resolvePricing(env);
     const switched = { ...pricing, products: Object.fromEntries(Object.entries(pricing.products).map(([id, product]) => [id, stopped.includes(id) ? { ...product, onSale: false } : product])) };
     return withStock(switched, Object.fromEntries(Object.entries(stock).map(([id, available]) => [id, { connected: true, available, outOfStock: available < STOCK_THRESHOLD }])));
   };
+  const payPricing = () => (paymentPricing ? resolvePricing({ ...env, PRICING_JSON: JSON.stringify(paymentPricing) }) : livePricing());
   const calls = { session: [], paypalOrder: [], paypalCapture: [], address: [], contact: [] };
   await page.route("https://static.airwallex.com/**", (route) =>
     route.fulfill({ contentType: "application/javascript", body: AIRWALLEX_STUB }));
@@ -190,13 +200,13 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         calls.session.push(body);
         const checkout = validateCheckout(body);
         enforceAddress(addressCheck, checkout);
-        const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, livePricing());
+        const priced = quote(body.items, { state: checkout.shipping.state, method: checkout.method }, payPricing());
         return reply(200, { orderId: ORDER_ID, quote: priced, intent: { id: "int_test", clientSecret: "secret_test", currency: "USD" } });
       }
       if (pathname === "/api/checkout/paypal/order") {
         calls.paypalOrder.push(body);
         if (body.shipping) enforceAddress(addressCheck, validateCheckout(body));
-        const priced = quote(body.items, { state: body.shipping?.state, method: body.method }, livePricing());
+        const priced = quote(body.items, { state: body.shipping?.state, method: body.method }, payPricing());
         return reply(200, {
           orderId: ORDER_ID,
           quote: priced,
@@ -206,7 +216,8 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
       }
       if (pathname === "/api/checkout/paypal/capture") {
         calls.paypalCapture.push(body);
-        if (paypalCaptureError) {
+        // once: only the first capture fails (the shopper's next try goes through).
+        if (paypalCaptureError && !(paypalCaptureError.once && calls.paypalCapture.length > 1)) {
           return reply(paypalCaptureError.status ?? 400, {
             error: paypalCaptureError.error ?? { code: "invalid_request", message: "Payment could not be completed." },
           });
@@ -233,7 +244,7 @@ export async function mockStore(page, { env = {}, paypal, paypalCaptureStatus = 
         const paymentStatus = paidWithPaypal
           ? (paypalCaptureStatus === "pending" ? "PENDING" : status === "pending" ? "APPROVED" : "COMPLETED")
           : (status === "paid" ? "SUCCEEDED" : "REQUIRES_PAYMENT_METHOD");
-        return reply(200, { id: ORDER_ID, status, email: "t••••@example.com", ...priced, lines, ...(paidWithPaypal ? { paymentProvider: "paypal" } : {}), paymentStatus, paymentFailure });
+        return reply(200, { id: ORDER_ID, status, email: "t••••@example.com", ...priced, lines, ...(paidWithPaypal ? { paymentProvider: "paypal" } : {}), paymentStatus, paymentFailure, ...orderExtra });
       }
       return reply(404, { error: { code: "not_found", message: "Not found." } });
     } catch (error) {

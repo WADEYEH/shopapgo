@@ -46,11 +46,11 @@ namespace_id = "3103"
 simple = { limit = 60, period = 60 }
 
 [vars]
-# "demo" = Airwallex sandbox. Switch to "prod" only after prices, shipping and
-# tax in worker/catalog.js are approved.
+# "demo" = Airwallex sandbox (local dev). Production uses "prod" with prices, shipping and tax approved
+# (worker/pricing.js, PRICING_APPROVED).
 AIRWALLEX_ENV = "demo"
 
-# Optional, non-secret store settings (all have safe defaults; see docs/commerce.md):
+# Optional, non-secret store settings (all have safe defaults; see commerce/docs/commerce.md):
 #   PRICING_JSON      partial override of worker/pricing.js DEFAULT_PRICING (prices, shipping, tax)
 #   PRICING_APPROVED  must be "true" before AIRWALLEX_ENV="prod" will take payments
 #   APPLE_PAY_ENABLED / GOOGLE_PAY_ENABLED   "false" hides that wallet button (default on)
@@ -82,7 +82,8 @@ enabled = true   # Workers Issues: groups errors and notifies (where to is set i
 #
 #   staging     staging.shopapgo.com + admin-staging.shopapgo.com; this repo's test site, the whole site from one Worker:
 #               npm run deploy:staging builds the site (scripts/build-site.mjs, test settings) and deploys it
-#   production  store.shopapgo.com + admin.shopapgo.com; checkout stays 503 until PRICING_APPROVED (see docs/commerce.md "Go-live checklist").
+#   production  www.shopapgo.com and the bare domain (store.shopapgo.com answers 301 to www) + admin.shopapgo.com behind
+#               Cloudflare Access; live since the cutover on 2026-10-16, deployed only from GitHub with approval (D65).
 # ---------------------------------------------------------------------------------------------------------------
 
 [env.staging]
@@ -91,7 +92,7 @@ workers_dev = true
 preview_urls = false
 # Custom domains (zone shopapgo.com). Wrangler creates the DNS records + certificates on deploy; workers.dev stays on.
 #   staging.shopapgo.com        the storefront (Basic-auth gate); /admin* answers 404 here
-#   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); email/password or ADMIN_TOKEN
+#   admin-staging.shopapgo.com  the order back office on its own host (ADMIN_HOST below); Cloudflare Access (scripts: ADMIN_TOKEN + service token)
 #   store-staging.shopapgo.com  plays the old store host: pages answer 301 to staging.shopapgo.com, /api/* stays (MOVED_HOSTS)
 routes = [
   { pattern = "staging.shopapgo.com", custom_domain = true },
@@ -201,7 +202,8 @@ crons = ["*/2 * * * *"]
 [env.staging.version_metadata]
 binding = "CF_VERSION_METADATA"
 
-# Production: store.shopapgo.com (storefront) + admin.shopapgo.com (back office: ADMIN_LOGIN_EMAIL/PASSWORD or ADMIN_TOKEN). Checkout answers 503 until PRICING_APPROVED="true".
+# Production (live since 2026-10-16): www.shopapgo.com and the bare domain, store.shopapgo.com answering 301 to www, and
+# admin.shopapgo.com (back office: Cloudflare Access only, C17). Checkout is open (PRICING_APPROVED is set as a secret).
 [env.production]
 name = "apgo-us-store"
 workers_dev = false
@@ -209,17 +211,13 @@ workers_dev = false
 routes = [
   { pattern = "store.shopapgo.com", custom_domain = true },
   { pattern = "admin.shopapgo.com", custom_domain = true },   # back office on its own host (ADMIN_HOST below); the store host answers 404 for /admin*
-  # www.shopapgo.com and the bare domain, whole hosts: the cutover deploy (docs/commerce-plan.md stage 4) takes all of
-  # www from Cloudflare Pages to this Worker. The www DNS record stays as it is (Pages); a Workers route runs in front of
-  # it, as the store paths already did since 2026-10-06. Routes are not part of a Worker version: rolling back the
-  # version keeps these routes, so moving www back to Pages means deploying a config without them (runbook section 24).
+  # www.shopapgo.com and the bare domain, whole hosts: since the cutover (2026-10-16) all of www runs on this Worker. The
+  # www DNS record still points at Cloudflare Pages (kept until after 10/30, C30); this Workers route runs in front of it.
+  # Routes are not part of a Worker version: rolling back the version keeps these routes, so moving www back to Pages
+  # means deploying a config without them (runbook section 24, npm run rollback:routes).
   { pattern = "www.shopapgo.com/*", zone_name = "shopapgo.com" },
   { pattern = "shopapgo.com/*", zone_name = "shopapgo.com" },
 ]
-
-# Do NOT deploy main here before the cutover (docs/commerce-plan.md §6, stage 4). Every customer page is a Next.js page
-# now (D41) and needs www's /_next/* from the same build, so the deploy that brings this site to production also moves
-# all of www to this Worker (the routes above change then). Until that deploy nothing below takes effect.
 
 # Next to the production D1 database (Eastern North America, "ENAM"; wrangler d1 info), like staging's
 # [env.staging.placement]: the back office from Asia stops paying a Pacific crossing per query, and the shop's API calls
@@ -268,11 +266,12 @@ simple = { limit = 60, period = 60 }
 AIRWALLEX_ENV = "prod"
 CONFIG_PROFILE = "production"   # worker/config-check.js: the settings this Worker must have (J6); keep its manifest equal to this file
 # GA4 refund events (worker/ga4.js, K3): the measurement id is public; the secret GA4_API_SECRET (a Measurement Protocol
-# API secret from GA4 → Data streams → shopapgo.com) is created and set at the cutover (D58). Without it nothing is sent.
+# API secret from GA4 → Data streams → shopapgo.com) was set at the cutover, 10/16 (D58). Without it nothing is sent.
 GA4_MEASUREMENT_ID = "G-YM10YMKE30"
 ADMIN_HOST = "admin.shopapgo.com"   # worker/hosts.js: /admin* only on this host; the store host 404s it
 # worker/redirects.js (D37, D39): www is the one site host; store.shopapgo.com and the bare domain answer 301 to the
-# same page there, except /api/* (webhooks still arrive on store until the providers point at www) and /.well-known/*.
+# same page there, except /api/* (kept for any provider still posting to store; all point at www since 10/16) and
+# /.well-known/*.
 SITE_HOST = "www.shopapgo.com"
 MOVED_HOSTS = "store.shopapgo.com,shopapgo.com"
 # Back-office members (worker/members.js, D44): the first owner; later owners add colleagues on the Members section.
@@ -296,16 +295,14 @@ ACCESS_LIST_ID = "013e636e-54ff-4339-b3c5-5728e1b1928a"
 META_DATASET_ID = "2606879866471418"
 # Contact us form (worker/contact.js, D28): messages go to the customer-service inbox, sent with the order-email sender
 # (RESEND_API_KEY + CUSTOMER_EMAIL_FROM), with a Turnstile bot check (M11, 10/15: widget "shopapgo contact form"; the
-# secret TURNSTILE_SECRET_KEY is set; the live landing code does not use it). The receiving inbox is the owner's choice (2026-10-08).
+# secret TURNSTILE_SECRET_KEY is set). The receiving inbox is the owner's choice (2026-10-08).
 CONTACT_EMAIL_TO = "wadeyeh@apgo.com.tw"
 TURNSTILE_SITE_KEY = "0x4AAAAAAFXdvG8hkAH0UWBo"
 # Payment methods (D70, owner 10/16): the production Airwallex account cannot take cards yet (M18), so the site opens
 # with PayPal (which also takes cards as a guest checkout) and Airwallex Pay. Once Airwallex enables cards, set this to
 # "true" (or delete the line) and deploy: the Card option, Apple Pay and Google Pay come back.
 CARD_PAYMENTS_ENABLED = "false"
-# Email (worker/customer-email.js, worker/notify.js), with the secret RESEND_API_KEY. Plain vars on purpose: they take
-# effect with the cutover deploy only. The live landing code falls back to ORDER_NOTIFY_EMAIL_FROM for customer mail,
-# so setting these on it before the cutover would start emails to real customers from the old store (10/15).
+# Email (worker/customer-email.js, worker/notify.js), with the secret RESEND_API_KEY; on since the cutover (10/16).
 CUSTOMER_EMAIL_FROM = "APGO <orders@shopapgo.com>"   # O8: shopapgo.com verified in Resend (SPF, DKIM, DMARC pass, C5)
 CUSTOMER_EMAIL_REPLY_TO = "services@apgo.com.tw"
 CUSTOMER_EMAIL_RETRY_CRON = "true"          # the */5 cron retries emails that failed (the outbox)
@@ -319,13 +316,13 @@ MCF_SYNC_CRON = "true"
 # ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. With ADMIN_ACCESS on (above),
 # admin login is Cloudflare Access only; ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD and ADMIN_TOKEN would open /admin again
 # only if ADMIN_ACCESS were switched off.
-# PRICING_APPROVED is deliberately NOT set: with AIRWALLEX_ENV=prod checkout answers 503 until the owner approves
-# prices / shipping / tax and sets PRICING_APPROVED = "true". SITE_ENV is deliberately not set either (no staging gate).
-# Secrets (wrangler secret put <NAME> --env production): AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY (production keys),
-# AIRWALLEX_WEBHOOK_SECRET, ADMIN_LOGIN_EMAIL, ADMIN_LOGIN_PASSWORD, ADMIN_TOKEN, META_CAPI_ACCESS_TOKEN,
-# plus the optional notification / email / MCF secrets.
-# PayPal live: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENV=live; PAYPAL_WEBHOOK_ID after registering
-# https://store.shopapgo.com/api/webhooks/paypal (and www path-route equivalent) in the PayPal live Dashboard.
+# PRICING_APPROVED is not a var here: it is set as a secret ("true"; with AIRWALLEX_ENV=prod checkout would answer 503
+# without it), and worker/config-check.js checks every day that it is "true" and PAYPAL_ENV "live" (C23). SITE_ENV is
+# deliberately not set (no staging gate).
+# Secrets (wrangler secret put <NAME> --env production; the full list of names is in docs/ops/production-config.md):
+# Airwallex, PayPal (PAYPAL_ENV=live, PAYPAL_WEBHOOK_ID for https://www.shopapgo.com/api/webhooks/paypal), Resend, Meta,
+# GA4, Amazon outbound, Google address check, Turnstile, Access list, healthchecks.io. ADMIN_LOGIN_* and ADMIN_TOKEN stay
+# set (owner 10/18) but do not open /admin while ADMIN_ACCESS is on.
 
 # Cron: every 5 minutes the Worker's scheduled() (worker/cron.js) re-sends Meta CAPI events that failed, retries customer
 # emails and (only when the MCF_SYNC_CRON var is switched on) syncs Amazon MCF shipment status; each run is recorded for

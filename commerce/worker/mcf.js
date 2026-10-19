@@ -32,6 +32,7 @@ import {
   mcfReadiness,
   shipmentFromMcfOrder,
   packagesFromMcfOrder,
+  CANCEL_REQUESTED,
 } from "./amazon-mcf.js";
 import { savePackages } from "./package-tracking.js";
 import { FulfillmentError, markShipped, recordAudit, validateShipment } from "./fulfillment.js";
@@ -45,9 +46,10 @@ const STALE_SUBMITTING_MS = 5 * 60_000;
 const RETRYABLE = ["failed", "rejected"];
 const SYNC_BATCH = 25;
 const TERMINAL_BAD = ["CANCELLED", "UNFULFILLABLE", "INVALID"];
+// How Amazon words a create refused for lack of stock (SP-API errors relayed by the gateway).
+const OUT_OF_STOCK = /unfulfillable|insufficient (inventory|quantity|stock)|not enough (inventory|stock)|out of stock|inventory (is )?(not available|unavailable)|no (sellable |available )?inventory|InvalidInventory/i;
 const clip = (value, max) => String(value ?? "").slice(0, max);
 const adminUrlOf = (env) => `${adminHost(env) ? `https://${adminHost(env)}` : "https://www.shopapgo.com"}/admin/`;
-const CANCEL_REQUESTED = "Cancellation requested; sync to confirm.";
 
 export function getMcfRecord(db, orderId) {
   return db.prepare("SELECT * FROM order_mcf WHERE order_id = ?").bind(orderId).first();
@@ -158,6 +160,8 @@ export function compareAmazonCopy(input, amazonOrder) {
   }
   const zip = (value) => String(value ?? "").trim().slice(0, 5);
   if (zip(sent.postalCode) !== zip(amazonOrder.address.postalCode)) differences.push(`ZIP: sent "${sent.postalCode}", Amazon has "${amazonOrder.address.postalCode}"`);
+  // All or nothing (C19): Amazon's default; anything else could ship part of the order.
+  if (amazonOrder.policy && amazonOrder.policy !== "FillOrKill") differences.push(`Fulfillment policy: Amazon has "${amazonOrder.policy}", expected "FillOrKill" (ship everything or nothing)`);
   return differences;
 }
 
@@ -306,6 +310,14 @@ export async function submitOrderToMcf(env, order, { actor = "mcf-auto", nowMs =
         const existing = await getFulfillmentOrder(env, sellerOrderId).catch(() => undefined);
         if (existing) return adopt(env, orderId, sellerOrderId, existing, actor, attempts, input);
       }
+      // Amazon refused it at once for lack of stock (C19): the same steps as an order Amazon later cannot fill (delay
+      // email, daily resend, the day-3 decision), not "sending failed".
+      if (error instanceof McfError && error.kind === "invalid" && OUT_OF_STOCK.test(`${error.message} ${error.details}`)) {
+        await saveState(env.DB, orderId, { status: "rejected", mcfStatus: "UNFULFILLABLE", errorKind: "amazon", errorMessage: clip(`Amazon has no stock for it: ${error.message}`, 200), note: "" });
+        await audit(env.DB, orderId, "mcf.closed", actor, { sellerOrderId, mcfStatus: "UNFULFILLABLE", atCreate: true });
+        await onStockout(env, orderId);
+        return { outcome: "stockout", record: publicRecord(await getMcfRecord(env.DB, orderId)) };
+      }
       const state = failure(error);
       await saveState(env.DB, orderId, state);
       await audit(env.DB, orderId, "mcf.failed", actor, { sellerOrderId, kind: state.errorKind, message: state.errorMessage, attempts });
@@ -403,8 +415,34 @@ async function applyAmazonOrder(env, orderId, amazonOrder, actor) {
     return { changed: false, shipped: false, email: null };
   }
 
+  // Amazon shipped an order that is cancelled here (C19): nothing is recorded as shipped and the customer gets no
+  // shipment email; the team is told once to sort it out (a return, or charging again). The row stops syncing.
+  const current = await getOrder(env.DB, orderId);
+  if (current && current.status !== "paid") {
+    await saveState(env.DB, orderId, { ...base, status: "shipped", carrier: checked.carrier, trackingNumber: checked.trackingNumber, errorKind: "order", errorMessage: `Amazon shipped it, but the order is ${current.status} here.`, note: "No shipment email was sent." });
+    await audit(env.DB, orderId, "mcf.shipped_not_paid", actor, { orderStatus: current.status, carrier: checked.carrier, trackingNumber: checked.trackingNumber });
+    await alertTeam(env, {
+      key: `mcf-shipped-not-paid:${orderId}`, kind: "mcf_shipped_not_paid", orderId, adminUrl: adminUrlOf(env),
+      subject: `Order ${orderId}: Amazon shipped an order that is ${current.status}`,
+      lines: [
+        `Amazon shipped order ${orderId} (${checked.carrier} ${checked.trackingNumber}), but here it is ${current.status}.`,
+        "The customer was not sent a shipment email. Decide what to do: contact the customer about returning it, or about paying again.",
+      ],
+    });
+    return { changed: true, shipped: false, email: null };
+  }
+  // Shipped although a refund was made (C19): it ships as usual and the customer is told, but the team should know.
+  const refunded = current ? await env.DB.prepare("SELECT 1 FROM order_refunds WHERE order_id = ? AND status != 'FAILED' LIMIT 1").bind(orderId).first() : null;
+
   try {
     const order = await markShipped(env.DB, orderId, checked, { actor: "mcf" });
+    if (refunded) {
+      await alertTeam(env, {
+        key: `mcf-shipped-refunded:${orderId}`, kind: "mcf_shipped_refunded", orderId, adminUrl: adminUrlOf(env),
+        subject: `Order ${orderId}: Amazon shipped an order that has a refund`,
+        lines: [`Amazon shipped order ${orderId} (${checked.carrier} ${checked.trackingNumber}) after a refund was made on it.`, "Check the refund on the order page: the customer may get the goods and their money back."],
+      });
+    }
     // Every package first, so the shipment email lists them all (F6, M8-05).
     await savePackages(env.DB, orderId, packagesFromMcfOrder(shipped));
     await saveState(env.DB, orderId, { ...base, status: "shipped", carrier: checked.carrier, trackingNumber: checked.trackingNumber, errorKind: "", errorMessage: "", note: "" });
@@ -551,7 +589,9 @@ export async function submitDueOrders(env, { nowMs = Date.now(), orderId = null,
         continue;
       }
       await dropQueued(env.DB, id);
-      if (result.outcome === "failed") {
+      // Out of stock at Amazon: the stock-out steps already told the team and the customer.
+      if (result.outcome === "stockout") summary.failed += 1;
+      else if (result.outcome === "failed") {
         summary.failed += 1;
         await alertTeam(env, {
           key: `mcf-failed:${id}`, kind: "mcf_failed", orderId: id, adminUrl,

@@ -12,9 +12,11 @@ const SETTLEABLE = `(status IN ('pending', 'expired') OR (status = 'cancelled' A
   AND NOT EXISTS (SELECT 1 FROM order_cancellations c WHERE c.order_id = orders.id)))`;
 
 // After a payment that succeeded did not settle the checkout: a redelivery of the payment that did (nothing to do), or
-// a second payment for an order already paid (refunded by worker/checkouts.js refundDuplicate).
-function alreadySettled(order, provider, ref, amountCents, currency, captureId = "") {
-  const duplicate = order.payment_intent_id !== ref;
+// a second payment for an order already paid (refunded by worker/checkouts.js refundDuplicate). Judged by the payment
+// records (C20): the one marked succeeded paid; orders.payment_intent_id only for orders older than those records.
+async function alreadySettled(db, order, provider, ref, amountCents, currency, captureId = "") {
+  const paid = await db.prepare("SELECT provider, ref FROM checkout_payments WHERE checkout_id = ? AND status = 'succeeded' LIMIT 1").bind(order.id).first();
+  const duplicate = paid ? !(paid.provider === provider && paid.ref === ref) : order.payment_intent_id !== ref;
   return { status: order.status, changed: false, order, ...(duplicate ? { duplicate: { provider, ref, amountCents, currency, captureId } } : {}) };
 }
 
@@ -46,23 +48,28 @@ export async function insertOrder(db, { id, checkout, quote }) {
     .run();
 }
 
+// The checkout's latest payment object, only while it is unpaid (C20): a second tab that starts a payment just after
+// the first one paid must not replace the reference of the payment that paid. false = paid meanwhile.
 export async function attachPaymentIntent(db, orderId, intentId) {
-  await db
-    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ?")
+  const result = await db
+    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ? AND paid_at IS NULL")
     .bind(intentId, now(), orderId)
     .run();
+  return result.meta?.changes !== 0;
 }
 
 export async function attachPaypalOrder(db, orderId, paypalOrderId) {
   const timestamp = now();
-  await db
-    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ?")
+  const result = await db
+    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ? AND paid_at IS NULL")
     .bind(paypalOrderId, timestamp, orderId)
     .run();
+  // Kept either way, so a payment on this PayPal order is still recognised as this checkout's (and refunded if second).
   await db
     .prepare("INSERT OR IGNORE INTO order_payments (order_id, provider, provider_ref, created_at) VALUES (?, 'paypal', ?, ?)")
     .bind(orderId, paypalOrderId, timestamp)
     .run();
+  return result.meta?.changes !== 0;
 }
 
 // The provider of the order's current payment object (the one that paid, once paid): from checkout_payments, else
@@ -146,7 +153,7 @@ export async function settleIntent(db, intent) {
       .bind(timestamp, timestamp, order.id, timestamp, timestamp),
   ]))[0] : await update.run();
   const changed = (result?.meta?.changes ?? 1) > 0;
-  if (!changed) return alreadySettled(await getOrder(db, order.id), "airwallex", intent.id, amountCents, intent.currency);
+  if (!changed) return alreadySettled(db, await getOrder(db, order.id), "airwallex", intent.id, amountCents, intent.currency);
   await recordPayment(db, { provider: "airwallex", ref: intent.id, checkoutId: order.id, amountCents, currency: intent.currency });
   await markPayment(db, "airwallex", intent.id, "succeeded");
   return { status, changed, order: await getOrder(db, order.id), lateAfterExpiry: order.status === "expired", payment: { provider: "airwallex", ref: intent.id } };
@@ -198,7 +205,7 @@ export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, am
       .bind(timestamp, timestamp, order.id, timestamp, timestamp),
   ]))[0] : await update.run();
   const changed = (result?.meta?.changes ?? 1) > 0;
-  if (!changed) return alreadySettled(await getOrder(db, order.id), "paypal", paypalOrderId, amountCents, currency, captureId);
+  if (!changed) return alreadySettled(db, await getOrder(db, order.id), "paypal", paypalOrderId, amountCents, currency, captureId);
   await recordPayment(db, { provider: "paypal", ref: paypalOrderId, checkoutId: order.id, amountCents, currency });
   await markPayment(db, "paypal", paypalOrderId, "succeeded");
   return { status: nextStatus, changed, order: await getOrder(db, order.id), lateAfterExpiry: order.status === "expired", payment: { provider: "paypal", ref: paypalOrderId } };
@@ -257,6 +264,8 @@ export function publicOrder(order) {
     taxCents: order.tax_cents,
     totalCents: order.total_cents,
     createdAt: order.created_at,
+    // It was paid at some point: a cancelled order then says "cancelled", not "payment not completed" (C21).
+    paid: Boolean(order.paid_at),
   };
 }
 
