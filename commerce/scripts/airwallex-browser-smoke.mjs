@@ -5,7 +5,7 @@
 //   npm run smoke:airwallex:browser  # [-- --base http://127.0.0.1:8799] [--headed] [--card success|declined|authentication-failed]
 //
 // Against a deployed STAGING Worker (Basic-auth gate, see docs/commerce.md):
-//   node scripts/airwallex-browser-smoke.mjs --base https://<staging>.workers.dev --credentials ~/.apgo-staging-credentials
+//   node scripts/airwallex-browser-smoke.mjs --base https://staging.shopapgo.com --credentials <file with the staging site login>
 // --credentials FILE (KEY=VALUE lines) supplies STAGING_BASIC_AUTH_USER / STAGING_BASIC_AUTH_PASSWORD (whole-site Basic gate) and
 // ADMIN_TOKEN (for /admin/); with it, .dev.vars is not read. Screenshots then get the prefix "staging-" (--shot-prefix to override).
 //

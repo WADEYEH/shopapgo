@@ -9,7 +9,7 @@
 
 **怎么读**
 
-- 「现况」栏是 **10/5 的快照**，之后没有逐条更新：现在的状态看 `docs/commerce-plan.md` §8.1（还缺的东西）和 `docs/design/modules/README.md`（各模块做了什么）。当时以 shopapgo `codex/us-commerce` 分支的代码为准；Meta 追踪、PayPal 等只有 landing 才有的功能，以 landing 为准。两边的完整差异见 `docs/design/landing-audit.md`。
+- 「现况」栏是 **10/5 的快照**，之后没有逐条更新：现在的状态看 `docs/commerce-plan.md` §8.1（还缺的东西）和 `docs/design/modules/README.md`（各模块做了什么）。当时以 shopapgo `codex/us-commerce` 分支的代码为准；Meta 追踪、PayPal 等只有 landing 才有的功能，以 landing 为准。两边当时的差异写在 landing 同步点检查纪录（10/6，10/21 已删除，git 纪录里有）。
 - ✓ 已有 ｜ △ 部分有 ｜ ✗ 没有 ｜ — 只需要定规则，不用写代码
 - 需要业务决定的项目都整理在第 1 节，情境表里写的是已确认的处理方式。
 - 「模块」栏使用第 3 节建议的 12 个模块代号。

@@ -1,183 +1,124 @@
 # shopapgo
 
-shopapgo.com 的網站原始碼。Next.js (App Router) 專案，正在從 Vercel 遷移到 Cloudflare Pages 靜態匯出。
+APGO 美國站 `www.shopapgo.com` 的原始碼：品牌首頁、指南和所有購物頁面（商品、購物車、結帳、政策、聯絡）都在同一個 Next.js（App Router）靜態匯出（`out/`）裡，由 `commerce/` 的 Cloudflare Worker `apgo-us-store` 提供。同一個 Worker 也負責 `/api/*`、後台、轉址和排程。
 
-## 架構
+## 現況（2026-10-16 起上線）
 
-| 層 | 設定 |
+| 項目 | 內容 |
 |---|---|
-| 程式碼 | GitHub `WADEYEH/shopapgo`，production 分支 `main` |
-| 部署 | **遷移中**：Vercel 專案 `shopapgo` 仍接收流量；Cloudflare Pages 靜態匯出準備中 |
-| 域名 | `shopapgo.com` → 308 轉到 `www.shopapgo.com`；www 指向 Production |
-| DNS | Cloudflare 託管；**目前**仍指向 Vercel（`@` A 記錄、`www` CNAME → `cname.vercel-dns.com`） |
-| SSL | Vercel 自動簽發（切換 Cloudflare Pages 後由 Cloudflare 簽發） |
-
-Vercel 帳號的 GitHub 連結是 `WADEYEH`；本機 git 以 `anpuuuuu`（collaborator）推送。
-
-## Cloudflare Pages 遷移
-
-網站正在從 Vercel 遷移到 Cloudflare Pages 作為靜態 HTML 匯出。**DNS 尚未切換**，production 流量仍走 Vercel。
-
-### 靜態匯出設定
-
-`next.config.mjs` 設定 `output: "export"`，建置後產生 `out/` 目錄，適用於 Cloudflare Pages：
-
-| 設定 | 值 |
-|---|---|
-| Build command | `npm run build`（或 `npx next build`） |
-| Output directory | `out` |
-| Framework | Next.js (Static HTML Export) |
-
-### 首頁與 /us 重導
-
-美國站首頁已掛在網域根路徑 `/`。精確路徑 `/us` 與 `/us/` 301 到 `https://www.shopapgo.com/`；`/us/guides` 與 `/us/assets` 維持原 URL、不重導。
-
-| 檔案 | 平台 | 說明 |
-|------|------|------|
-| `vercel.json` | Vercel（若仍部署） | `/us`、`/us/` → `/` 301 |
-| `public/_redirects` | Cloudflare Pages | 同上（絕對 URL 目標） |
-
-### 遷移階段
-
-1. **Phase 1**（本 PR）：啟用靜態匯出、設定 `_redirects`、更新文件
-2. **Phase 2**：在 Cloudflare Dashboard 建立 Pages 專案、設定環境變數、驗證預覽部署
-3. **Phase 3**：切換 DNS（`www` CNAME → Pages 專案、`@` 轉址）、停用 Vercel 部署
-
-### 驗證靜態匯出
-
-```bash
-npm run build           # 產生 out/ 目錄
-ls out/                 # 確認 index.html、us.html、_redirects、sitemap.xml 等
-npx serve out           # 本地預覽（需另裝 serve）
-```
-
-## 日常工作流
-
-在 `main` 上直接開發，push 即上線：
-
-```bash
-npm install     # 第一次
-npm run dev     # 本地預覽 http://localhost:3000
-git add -A && git commit -m "..." && git push
-```
-
-push 到 `main` 後 Vercel 會自動建置並部署到 shopapgo.com。
-
-只有在改動大、想先看效果時才開分支；push 分支後 Vercel 會給一個預覽網址，確認沒問題再合回 `main`。
+| 正式網站 | `www.shopapgo.com` 和裸網域，整個網域由 Worker `apgo-us-store` 服務（`out/` 當靜態檔，`run_worker_first`） |
+| 舊網址 | `store.shopapgo.com`、`shopapgo.com` 的網頁 301 到 www 的同一頁（`MOVED_HOSTS`）；`/api/*`、`/.well-known/*` 不轉址 |
+| 後台 | `admin.shopapgo.com`，Cloudflare Access 登入（Google 或 email 驗證碼）。成員在後台 Members 頁管理，同步到 Zero Trust 名單；`ADMIN_LOGIN_*`、`ADMIN_TOKEN` 還在，但在正式環境打不開 `/admin` |
+| 測試站 | `staging.shopapgo.com`（網站密碼）＋ `admin-staging.shopapgo.com`（Access）；訂單送到假的 Amazon（`MCF_FAKE`），庫存讀真的 Amazon（唯讀） |
+| 舊主機 | 之前服務 www 的 Cloudflare Pages 專案保留到 10/30 之後（C30）。Vercel 舊專案仍會替 PR 建預覽（PR 上的「Vercel」檢查），但不接任何流量；`vercel.json` 暫時保留 |
+| 程式碼 | GitHub `WADEYEH/shopapgo`，主分支 `main` |
 
 ## 目錄
 
 ```
 app/
-  (tw)/                 # 預留給台灣站（目前無 page；勿與 US 根路徑衝突）
-    layout.js
-  (us)/                 # 美國站 root layout（lang=en、Barlow 字體、us.css）
-    layout.js
-    us.css
-    page.js             # / 美國落地頁（CTA 連同域商品頁）
-    us/
-      guides/
-        page.js         # /us/guides 指南總覽
-        after-washing-your-car/page.js
-        wet-or-dry-application/page.js
-        how-to-apply-colored-glaze/page.js
-        how-to-apply-glaze-coating/page.js
-    (shop)/             # 商店頁（D41）：包一層 .shop 套商店樣式（shop.css）並載入商店的 Meta Pixel
-      layout.js
-      shop.css
-      products/page.js  # /products 商品總覽
-      products/[slug]/page.js  # /products/atomic-colored-glaze、/products/atomic-glaze-coating
-      cart/page.js      # /cart 購物車
-      checkout/page.js  # /checkout 結帳與訂單頁（/checkout?order=…）
-      privacy/ terms/ returns/ shipping/  # 政策頁，內容直接讀 docs/legal/ 的草稿
-      contact/page.js   # /contact 聯絡我們與聯絡表單
-components/shop/       # 商品頁、商品卡片（價格一律取自 Worker 的 /api/store/config）
-lib/shop/              # 商店共用：商品資料、購物車、商店設定與價格、評論規則
-components/us/
-  GtmScripts.js         # GTM 容器載入器，兩道閘門都通過才輸出
-  SiteChrome.js         # 六頁共用 header、手機抽屜與選單狀態
-  SiteFooter.js         # 六頁共用完整站點導航與客服資訊
-  landing/              # 首頁各區塊（client components，含 DRY/WET 選擇器狀態）
-  guides/               # 指南共用 article、麵包屑、響應式目錄元件
-app/
-  robots.js             # /robots.txt（必須在 app 根目錄，放進 route group 會失效）
-  sitemap.js            # /sitemap.xml：首頁為 /，指南仍為 /us/guides/*；不含會 301 的 /us
-lib/
-  site.js               # SITE_URL：正式網域的唯一來源，metadataBase、JSON-LD、sitemap 共用
-lib/us/
-  routes.js             # 站內連結唯一來源（home="/"；guides/assets 仍用 US_BASE="/us"）
-  navigation.js         # 主選單、頁尾共用的分組與短標題；首頁段落目錄
-  company.js            # apgo.tw 公開公司資料、電話、地址、營業時間與預設客服信箱
-  tokens.js             # 設計 tokens：色票、字體、產品基本資料
-  config.js             # 讀取 NEXT_PUBLIC_APGO_US_* 環境變數（影片、分析、耐洗次數）
-  faq.js                # 首頁 FAQ 文案（FAQ 區與 JSON-LD 共用）
-  analytics.js          # dataLayer 事件
-public/us/assets/       # logo、packshot、施作步驤圖、影片 poster
-.env.example            # 美國站所需環境變數清單
+  (us)/                 美國站 root layout（lang=en、Barlow、us.css、GTM、Meta Pixel）
+    page.js             / 首頁
+    us/guides/          /us/guides 指南總覽與 27 篇指南
+    (shop)/             商店頁：/products、兩個商品頁、/cart、/checkout（含訂單頁 /checkout?order=…）、
+                        /privacy、/terms、/returns、/shipping、/contact
+  (tw)/                 預留給台灣站（目前沒有頁面，勿與根路徑衝突）
+  robots.js、sitemap.js /robots.txt、/sitemap.xml（必須在 app 根目錄）
+components/us/          Header、Footer、首頁區塊、指南元件、GTM 載入
+components/shop/        商品頁、購物車、結帳、政策頁、聯絡表單
+lib/us/                 站內網址（routes.js）、導覽、公司資料、設定（config.js）、分析事件（analytics.js）
+lib/shop/               商店共用程式：商品資料、購物車、結帳與地址規則、付款輔助（Worker 也引用同一份）
+lib/site.js             SITE_URL：正式網域的唯一來源
+public/                 us/assets/（圖片、影片）、admin/（後台頁面）、js/meta-pixel.js、apple-pay/、_redirects
+commerce/               商店 Worker：API、後台 API、轉址、排程、D1 遷移檔、測試與工具（見 commerce/README.md）
+amazon-spapi-mcp/       Amazon 轉接程式（amazon-mcp.apgo.tw）：MCF 送單、讀回、取消、追蹤、庫存
+amazon-connect/         Amazon 工具（MCP）的 GitHub 登入入口
+amazon-review-cron/     Amazon 請評論排程的備援
+docs/                   企劃、營運手冊、設計規格、政策全文（見下方「文件」）
+tests/                  網站的 node:test 測試（npm test）
+.env.example            網站的 NEXT_PUBLIC_* 設定
 ```
 
-## 美國站（/ 首頁；指南 /us/guides）
+## 本機開發與測試
 
-`/` 是 APGO 美國落地頁（原 `/us`），依設計交付包高保真重建。精確 `/us` 會 301 到 `/`。主要購買 CTA 連到同域商店商品頁（`/products/d204`、`/products/d215`）；結帳由同一主機的 Worker 處理。產品與指南正文仍維持原核准文案。
+需要 Node 22.5 以上。
 
-商品總覽 `/products`、兩個商品頁、購物車 `/cart`、結帳 `/checkout`、政策頁（`/privacy`、`/terms`、`/returns`、`/shipping`）與聯絡我們 `/contact` 也是這個 Next.js 網站的頁面（`app/(us)/(shop)`，D41），共用同一個 Header / Footer（結帳頁只留標誌和購物車），商品資料與首頁共用同一份（`lib/shop/catalog.js`）。政策頁的內容直接讀 `docs/legal/` 的草稿，律師改那幾個檔案，重新建置後網站就跟著變。這些頁面要跟 Worker 一起看：`npm --prefix commerce run build:site` 建出單一網站，預覽與測試方式見 `commerce/README.md`。
+```bash
+npm ci                                  # 第一次
+npm run dev                             # 品牌頁與指南 http://localhost:3000
+npm test                                # 網站測試（tests/*.test.cjs）
+npm run build                           # 正式建置，產生 out/
+```
 
-### 環境變數
+`npm run dev` 只適合看品牌頁和指南。商店頁（Shop、購物車、結帳、政策頁）要跟 Worker 一起看：
+
+```bash
+npm run commerce:install                # commerce/ 的套件
+npm --prefix commerce run build:site    # 用測試站設定建置 out/
+npm run commerce:dev                    # Worker http://127.0.0.1:8799
+npm run commerce:test                   # Worker 與商店的 node:test
+npm run commerce:test:e2e               # Playwright，跑在 build:site 的結果上
+npm run commerce:verify                 # Worker 打包檢查（dry-run）
+```
+
+本機 D1、`.dev.vars` 和沙盒付款見 `commerce/README.md`。
+
+## 部署
+
+- **CI**（`.github/workflows/ci.yml`）：每個 PR 和每次 push 到 `main` 都跑：網站測試與建置、商店測試、Worker 打包、Playwright、三個 Amazon Worker 的 dry-run。
+- **測試站**：`main` 的 CI 通過後自動部署（`.github/workflows/deploy.yml`；只部署 `main` 最新的那個 commit）。
+- **正式環境**：只能手動。GitHub → Actions → Deploy → target 選 `production`、confirm 輸入 `deploy production`，再由 Production 環境的審核人核准（D65）。push 到 `main` 不會更新正式網站，也不從本機部署。
+- **Amazon 轉接程式和另外兩個 Amazon Worker**：`.github/workflows/deploy-amazon-gateway.yml`（手動、要核准）。
+- **資料庫每日加密備份**：`.github/workflows/backup-database.yml`（D77，`docs/ops/runbook.md` 第 6 節）。
+
+步驟、回退和還原：`docs/ops/runbook.md`。
+
+## 網址與轉址
+
+- 首頁在 `/`。`/us`、`/us/` 301 到 `https://www.shopapgo.com/`（Worker 的 `commerce/worker/redirects.js`，`public/_redirects` 同一條規則）；指南和素材維持在 `/us/guides/*`、`/us/assets/*`。
+- `/go/*` 是包裝卡 QR 短網址，302 到指南。
+- 商品頁用具名網址：`/products/atomic-colored-glaze`（D204）、`/products/atomic-glaze-coating`（D215）；舊的 `/products/d204`、`/products/d215` 301 過去。
+- 站內連結的唯一來源是 `lib/us/routes.js`。`NEXT_PUBLIC_APGO_US_SINGLE_SITE=true`（正式與測試站的建置都會設）才在 Header / Footer 顯示 Shop、購物車和政策連結，並使用具名商品網址；沒設的建置（本機 `next dev`、Vercel 預覽）不顯示這些連結，商品按鈕連到 `/products/d204`、`/products/d215`。
+
+## 商店頁
+
+商品總覽、兩個商品頁、購物車、結帳、政策頁和聯絡頁（`app/(us)/(shop)`，D41）跟品牌頁共用 Header / Footer（結帳頁只留標誌和購物車），商品資料與首頁共用 `lib/shop/`。價格一律來自 Worker 的 `/api/store/config`，頁面本身不含價格；擁有者在後台改價格、文字和照片（D52）。
+
+政策頁直接顯示 `docs/legal/` 的全文（2026-10-16 生效，賣家 WEI SYUAN TECHNOLOGY CO., LTD.）；改那幾個檔案，下次部署後網站就跟著變。
+
+付款、出貨、後台和寄信的細節：`commerce/README.md`、`commerce/docs/commerce.md`。
+
+## 環境變數（網站）
 
 | 變數 | 說明 |
 |---|---|
-| `NEXT_PUBLIC_APGO_US_VIDEO_READY` | 施作影片核准後設 `true`（影片檔放 `public/us/assets/video/{sku}-application.mp4` 與 `{sku}-captions-en.vtt`） |
-| `NEXT_PUBLIC_APGO_US_SUPPORT_EMAIL` | 六頁共用客服信箱；未設定或空白時預設 services@apgo.com.tw |
+| `NEXT_PUBLIC_APGO_US_SINGLE_SITE` | `true` = 這份建置由商店 Worker 一起服務（見上方「網址與轉址」）；`commerce/scripts/build-site.mjs` 會設 |
+| `NEXT_PUBLIC_APGO_US_ANALYTICS_READY` | 分析總開關；只在正式建置設 `true` |
+| `NEXT_PUBLIC_APGO_US_GTM_ID` | GTM 容器 ID（`GTM-XXXXXXX`）；GA4 評估 ID 設在 GTM 容器裡，不進程式碼 |
+| `NEXT_PUBLIC_APGO_US_HONOR_GPC` | Global Privacy Control（D46）；空白 = 遵守，`false` = 不遵守 |
+| `NEXT_PUBLIC_APGO_US_SUPPORT_EMAIL` | 客服信箱；空白時用 services@apgo.com.tw |
+| `NEXT_PUBLIC_APGO_US_VIDEO_READY` | 施作影片核准後設 `true`（影片放 `public/us/assets/video/{sku}-application.mp4` 與 `{sku}-captions-en.vtt`） |
 | `NEXT_PUBLIC_APGO_US_D204_WASH_RESISTANCE` / `..._D215_...` | 耐洗次數文字，空白顯示「—」 |
 | `NEXT_PUBLIC_APGO_US_RANK_SOURCE` | No.1 排名來源註記 |
-| `NEXT_PUBLIC_APGO_US_SHOW_ORIGIN` | `false` 則 hero eyebrow 不顯示「Made in Taiwan」 |
-| `NEXT_PUBLIC_APGO_US_ANALYTICS_READY` | 分析總開關，只在 Production 設 `true`，預覽與本機留空才不會汙染 GA4 |
-| `NEXT_PUBLIC_APGO_US_GTM_ID` | GTM 容器 ID，格式 `GTM-XXXXXXX`；GA4 評估 ID 設在 GTM 後台，不進程式碼 |
-| `NEXT_PUBLIC_APGO_US_META_PIXEL_ID` | Meta Pixel（資料集）ID，純數字 8–20 碼；與 `ANALYTICS_READY=true` 同時成立才載入（官網 /us 僅送 PageView 與 `AmazonClick`）；正式站為公開值 `2606879866471418`，其他環境留空 |
+| `NEXT_PUBLIC_APGO_US_SHOW_ORIGIN` | `false` 則 hero 不顯示「Made in Taiwan」 |
 
-完整清單見 `.env.example`。
+`NEXT_PUBLIC_*` 在建置時寫進頁面，改了要重新部署。正式建置的追蹤設定由 Deploy workflow 給值（GitHub Variables，未設時用預設的 `GTM-TD5NTFH9`）；測試站和本機一律不載入。完整清單見 `.env.example`。
 
-### 導航與本地驗證
+## 分析與搜尋
 
-- 美國站 layout 統一提供 Header / Footer；文章正文保留 Server Components。
-- 桌面 Header 高 72px；900px 以下高 64px，顯示 Guides 入口與右側 Menu 抽屜。
-- 本頁目錄獨立於全站選單；文章在 1100px 以上使用右側固定目錄，其餘寬度放在文章頂部，手機預設收起。
-- DRY / WET 選擇器位於產品比較區；`#d204` / `#d215` 保留深連結及瀏覽器歷史切換。
-- 首頁手機購買列在 Hero、最後產品區或 Footer 可見，以及 Menu 開啟時隱藏；指南頁不顯示購買列。
-- 尚為 `#` 的法律／聯絡連結不顯示。Footer 使用 `company.js` 的公開公司資料及預設信箱，並區分 APGO 產品支援與 Amazon 訂單支援。導覽入口文字可調整，產品與文章正文仍維持原核准文案。
-- `npm test` 檢查同域商品 CTA 與點擊事件；`npm run build` 檢查正式建置。
-- 瀏覽器驗證：六頁 × 360 / 390 / 768 / 1024 / 1440px；確認菜單鍵盤操作、跨頁／段落跳轉、產品切換與 Footer 避讓。
+- GA4 透過 GTM 載入。`lib/us/analytics.js` 把事件推到 `dataLayer`：GA4 建議的電商事件（`view_item`、`select_item`、`view_cart`、`add_to_cart`、`remove_from_cart`、`begin_checkout`、`add_shipping_info`、`add_payment_info`、`purchase`，都帶 `ecommerce` 物件），以及 `us_referral_landing_view`、`scroll_depth`、`fit_selector_answer`、`faq_expand`、`video_start` 等。**事件名稱是跟 GTM 容器之間的契約，改名會靜默弄壞後台的代碼，而且不會有任何建置錯誤。**
+- 同一個事件也以 `apgo:analytics` DOM 事件送出，`public/js/meta-pixel.js`（全站唯一的 Meta Pixel，只在 shopapgo.com 的網域上啟動）把它轉成 Meta 事件；購買事件跟 Worker 的 Conversions API 用同一個事件編號去重（`commerce/docs/meta-tracking.md`）。瀏覽器送出 Global Privacy Control 時不載入 Pixel（D46）。
+- GTM 只在 `NEXT_PUBLIC_APGO_US_ANALYTICS_READY=true` 且容器 ID 格式正確時載入。不要改用 `NODE_ENV` 判斷：預覽建置的 `NODE_ENV` 同樣是 `production`。
+- 除了購物車和結帳，所有頁面都開放收錄；`/sitemap.xml` 共 37 頁（D71）。新增頁面要加進 `app/sitemap.js` 的 `pages`，忘了的話 `npm test` 會失敗。`lastModified` 是文案最後修改的日期，改樣式不用動。Search Console 用 Cloudflare DNS TXT 驗證網域資源，那筆 TXT 紀錄不能刪。
 
-### 分析與搜尋
+## 文件
 
-GA4 透過 GTM 載入，程式碼裡只有容器 ID。`lib/us/analytics.js` 推送六個事件到 `dataLayer`，
-GTM 後台再把它們對應成 GA4 事件：`us_referral_landing_view`、`scroll_depth`、
-`fit_selector_answer`、`amazon_referral_click`、`faq_expand`、`video_start`。
-**這些事件名稱是跟 GTM 容器之間的契約，改名會靜默弄壞後台的代碼，而且不會有任何建置錯誤。**
-
-容器只在 `NEXT_PUBLIC_APGO_US_ANALYTICS_READY=true` 且容器 ID 格式正確時載入，兩者都預設關閉。
-不要改用 `NODE_ENV` 判斷：Vercel 建預覽部署時 `NODE_ENV` 同樣是 `production`。
-
-`/robots.txt` 和 `/sitemap.xml` 由 `app/robots.js` 與 `app/sitemap.js` 產生。新增頁面時要一併加進
-`app/sitemap.js` 的 `pages` 陣列，忘了的話 `npm test` 會紅字。`lastModified` 是文案最後修改的日期，
-改樣式不用動。Search Console 用 Cloudflare DNS TXT 驗證的網域資源，那筆 TXT 記錄不能刪。
-
-### 之後要把美國站搬到根路徑
-
-- **目前狀態**：`public/_redirects` 設定 `/` 301 轉到 `/us`。台灣站要用 root 時把那行刪掉即可。
-- **真的搬到 /**：把 `lib/us/routes.js` 的 `US_BASE` 改成 `""`，把 `app/(us)/us/*` 移到 `app/(us)/*`，並在 `public/_redirects` 為舊的 `/us/*` 加 redirect。
-
-### 上線前待補（設計交付包列出的空缺）
-
-- Privacy / Terms / Contact 連結（`lib/us/routes.js` 目前是 `#`）。
-- 施作影片 MP4 與英文字幕 VTT。
-- 耐洗次數數值。
-- 文案對齊：首頁 WET 段寫「No extra step」，指南寫毛巾擦乾後仍需 buff。
-
-## Direct store integration (October 1)
-
-The imported V3 storefront, Airwallex Worker and order back office live in
-`commerce/` as a separate application. Existing Pages export and guide routes
-remain intact. Setup, provenance, preview switches and go-live limitations:
-[commerce/README.md](commerce/README.md). No commerce deploy is triggered by
-`npm run build`; production checkout remains closed until its release gates pass.
+| 文件 | 內容 |
+|---|---|
+| `docs/commerce-plan.md` | 企劃、決策紀錄（D 編號）、待辦總表（第 8.1 節） |
+| `docs/ops/runbook.md` | 營運手冊（簡體中文）：部署、回退、還原、告警、後台操作 |
+| `docs/ops/production-config.md` | 正式環境設定清單（只記名稱，不記密鑰） |
+| `docs/design/` | 設計規格：`modules/`、`scenarios.md`、`traceability.md` |
+| `docs/legal/` | 政策全文（網站的政策頁直接顯示） |
+| `commerce/README.md`、`commerce/docs/` | 商店 Worker：技術參考 `commerce.md`、`paypal.md`、`meta-tracking.md`、`product-pages.md` |
+| `amazon-spapi-mcp/README.md` | Amazon 轉接程式 |

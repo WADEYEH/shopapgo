@@ -14,7 +14,7 @@
  * Deduplication with the server-side Conversions API (worker):
  *   InitiateCheckout  eventID = "ic_" + merchant order id (APGO-US-...)
  *   Purchase          eventID = "purchase_" + merchant order id
- * See docs/meta-tracking-frontend.md.
+ * See commerce/docs/meta-tracking.md.
  */
 (function () {
   "use strict";

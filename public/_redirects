@@ -10,7 +10,7 @@
 /us https://www.shopapgo.com/ 301
 /us/ https://www.shopapgo.com/ 301
 
-# /go/* package-insert QR short links (docs/marketing/go-links.md). The store Worker answers these first
+# /go/* package-insert QR short links (GO_LINKS in commerce/worker/redirects.js). The store Worker answers these first
 # (commerce/worker/redirects.js); listed here for Cloudflare Pages too. 302 so targets can change without reprinting.
 /go/apply /us/guides/how-to-apply-glaze-coating?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302
 /go/wet-or-dry /us/guides/wet-or-dry-application?utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides 302

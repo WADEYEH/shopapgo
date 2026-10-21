@@ -30,7 +30,7 @@ const MOVED = new Map([
 
 const OLD_ASSETS = /^\/assets\/[A-Za-z0-9._/-]+$/;
 
-// /go/* short links printed as QR codes on package insert cards (docs/marketing/go-links.md). 302, not 301, so a target
+// /go/* short links printed as QR codes on package insert cards (the list is GO_LINKS below). 302, not 301, so a target
 // can change without reprinting; /go/apply is already printed and must never be renamed. Each target carries its own
 // UTM tags, so the incoming query string is dropped. A trailing slash and any letter case answer the same.
 const QR_UTM = "utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides";
