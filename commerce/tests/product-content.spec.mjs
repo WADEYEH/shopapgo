@@ -101,6 +101,37 @@ test("the overview and moving to the product inside the site show the live produ
   expect(errors).toEqual([]);
 });
 
+// C6: the home page and the product card beside a guide follow the name, when to apply and how long it lasts; their
+// photos and the guides' own text do not (owner, 10/19).
+async function throughWorkerPages(page, overrides) {
+  await page.route(/^https?:\/\/[^/]+\/(us\/guides\/[a-z0-9-]+)?(\?.*)?$/, async (route) => {
+    const response = await route.fetch();
+    const { pathname } = new URL(route.request().url());
+    await route.fulfill({ response, body: rewriteSiteHtml(await response.text(), { pathname, overrides }) });
+  });
+}
+
+test("C6: the home page and the product card beside a guide show the live name, when to apply and how long it lasts", async ({ page }) => {
+  const errors = watchErrors(page);
+  const content = { d204: { name: "Colored Glaze Pro", when: "After the wash, once dry", lasts: "8 months" }, d215: { name: "Glaze Coating Plus" } };
+  await mockStore(page, { env: PRICES, content });
+  await throughWorkerPages(page, content);
+  await page.goto("/");
+  const live = (scope, sku, field) => page.locator(`${scope} [data-content="${field}"][data-content-sku="${sku}"]`);
+  await expect(live("#top", "d204", "name")).toHaveText("Colored Glaze Pro");
+  await expect(live("#top", "d204", "when")).toHaveText("After the wash, once dry");
+  await expect(live("#final", "d204", "name")).toHaveText("Colored Glaze Pro");
+  await expect(live("#final", "d215", "name")).toHaveText("Glaze Coating Plus");
+  await expect(live("#final", "d215", "when")).toHaveText("While paint is still wet");
+  await expect(live("body", "d204", "lasts").first()).toHaveText("8 months");
+  await expect(page.locator('[data-routine-option="d204"]')).toContainText("After the wash, once dry");
+  await expect(page.locator("#top img").first()).toHaveAttribute("src", /d204-packshot\.png$/, { message: "the photo stays" });
+
+  await page.goto("/us/guides/how-to-apply-colored-glaze");
+  await expect(page.locator('aside[aria-label="Product"] [data-content="name"]')).toHaveText("Colored Glaze Pro");
+  expect(errors, "React took the pages over without a difference").toEqual([]);
+});
+
 // ---------- the back office, against the real Worker ----------
 
 const OWNER = "owner@apgo.example";

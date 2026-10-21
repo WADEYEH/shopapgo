@@ -1,6 +1,9 @@
+"use client";
+
 import { asset } from "@/lib/us/routes";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
 import ProductCta from "./ProductCta";
+import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 
 const ctaStyle = {
   width: "100%",
@@ -17,7 +20,9 @@ const ctaStyle = {
   textDecoration: "none",
 };
 
-function Cell({ sku, accent, word, name, meta, cta }) {
+// The name and when to apply follow the back office (C6); the size and photo do not.
+function Cell({ sku, accent, word, size, cta }) {
+  const live = useLiveProduct(sku);
   return (
     <div
       style={{
@@ -33,8 +38,10 @@ function Cell({ sku, accent, word, name, meta, cta }) {
       <img src={asset(`products/${sku}-packshot.png`)} alt="" style={{ width: 180, height: 180, objectFit: "contain" }} />
       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
         <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 44, lineHeight: 1, color: accent, letterSpacing: ".04em" }}>{word}</span>
-        <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 20, textTransform: "uppercase" }}>{name}</span>
-        <span style={{ fontSize: 12, letterSpacing: ".12em", textTransform: "uppercase", color: color.quiet2 }}>{meta}</span>
+        <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 20, textTransform: "uppercase" }} {...liveMark(sku, "name")}>{live.name}</span>
+        <span style={{ fontSize: 12, letterSpacing: ".12em", textTransform: "uppercase", color: color.quiet2 }}>
+          <span {...liveMark(sku, "when")}>{live.when}</span> · {size}
+        </span>
       </div>
       <ProductCta sku={sku} placement="final" style={ctaStyle}>
         {cta}
@@ -88,8 +95,8 @@ export default function FinalSection() {
             border: `1px solid ${color.hairline}`,
           }}
         >
-          <Cell sku="d204" accent={color.dry} word="DRY" name={products.d204.name} meta={`${products.d204.when} · ${products.d204.size}`} cta={`Shop ${products.d204.tag}`} />
-          <Cell sku="d215" accent={color.wet} word="WET" name={products.d215.name} meta={`${products.d215.when} · ${products.d215.size}`} cta={`Shop ${products.d215.tag}`} />
+          <Cell sku="d204" accent={color.dry} word="DRY" size={products.d204.size} cta={`Shop ${products.d204.tag}`} />
+          <Cell sku="d215" accent={color.wet} word="WET" size={products.d215.size} cta={`Shop ${products.d215.tag}`} />
         </div>
       </div>
     </section>

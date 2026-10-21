@@ -89,6 +89,7 @@ import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 import { rateLimited } from "./rate-limit.js";
 import { cronHealth, runScheduled } from "./cron.js";
 import { noteBadSignature } from "./webhook-signatures.js";
+import { carrierTrackingUrl } from "./amazon-mcf.js";
 import { checkoutIdForPayment, checkoutPayments, nextRequestId, paymentBelongsTo, recordPayment, reusableCheckout, updateCheckout, voidPayments } from "./checkouts.js";
 
 async function readBody(request) {
@@ -480,9 +481,11 @@ async function publicShipment(db, order) {
   if (order.status !== "paid") return null;
   const shipped = await getFulfillment(db, order.id).catch(() => null);
   if (!shipped) return { shipped: false };
+  // A link stored when it shipped, else the carrier's own tracking page (orders shipped before links were stored).
+  const link = (url, carrier, number) => (/^https:\/\//i.test(url ?? "") ? url : carrierTrackingUrl(carrier, number) || null);
   const packages = (shipped.packages ?? []).filter((p) => p.trackingNumber)
-    .map(({ carrier, trackingNumber, trackingUrl, status, deliveredAt }) => ({ carrier, trackingNumber, trackingUrl: trackingUrl || null, status: status || null, deliveredAt: deliveredAt || null }));
-  return { shipped: true, shippedAt: shipped.shippedAt, carrier: shipped.carrier, trackingNumber: shipped.trackingNumber, trackingUrl: shipped.trackingUrl || null, packages };
+    .map(({ carrier, trackingNumber, trackingUrl, status, deliveredAt }) => ({ carrier, trackingNumber, trackingUrl: link(trackingUrl, carrier, trackingNumber), status: status || null, deliveredAt: deliveredAt || null }));
+  return { shipped: true, shippedAt: shipped.shippedAt, carrier: shipped.carrier, trackingNumber: shipped.trackingNumber, trackingUrl: link(shipped.trackingUrl, shipped.carrier, shipped.trackingNumber), packages };
 }
 
 async function handleWebhook(request, env, services) {

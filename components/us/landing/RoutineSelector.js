@@ -1,9 +1,12 @@
 "use client";
 
 import { color, CONDENSED, products } from "@/lib/us/tokens";
+import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 
 // One responsive selector next to the product cards it controls.
 export default function RoutineSelector({ sku, onPick, labelledBy }) {
+  const dry = useLiveProduct("d204");
+  const wet = useLiveProduct("d215");
   const seg = (sel, p) => ({
     bg: sel ? color.text : "transparent",
     fg: sel ? color.bg : color.tertiary,
@@ -63,7 +66,8 @@ export default function RoutineSelector({ sku, onPick, labelledBy }) {
       }}
     >
       <button type="button" role="radio" tabIndex={sku === "d204" ? 0 : -1} aria-checked={sku === "d204"} data-routine-option="d204" onClick={() => onPick("d204")} style={btn(a)}>
-        <span style={code(a.code)}>DRY</span>{products.d204.when}
+        <span style={code(a.code)}>DRY</span>
+        <span {...liveMark("d204", "when")}>{dry.when}</span>
       </button>
       <button
         type="button"
@@ -74,7 +78,8 @@ export default function RoutineSelector({ sku, onPick, labelledBy }) {
         onClick={() => onPick("d215")}
         style={btn(b, { borderLeft: `1px solid ${color.border}` })}
       >
-        <span style={code(b.code)}>WET</span>{products.d215.when}
+        <span style={code(b.code)}>WET</span>
+        <span {...liveMark("d215", "when")}>{wet.when}</span>
       </button>
     </div>
   );

@@ -7,6 +7,7 @@ import OnThisPage from "@/components/us/guides/OnThisPage";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
 import { track } from "@/lib/us/analytics";
 import ProductCta from "./ProductCta";
+import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 import Hero from "./Hero";
 import BrandSection from "./BrandSection";
 import TechnologySection from "./TechnologySection";
@@ -101,6 +102,7 @@ export default function Landing() {
   }, [sku]);
 
   const sel = products[sku];
+  const selLive = useLiveProduct(sku);
 
   const showSticky = sticky && !menuOpen;
 
@@ -143,7 +145,9 @@ export default function Landing() {
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
             <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 22, lineHeight: 1, color: sel.accent, letterSpacing: ".04em" }}>{sel.word}</span>
-            <span style={{ fontSize: 12, color: color.tertiary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sel.fullName}</span>
+            <span style={{ fontSize: 12, color: color.tertiary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {sel.label} · <span {...liveMark(sku, "name")}>{selLive.name}</span>
+            </span>
           </div>
           <ProductCta
             sku={sku}

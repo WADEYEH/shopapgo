@@ -1,11 +1,16 @@
+"use client";
+
 import Link from "next/link";
 import { routes, asset } from "@/lib/us/routes";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
+import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 
 // Product card inside an article: 110px packshot, accent top border, "View product details" CTA.
-// `alt` and `meta` are passed explicitly so the FTC-reviewed copy stays exactly as designed.
+// `alt` and `meta` are passed explicitly so the FTC-reviewed copy stays exactly as designed; the name follows the back
+// office (C6).
 export default function ProductAside({ sku, alt, meta }) {
   const p = products[sku];
+  const live = useLiveProduct(sku);
   return (
     <aside
       aria-label="Product"
@@ -24,7 +29,7 @@ export default function ProductAside({ sku, alt, meta }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 30, lineHeight: 1, color: p.accent }}>{p.word}</span>
-          <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 18, textTransform: "uppercase" }}>{p.name}</span>
+          <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 18, textTransform: "uppercase" }} {...liveMark(sku, "name")}>{live.name}</span>
         </div>
         <span style={{ fontSize: 13, color: color.tertiary }}>{meta}</span>
         <Link

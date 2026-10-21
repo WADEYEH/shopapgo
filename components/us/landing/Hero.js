@@ -1,11 +1,16 @@
+"use client";
+
 import { asset } from "@/lib/us/routes";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
 import { config } from "@/lib/us/config";
 import ProductCta from "./ProductCta";
 import Eyebrow from "./Eyebrow";
+import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 
-// Hero always shows D204 regardless of the selected routine (per handoff).
+// Hero always shows D204 regardless of the selected routine (per handoff). Its name and when to apply follow the back
+// office (C6); the photo and sizes do not.
 export default function Hero() {
+  const live = useLiveProduct("d204");
   const eyebrow =
     config.showOrigin === false
       ? "APGO Auto Care · Taiwan’s No.1 car-care brand"
@@ -138,10 +143,10 @@ export default function Hero() {
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ ...specNum, color: color.dry, letterSpacing: ".04em" }}>DRY</span>
-            <span style={specLabel}>{products.d204.when}</span>
+            <span style={specLabel} {...liveMark("d204", "when")}>{live.when}</span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span style={{ ...specNum, textTransform: "uppercase" }}>{products.d204.name}</span>
+            <span style={{ ...specNum, textTransform: "uppercase" }} {...liveMark("d204", "name")}>{live.name}</span>
             <span style={{ fontSize: 12, letterSpacing: ".14em", color: color.quiet2, border: `1px solid ${color.border}`, padding: "3px 8px", borderRadius: 4 }}>
               {products.d204.tag}
             </span>

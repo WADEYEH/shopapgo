@@ -8,6 +8,7 @@ import { config } from "@/lib/us/config";
 import { track } from "@/lib/us/analytics";
 import ProductCta from "./ProductCta";
 import RoutineSelector from "./RoutineSelector";
+import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 
 // The product facts (name, SKU, contents, when to apply, how long it lasts) come from the store's product data via
 // lib/us/tokens.js.
@@ -63,6 +64,7 @@ const specKey = { color: color.quiet2, letterSpacing: ".08em", textTransform: "u
 
 function ProductCard({ sku, selected, onPick }) {
   const p = PANEL[sku];
+  const live = useLiveProduct(sku);
   const wash = config.products[sku].washResistance || "—";
   return (
     <button
@@ -120,15 +122,15 @@ function ProductCard({ sku, selected, onPick }) {
       )}
       <span style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 44, lineHeight: 1, color: p.accent, letterSpacing: ".04em" }}>{p.word}</span>
-        <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 20, textTransform: "uppercase", lineHeight: 1 }}>{p.name}</span>
+        <span style={{ fontFamily: CONDENSED, fontWeight: 700, fontSize: 20, textTransform: "uppercase", lineHeight: 1 }} {...liveMark(sku, "name")}>{live.name}</span>
         <span style={{ fontSize: 11, letterSpacing: ".14em", color: color.quiet2, border: `1px solid ${color.border}`, padding: "2px 6px", borderRadius: 4 }}>{p.tag}</span>
       </span>
       <span style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 18px", fontSize: 14, lineHeight: 1.35 }}>
         <span style={specKey}>When</span>
-        <span>{p.when}</span>
+        <span {...liveMark(sku, "when")}>{live.when}</span>
         <span style={specKey}>Lasts up to</span>
         <span>
-          <strong style={{ fontWeight: 600, color: p.accent }}>{p.lasts}</strong>
+          <strong style={{ fontWeight: 600, color: p.accent }} {...liveMark(sku, "lasts")}>{live.lasts}</strong>
         </span>
         <span style={specKey}>Wash resistance</span>
         <span>{wash}</span>
@@ -210,6 +212,7 @@ function VideoCard({ sku, playing, onPlay }) {
 
 function Panel({ sku, playing, onPlay }) {
   const p = PANEL[sku];
+  const live = useLiveProduct(sku);
   return (
     <div
       id={sku}
@@ -226,7 +229,9 @@ function Panel({ sku, playing, onPlay }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontFamily: CONDENSED, fontWeight: 800, fontSize: 52, lineHeight: 1, color: p.accent, letterSpacing: ".04em" }}>{p.word}</span>
-          <span style={{ fontSize: 13, letterSpacing: ".16em", textTransform: "uppercase", color: color.tertiary }}>{p.meta}</span>
+          <span style={{ fontSize: 13, letterSpacing: ".16em", textTransform: "uppercase", color: color.tertiary }}>
+            <span {...liveMark(sku, "name")}>{live.name}</span> · {p.tag} · {p.size} · Up to <span {...liveMark(sku, "lasts")}>{live.lasts}</span>
+          </span>
         </div>
         <h3
           style={{
@@ -279,6 +284,7 @@ function Panel({ sku, playing, onPlay }) {
 }
 
 export default function RoutineSection({ sku, onPick }) {
+  const selected = useLiveProduct(sku);
   // Which product's video is playing (null, "d204" or "d215"). Playing one stops the other.
   const [playing, setPlaying] = useState(null);
   return (
@@ -324,7 +330,7 @@ export default function RoutineSection({ sku, onPick }) {
         <div className="us-routine-picker">
           <p id="routine-q">When do you prefer to apply?</p>
           <RoutineSelector sku={sku} onPick={onPick} labelledBy="routine-q" />
-          <span className="us-sr-only" aria-live="polite">Selected · {PANEL[sku].name}</span>
+          <span className="us-sr-only" aria-live="polite">Selected · <span {...liveMark(sku, "name")}>{selected.name}</span></span>
           <Link href={routes.wetOrDry} className="us-text-link">Compare dry &amp; wet <span aria-hidden="true">→</span></Link>
         </div>
         <div
