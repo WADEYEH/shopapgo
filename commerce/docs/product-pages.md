@@ -47,7 +47,9 @@ Copy is the design's (FTC-reviewed) text, unchanged.
   colour, not opacity, to keep contrast.
 * **Keep reading:** the design links two guide articles that do not exist in this repo, so the section
   links to the other product page and to "How APGO works" on the home page instead.
-* **"Read the full how-to guide" button** is omitted (no guide page yet).
+* **"Read the full how-to guide" button** was omitted (no guide page then). The how-to guides exist now
+  (`/us/guides/how-to-apply-colored-glaze`, `/us/guides/how-to-apply-glaze-coating`); linking them from the product
+  pages is a possible follow-up.
 * **Compare table** is a real table that fits 390 px without horizontal scrolling.
-* **Application video** is the existing click-to-load MP4 with captions already used on the v3 page
+* **Application video** is the existing click-to-load MP4 with captions already used on the earlier landing page
   (publication rights are still on the asset-map to-do list).

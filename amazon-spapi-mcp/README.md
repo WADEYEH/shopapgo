@@ -14,7 +14,28 @@
 | `POST /preview` | 出货试算（地址能不能送、预计送达） |
 | `POST /orders`、`GET /orders`、`GET /orders/{id}`、`POST /orders/{id}/cancel` | 建立、列出、读取、取消出货单 |
 | `GET /tracking/{包裹编号}` | 包裹追踪 |
-| `GET /inventory?skus=D204,D215` | **10/16 加**：每个 SKU 的可售、入库中、保留数量（只读，1–50 个 SKU），规格见 `docs/design/amazon-mcp-inventory.md` |
+| `GET /inventory?skus=D204,D215` | 每个 SKU 的可售、入库中、保留数量（只读，10/18 的 1.8.3 加的，规格见下面「库存入口」） |
+
+## 库存入口（`GET /internal/outbound/inventory`）
+
+网站每 15 分钟读一次，可售低于 5 件就显示缺货、不让结账（D25、D76；网站这边是 `commerce/worker/inventory.js`，营运手册第 26 节）。
+
+```
+GET /internal/outbound/inventory?skus=D204,D215
+Authorization: Bearer <OUTBOUND_INTERNAL_TOKEN>
+```
+
+- 只读，不改任何 Amazon 资料。`skus` 必填，1–50 个，逗号分开。
+- 回应（200）：`{ "marketplaceId": "ATVPDKIKX0DER", "items": [{ "sellerSku": "D204", "fulfillable": 37, "inbound": 120, "reserved": 2, "updatedAt": "…" }] }`
+- **Amazon 没有纪录的 SKU 不会出现在 `items` 里**（不是回 0）；网站把没出现的 SKU 当成 0 件。
+- 错误沿用其他入口的格式（`{ error, spapiStatus, details }`，Amazon 的 4xx／5xx 照转）。
+
+| 栏位 | SP-API（FBA Inventory v1 `/fba/inventory/v1/summaries`，`details=true`） |
+|---|---|
+| `fulfillable` | `inventoryDetails.fulfillableQuantity` |
+| `inbound` | `inboundWorkingQuantity + inboundShippedQuantity + inboundReceivingQuantity` |
+| `reserved` | `inventoryDetails.reservedQuantity.totalReservedQuantity` |
+| `updatedAt` | `lastUpdatedTime` |
 
 ## 怎么改
 

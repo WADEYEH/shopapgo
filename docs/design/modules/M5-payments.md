@@ -4,7 +4,7 @@
 |---|---|
 | 文件版本 | v0.3，10/6 改为付款成功才成立订单（D36）；v0.2 已审核 |
 | 日期 | 2026-10-06（最后更新 10/19：切换上线后的现况） |
-| 上层文件 | `docs/commerce-plan.md`、`docs/design/scenarios.md`、`docs/design/landing-audit.md` |
+| 上层文件 | `docs/commerce-plan.md`、`docs/design/scenarios.md` |
 | 相关规格 | `docs/design/modules/M4-order-core.md` |
 | 对应情境 | C11、C15、D1–D20、E4、E5、F2、G1、G3、G5、G9、G10、K3 |
 

@@ -171,7 +171,7 @@ test("'/' is the site's home page from the export: the v3 home override is gone"
   assert.deepEqual(seen, ["/"]);
 });
 
-test("/go/* QR short links answer 302 to their guide with the insert-card UTM tags (docs/marketing/go-links.md)", () => {
+test("/go/* QR short links answer 302 to their guide with the insert-card UTM tags (GO_LINKS in worker/redirects.js)", () => {
   const utm = "utm_source=amazon_insert&utm_medium=qr&utm_campaign=guides";
   const links = {
     "/go/apply": "/us/guides/how-to-apply-glaze-coating",

@@ -1,60 +1,67 @@
-# APGO commerce integration
+# APGO store Worker (`commerce/`)
 
-The October 1 store implementation now lives inside `shopapgo`, independently
-of the Next.js static brand site. No deployment is performed by the import.
+The Cloudflare Worker `apgo-us-store` serves all of `www.shopapgo.com` (live since 2026-10-16): the Next.js static
+export in `../out` as its assets (`run_worker_first`, so every path passes the Worker), plus `/api/*` (quotes,
+checkout, PayPal and Airwallex, order status, contact form, webhooks, health), the back office on `admin.shopapgo.com`,
+the 301s for moved URLs and hosts, and the cron jobs (Amazon MCF, emails, reconciliation, stock). Orders live in D1;
+product photos owners upload live in R2.
 
-## Provenance and scope
+- Technical reference: [docs/commerce.md](docs/commerce.md); PayPal: [docs/paypal.md](docs/paypal.md); Meta Pixel and
+  Conversions API: [docs/meta-tracking.md](docs/meta-tracking.md); product pages: [docs/product-pages.md](docs/product-pages.md).
+- Operations (deploy, rollback, restore, back-office procedures): `../docs/ops/runbook.md`. Production settings
+  (names only): `../docs/ops/production-config.md`. Plan, decisions and open items: `../docs/commerce-plan.md`.
 
-Imported from `WADEYEH/apgo-us-amazon-landing`, branch
-`codex/v2-content-blueprint`, at `9a30bfc68db883a31b774c43b4b40dfb431d5161`:
+The code came from `WADEYEH/apgo-us-amazon-landing`, which is frozen (plan D37) and no longer deploys anywhere.
 
-- `5ee653d`: draft Privacy, Terms, Returns and Contact pages and generator.
-- `073dbac`: V3 landing, cart, checkout, wallets, back-office UI and media.
-- `6037226`: Worker, D1 order storage, Airwallex, fulfillment and deploy tools.
-- `9a30bfc`: documentation, handoff and tests.
+## One site, two packages
 
-Required older dependencies (product images, full application videos and
-Amazon link configuration) are included. V1/V2 landing pages, their tests and
-old Shopify/blueprint documents are not imported. V3 and its style board were
-retired in the D41 cleanup (2026-10-08); `/v3` answers 301 to the home page.
+- Root: the Next.js site: the brand pages, the guides and every page shoppers see (D41): `/products`, the two product
+  pages, `/cart`, `/checkout` (the order page is `/checkout?order=<id>`), the policy pages (`/privacy`, `/terms`,
+  `/returns`, `/shipping`, showing `docs/legal/*.md`) and `/contact` (`app/(us)/(shop)`, components in
+  `components/shop`). The back office page (`public/admin/`), the Meta Pixel script (`public/js/`) and the Apple Pay
+  folder (`public/apple-pay/`) ship with the site's files; images and videos are in `public/us/assets/`.
+- `commerce/`: this package: the Worker (`worker/`), D1 migrations (`migrations/`), tests and tools. The store code it
+  shares with the pages (product data, checkout, address and contact rules, payment helpers) is in `lib/shop/*.mjs`:
+  plain ES modules both import.
+- `NEXT_PUBLIC_APGO_US_SINGLE_SITE=true` (`lib/us/routes.js`; set by `scripts/build-site.mjs` for the staging and
+  production builds) turns on Shop, the cart count and the policy links in the site's header and footer, and the named
+  product URLs `/products/atomic-colored-glaze` and `/products/atomic-glaze-coating` (D39). Old URLs
+  (`/products/d204`, `/products/d215`, `/cart.html`, `/checkout.html`, `/assets/*`, `/v3`, …) answer 301
+  (`worker/redirects.js`).
 
-**Sync point 1 (2026-10-06).** The landing repo kept developing after the import. Its
-`main` at `cbdf77e` was merged into `commerce/` with history (`9a30bfc` recorded as already
-imported, then `git merge -X subtree=commerce cbdf77e`). It brought PayPal Orders v2
-(`docs/paypal.md`), the Meta Pixel and Conversions API with checkout attribution
-(`docs/meta-tracking.md`), the product pages (`docs/product-pages.md`), Airwallex Pay, checkout
-drafts, email/password admin login and the live production settings. The legacy landing pages
-(`index.html`, `v2.html`) stay out. Gaps found in the audit are listed in
-`docs/design/landing-audit.md` at the repository root; later landing work is merged the same way.
+## Environments
 
-## Two applications, one repository
+| | Hosts | Notes |
+| --- | --- | --- |
+| production | `www.shopapgo.com` and the bare domain (whole-host routes); `store.shopapgo.com` and `shopapgo.com` answer 301 to the same page on www (`MOVED_HOSTS`; `/api/*` and `/.well-known/*` are not redirected); back office `admin.shopapgo.com` | Worker `apgo-us-store`, D1 `apgo-us-store`, Airwallex `prod`, PayPal live. Back office behind Cloudflare Access only (Google or an email code; members managed on the back office Members page, synced to a Zero Trust list); `ADMIN_LOGIN_*` and `ADMIN_TOKEN` exist but do not open `/admin` |
+| staging | `staging.shopapgo.com` (Basic-auth gate), `admin-staging.shopapgo.com` (Cloudflare Access), `store-staging.shopapgo.com` (plays the old store host) | Own Worker and D1, Airwallex and PayPal sandbox, emails only to the approved test address, orders go to a fake Amazon (`worker/fake-amazon.js`, `MCF_FAKE`) so nothing ships, Amazon stock read for real (read-only), no Meta |
+| local | `http://127.0.0.1:8799` | `wrangler dev`, local D1 |
 
-- Root: the Next.js site: the brand pages, the guides and every page shoppers see (D41). Its static export
-  (`out/`) is exactly what the store Worker serves; the brand host (Pages / Vercel) still serves the brand pages on
-  www until the cutover. The back office page (`public/admin/`), the store's Meta Pixel script (`public/js/`) and the
-  Apple Pay folder (`public/apple-pay/`) ship with the site's files; images and videos are in `public/us/assets/`,
-  one copy for the brand and store pages.
-- `commerce/`: standalone package: the Worker (API, back office API, redirects, crons), its tests and tools. The
-  store code it shares with the pages (product data, checkout and contact rules, payment helpers) is in
-  `lib/shop/*.mjs`: plain ES modules both import.
-- Brand-site product CTAs link to the same-host store pages. On the live site,
-  `www.shopapgo.com` serves those store paths (`/products/*`, `/cart`, `/checkout`,
-  `/api/*`, the policy pages and their assets) from the production store Worker
-  (routes in `wrangler.toml`, see `docs/ops/production-config.md`).
-- Single-site switch `NEXT_PUBLIC_APGO_US_SINGLE_SITE` (`lib/us/routes.js`), on only in
-  builds the Worker serves (`scripts/build-site.mjs` sets it for the test site; www gets it at
-  the cutover): Shop and the cart count in the brand header,
-  Shop/Cart and the policy pages in its footer, and the named product URLs
-  `/products/atomic-colored-glaze` and `/products/atomic-glaze-coating` (D39). Off, the
-  brand pages keep `/products/d204` and `/products/d215`; the Worker answers those, and
-  `/v3`, with a 301 to the new URLs (`worker/redirects.js`).
-- Every page shoppers see is a page of the Next.js site (D41, `docs/commerce-plan.md` §6):
-  `/products`, the two product pages, `/cart`, `/checkout`, the policy pages (`/privacy`, `/terms`, `/returns`,
-  `/shipping`, read from the drafts in `docs/legal`) and `/contact` with its form (`app/(us)/(shop)`,
-  components in `components/shop`, shared store code in `lib/shop`), in the site's own header and footer (on
-  the checkout only the logo and the cart). The old plain HTML store pages, v3 and their copies of the images are gone;
-  old URLs (`/cart.html`, `/checkout.html`, `/assets/*`, …) answer 301. Because the store pages come from the
-  Next.js build, do not deploy `main` to production before the cutover moves all of www to this Worker.
+Plain settings are in `wrangler.toml` per environment; secrets are set per environment with `wrangler secret put`
+(names in `../docs/ops/production-config.md`). Values never go into the repo, chat or tickets; current secrets come
+from the password vault.
+
+What production runs (details in [docs/commerce.md](docs/commerce.md)): D204 $59.99 and D215 $29.99 (owners change
+price, text and photos in the back office, D52), $7.99 flat standard shipping ("most orders arrive in 3–5 business
+days", D31), sales tax $0 (D68); `PRICING_APPROVED` is set, so checkout is open. Payment methods (D70): PayPal (listed
+first and selected; it also takes cards as a guest checkout) and Airwallex Pay; Card, Apple Pay and Google Pay stay
+hidden (`CARD_PAYMENTS_ENABLED = "false"`) until the production Airwallex account takes cards (M18, C14). Paid orders go
+to Amazon MCF automatically after a one-hour change window.
+
+## Deploys
+
+- CI (`.github/workflows/ci.yml`) runs on every PR and push: `test:static`, `build:site`, `verify:bundle` and the
+  Playwright suite here, plus the site's own tests and build.
+- Staging: `.github/workflows/deploy.yml` deploys automatically after CI passes on `main` (only the run for the newest
+  commit of `main`): it builds the test site, applies new D1 migrations and deploys. `npm --prefix commerce run
+  deploy:staging` does the same from a laptop (staging only).
+- Production: only by hand from GitHub: Actions → Deploy → target `production`, confirm `deploy production`, approved by
+  a Production reviewer (D65). The run tests again, builds the production site (`build-site.mjs --production`), records
+  the D1 restore point, applies migrations and deploys. Never from a laptop.
+- D1 changes are numbered files in `migrations/` that wrangler applies once each (D45: they only add tables, indexes and
+  columns). `tests/schema.test.mjs` applies them to the production structure
+  (`tests/fixtures/production-schema-2026-10-06.sql`) and checks that every existing column stays as it was.
+- Rollback, restore and the daily encrypted backup (`.github/workflows/backup-database.yml`, D77): `../docs/ops/runbook.md`.
 
 ## Local review
 
@@ -84,42 +91,13 @@ local D1 with `npm --prefix commerce run db:migrate:local`. Copy
 your sandbox credentials when testing actual sandbox payment. Without those
 credentials, quote/cart work but a payment cannot be created.
 
-The brand site's Shop and cart links are same-host paths, so preview them on the
+The site's Shop and cart links are same-host paths, so preview them on the
 Worker (`npm run commerce:dev` after `build:site`) rather than on `npm run dev`. Browser tests mock
 Airwallex/Resend/Amazon and take no real payment or shipment.
 
-## Integration adjustments
+## Notes
 
-- All asset requests run through the Worker in every environment. Host split,
-  admin authentication, redirects for moved URLs and staging protection consequently
-  apply to static pages as well as API requests.
-- Test site: `staging.shopapgo.com` + `admin-staging.shopapgo.com` (`[env.staging]`: own Worker
-  and D1, Airwallex/PayPal sandbox, Basic-auth gate, emails only to the approved test address,
-  orders go to a fake Amazon (`worker/fake-amazon.js`, `MCF_FAKE`) so nothing real ships, no Meta).
-  Deployed by `.github/workflows/deploy.yml` after CI passes on main, or with
-  `npm --prefix commerce run deploy:staging`; both apply new D1 migrations first.
-  The landing repo is frozen (plan D37) and no longer deploys anywhere.
-- Production settings mirror the live store (`store.shopapgo.com`, `admin.shopapgo.com`, the
-  production D1). This repo does not deploy production yet; `PRICING_APPROVED` stays unset here.
-- D1 changes are numbered files in `migrations/` that wrangler applies once each (D45: they only
-  add tables, indexes and columns). `tests/schema.test.mjs` applies them to the production structure
-  (`tests/fixtures/production-schema-2026-10-06.sql`) and checks that every existing column stays as it was.
-  Restore and rollback: `docs/ops/runbook.md`.
-- Cart-page express wallets remain **off on staging and production** because
-  the imported cart express flow is UI only. Checkout-step wallets are retained.
-- Policy generator output is explicitly LF to remain deterministic on Windows.
-- Original handoff documents in `docs/` describe the upstream staging state;
-  they are historical evidence, not confirmation of a new deployment here.
-
-## Remaining production work
-
-Finalize prices, shipping, tax and policies; configure production D1, secrets,
-domains and Airwallex webhook; validate 3DS and wallets on real devices; configure
-customer emails and decide fulfillment. Then perform a real low-value order
-before enabling the brand-site store switch. Refunds are initiated in Airwallex;
-the shared-token admin can sync and display their status and hold new shipping.
-It has no refund-creation, cancellation, partial shipment or tracking-edit workflow. MCF is opt-in
-and requires the separate `amazon-spapi-mcp` service.
-
-See `docs/commerce.md` for the imported architecture and service details. Do not
-use its old owner credential-file paths: obtain current secrets from the vault.
+- All asset requests run through the Worker in every environment. Host split, admin authentication, redirects for
+  moved URLs and the staging gate consequently apply to static pages as well as API requests.
+- There is no express checkout on the cart page; Apple Pay and Google Pay sit on the checkout's payment step (where
+  card payments are enabled).
