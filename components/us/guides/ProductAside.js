@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { routes, asset } from "@/lib/us/routes";
+import { asset, productPathFor } from "@/lib/us/routes";
 import { color, CONDENSED, products } from "@/lib/us/tokens";
 import { liveMark, useLiveProduct } from "@/lib/us/live-products";
 
@@ -33,7 +33,7 @@ export default function ProductAside({ sku, alt, meta }) {
         </div>
         <span style={{ fontSize: 13, color: color.tertiary }}>{meta}</span>
         <Link
-          href={routes.compare}
+          href={productPathFor(sku)}
           className="us-btn"
           style={{
             alignSelf: "flex-start",
