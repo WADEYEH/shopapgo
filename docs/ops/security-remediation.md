@@ -2,6 +2,28 @@
 
 审查基线：`5791e54224e8d7b1cb360fb9fdde0e3d05e71709`。范围为五项已确认发现及验证中发现的依赖漏洞；审查没有证明线上已被利用。
 
+## 执行检查点（2026-11-08，后续暂缓）
+
+用户要求先 commit / push，平台配置与剩余合并、部署留待之后继续。恢复工作时先核对平台实际状态，不自动发起新的部署。
+
+- 支付修复 [PR #94](https://github.com/WADEYEH/shopapgo/pull/94) 与 Access／请求体限制 [PR #95](https://github.com/WADEYEH/shopapgo/pull/95) 已合并；main 为 `fd90fc539e03f512045078ceaf6f1983cb3af8a7`。
+- 已按用户授权，通过现有 GitHub Actions 流程部署上述两组修复。[正式部署](https://github.com/WADEYEH/shopapgo/actions/runs/42486632365) 成功，Worker 版本 `ab7cc39f-4e22-49de-8a5c-4e6b4bb50832`；[测试部署](https://github.com/WADEYEH/shopapgo/actions/runs/42487087360) 成功，版本 `b755af8f-3389-4ffd-8fdc-d65b036872cb`。两者均无待执行数据库迁移；正式部署 summary 已记录部署前 D1 还原点。
+- 部署后正式站 `/api/health` 与 `/api/store/config` 返回 200；262145 字节的无签名 Airwallex webhook 返回 413。没有真实付款、退款或 Amazon 出货；这不代替有效 Access 用户登录、沙盒交易及备份恢复验收。
+- Production 与新建 staging 已限制 main，审核人设为 WADEYEH／anpuuuuu，禁止自行批准及管理员绕过。新建 backup-production、backup-staging 已限制 main；备份不设人工审批，保留每日自动执行。
+- main 分支保护尚未保存成功：已准备至少一人批准、CODEOWNERS、禁止管理员绕过，以及 test／commerce／amazon-gateway／三个 security 必需检查；提交时 GitHub 要求 WADEYEH 重新验证身份。不能将表单已填写视为规则已生效。
+- [PR #96](https://github.com/WADEYEH/shopapgo/pull/96) 保持 draft，尚未合并或部署。它包含凭证迁移工作流、Action SHA 固定、独立安全扫描及依赖修补；[CI](https://github.com/WADEYEH/shopapgo/actions/runs/42485612183) 和 [security](https://github.com/WADEYEH/shopapgo/actions/runs/42485612174) 已通过。
+
+恢复前需在 GitHub Environments 直接配置以下 secret，值不进入 Git、日志或聊天：
+
+| 环境 | Secret |
+|---|---|
+| staging | STAGING_CLOUDFLARE_API_TOKEN |
+| Production | PRODUCTION_CLOUDFLARE_API_TOKEN |
+| backup-staging | D1_BACKUP_API_TOKEN |
+| backup-production | D1_BACKUP_API_TOKEN |
+
+部署凭证仅授予所需 Workers／D1 权限；备份凭证仅授予 D1 导出所需权限，不复用通用部署 token。四个 secret 最近核对均尚未配置。旧部署／备份工作流和仓库级凭证暂留，避免切换后中断；后续按平台迁移顺序完成配置、合并 #96、验证新部署和加密备份／隔离恢复，再确认其他依赖并撤销旧通用凭证。
+
 ## 问题、根因与修复
 
 | 项目 | 根因 | 修复及必须保持的行为 |
@@ -36,7 +58,7 @@
 6. 新备份凭证各手动跑一次加密备份，artifact 只含密文；在隔离空数据库还原测试站备份，不覆盖现有数据库。新部署凭证验证可用后，确认其他使用者不依赖旧凭证，再撤销旧通用 token、删除仓库级 CLOUDFLARE_API_TOKEN。
 7. 正式部署人工发起，由另一名审核人批准。记录旧 Worker 版本及 D1 还原点；部署后检查健康、鉴权、支付 review、webhook 413／429 及下一次备份。
 
-本次不自动真实付款、退款、Amazon 出货或正式部署。旧后台 secret 可暂留，正式应用不会接受；删除／轮替另记营运记录。
+最初修复阶段不执行真实付款、退款、Amazon 出货或正式部署；后续获授权的部署结果见上方执行检查点。旧后台 secret 可暂留，正式应用不会接受；删除／轮替另记营运记录。
 
 ## 回退与关闭
 
@@ -53,7 +75,7 @@
 - 网站完整静态建置与 Worker production dry-run 通过；Actionlint 1.7.12（校验下载包 SHA-256）通过。
 - Playwright 常规回归 273 项通过；默认跳过的 7 项以 APGO_SITE_URL 指向隔离本地 Worker 后全部通过，共 280 项。
 - 两个 lockfile 的 npm audit 均为 0 项；Gitleaks／Semgrep／OSV 的 GitHub 执行结果另记，不以 npm audit 代替。
-- 这些结果不涉及真实扣款、退款、Amazon 出货或正式部署。平台设置仍待管理员执行。
+- 上述本地验证不涉及真实扣款、退款、Amazon 出货或正式部署。后续平台配置及部署进度见上方执行检查点。
 
 - 真实本地 Worker／D1 签名 webhook 演练：$37.98／1 件为 paid；付款 $37.98、订单 $307.89／10 件为 review。临时配置只含假密钥，数据库及数据均在系统暂存目录。
 
