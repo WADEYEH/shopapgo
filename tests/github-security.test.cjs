@@ -62,6 +62,7 @@ test("security scans run without credentials and pin binaries by checksum and co
   assert.equal((source.match(/sha256sum --check/g) ?? []).length, 2);
   assert.ok(source.includes("--redact"));
   assert.ok(source.includes("--baseline-commit"));
+  assert.ok(source.includes('git merge-base "origin/$BASE_BRANCH" HEAD'), "stacked PRs include all fixes since main");
   assert.ok(source.includes("sys.exit(1 if found or report[\"scanner_errors\"] else 0)"));
   assert.doesNotMatch(source, /secrets:\s*inherit|\$\{\{\s*secrets\./);
 });
