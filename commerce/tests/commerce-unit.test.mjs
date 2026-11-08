@@ -5,7 +5,9 @@ import test from "node:test";
 import { PRODUCTS, QuoteError, TAX_RATES_BPS, quote, toMajor } from "../worker/catalog.js";
 import { ORDER_ID_PATTERN, maskEmail, newOrderId, validateCheckout } from "../worker/checkout.js";
 import { verifyWebhookSignature } from "../worker/airwallex.js";
-import { applyIntentStatus, publicOrder } from "../worker/orders.js";
+import { applyIntentStatus, publicOrder, insertOrder } from "../worker/orders.js";
+
+import { createD1 } from "./helpers/d1.mjs";
 
 const validBody = {
   contact: { email: "Shopper@Example.com", phone: "(512) 555-0134", marketingOptIn: true },
@@ -112,36 +114,15 @@ test("webhook signature: accepts valid, rejects tampered, stale or unsigned requ
   assert.equal(await verifyWebhookSignature({ secret: "", timestamp, signature, rawBody, now }), false);
 });
 
-// Minimal D1 stand-in covering the statements orders.js issues.
-function fakeDb(order) {
-  const rows = new Map([[order.id, { ...order }]]);
-  return {
-    rows,
-    async batch(statements) { return Promise.all(statements.map(statement => statement.run())); },
-    prepare(sql) {
-      return {
-        bind(...args) {
-          return {
-            async first() {
-              // worker/checkouts.js paymentBelongsTo: no recorded payment objects here, only the legacy single one.
-              if (sql.includes("FROM checkout_payments")) return null;
-              if (sql.startsWith("SELECT 1 AS x FROM orders WHERE id = ? AND payment_intent_id = ?")) return rows.get(args[0])?.payment_intent_id === args[1] ? { x: 1 } : null;
-              return rows.get(args[0]) ?? null;
-            },
-            async run() {
-              if (sql.startsWith("UPDATE orders SET status")) {
-                const [status, paidAt, ref, updatedAt, id] = args;
-                const row = rows.get(id);
-                if (row?.status !== "pending") return { meta: { changes: 0 } };
-                Object.assign(row, { status, paid_at: paidAt, payment_intent_id: ref, updated_at: updatedAt });
-              }
-              return { meta: { changes: 1 } };
-            },
-          };
-        },
-      };
-    },
-  };
+// Exercise the settlement SQL on the same in-memory schema as backend tests.
+async function fakeDb(order) {
+  const db = await createD1();
+  await insertOrder(db, { id: order.id, checkout: { email: order.email, shipping: {} }, quote: {
+    shippingMethod: order.shipping_method, lines: JSON.parse(order.lines_json), currency: order.currency,
+    subtotalCents: order.subtotal_cents, shippingCents: order.shipping_cents, taxCents: order.tax_cents, totalCents: order.total_cents,
+  } });
+  await db.prepare("UPDATE orders SET payment_intent_id = ? WHERE id = ?").bind(order.payment_intent_id, order.id).run();
+  return db;
 }
 
 const storedOrder = {
@@ -160,22 +141,22 @@ const storedOrder = {
 };
 
 test("a succeeded intent matching the stored total marks the order paid", async () => {
-  const db = fakeDb(storedOrder);
+  const db = await fakeDb(storedOrder);
   const status = await applyIntentStatus(db, { id: "int_1", merchant_order_id: storedOrder.id, status: "SUCCEEDED", amount: 54.8, currency: "USD" });
   assert.equal(status, "paid");
-  assert.equal(db.rows.get(storedOrder.id).status, "paid");
+  assert.equal(db.raw.prepare("SELECT status FROM orders WHERE id = ?").get(storedOrder.id).status, "paid");
 });
 
 test("a succeeded intent with a different amount is parked for review", async () => {
-  const db = fakeDb(storedOrder);
+  const db = await fakeDb(storedOrder);
   const status = await applyIntentStatus(db, { id: "int_1", merchant_order_id: storedOrder.id, status: "SUCCEEDED", amount: 1, currency: "USD" });
   assert.equal(status, "review");
 });
 
 test("intents that do not belong to the order are ignored", async () => {
-  const db = fakeDb(storedOrder);
+  const db = await fakeDb(storedOrder);
   assert.equal(await applyIntentStatus(db, { id: "int_other", merchant_order_id: storedOrder.id, status: "SUCCEEDED", amount: 54.8, currency: "USD" }), null);
-  assert.equal(db.rows.get(storedOrder.id).status, "pending");
+  assert.equal(db.raw.prepare("SELECT status FROM orders WHERE id = ?").get(storedOrder.id).status, "pending");
 });
 
 test("publicOrder hides the address and masks the email", () => {

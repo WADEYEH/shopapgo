@@ -1,10 +1,9 @@
-import { toMajor } from "./catalog.js";
 import { maskEmail } from "./checkout.js";
 import { getFulfillment, listAudit } from "./fulfillment.js";
 import { listPaymentFailures } from "./payment-failures.js";
 import { refundView } from './refunds.js';
-import { amountsMatch, isUsableUsShipping } from "./paypal.js";
-import { checkoutIdForPayment, markPayment, paymentBelongsTo, recordPayment } from "./checkouts.js";
+import { isUsableUsShipping } from "./paypal.js";
+import { checkoutIdForPayment, markPayment, paymentBelongsTo } from "./checkouts.js";
 
 // A checkout that a payment may still turn into an order (D36): pending, expired (a late payment still counts, M4-04),
 // or closed before any payment. An order cancelled after payment (order_cancellations) never is.
@@ -52,7 +51,7 @@ export async function insertOrder(db, { id, checkout, quote }) {
 // the first one paid must not replace the reference of the payment that paid. false = paid meanwhile.
 export async function attachPaymentIntent(db, orderId, intentId) {
   const result = await db
-    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ? AND paid_at IS NULL")
+    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = 'pending' AND paid_at IS NULL")
     .bind(intentId, now(), orderId)
     .run();
   return result.meta?.changes !== 0;
@@ -61,7 +60,7 @@ export async function attachPaymentIntent(db, orderId, intentId) {
 export async function attachPaypalOrder(db, orderId, paypalOrderId) {
   const timestamp = now();
   const result = await db
-    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ? AND paid_at IS NULL")
+    .prepare("UPDATE orders SET payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = 'pending' AND paid_at IS NULL")
     .bind(paypalOrderId, timestamp, orderId)
     .run();
   // Kept either way, so a payment on this PayPal order is still recognised as this checkout's (and refunded if second).
@@ -119,11 +118,53 @@ export async function cancelUnpayableOrder(db, orderId) {
     .run();
 }
 
+// The amount test runs in the UPDATE, against the live row, not an earlier SELECT. The payment record and email
+// instruction commit with it; a failure in any statement rolls the whole settlement back (D1 batch transaction).
+async function settlePayment(db, order, { provider, ref, amount, currency, captureId = "", shipping = null, addressOk = true }) {
+  const numeric = Number(amount);
+  const amountCents = Math.round(numeric * 100);
+  if (amount == null || String(amount).trim() === "" || !Number.isFinite(numeric) || !Number.isSafeInteger(amountCents)
+    || amountCents <= 0 || Math.abs(numeric * 100 - amountCents) > 0.000001) throw new Error("Invalid payment amount.");
+  const timestamp = now();
+  const matches = "currency = ? AND total_cents = ? AND ? = 1";
+  // PayPal owns its shipping address. Keep the phone and address-check result from the live checkout, not the stale
+  // snapshot; the check survives only when the address still matches. All paths and SQL fragments are constants.
+  const sameAddress = ["street", "street2", "city", "state", "zip"].map((key) =>
+    `lower(trim(COALESCE(json_extract(shipping_json, '$.${key}'), ''))) = lower(trim(COALESCE(json_extract(?, '$.${key}'), '')))`);
+  const providerShipping = shipping ? JSON.stringify({ firstName: shipping.firstName, lastName: shipping.lastName,
+    street: shipping.street, street2: shipping.street2 || "", city: shipping.city, state: shipping.state, zip: shipping.zip }) : null;
+  const unchecked = JSON.stringify({ status: "unverified", reason: "paypal_address" });
+  const shippingSql = providerShipping ? `, shipping_json = json_patch(?, json_object('phone', json_extract(shipping_json, '$.phone'),
+    'addressCheck', json(CASE WHEN ${sameAddress.join(" AND ")} THEN COALESCE(json_extract(shipping_json, '$.addressCheck'), ?)
+      ELSE ? END)))` : "";
+  const shippingArgs = providerShipping ? [providerShipping, ...sameAddress.map(() => providerShipping), unchecked, unchecked] : [];
+  const owned = "id = ? AND payment_intent_id = ? AND updated_at = ? AND status IN ('paid', 'review')";
+  const results = await db.batch([
+    db.prepare(`UPDATE orders SET status = CASE WHEN ${matches} THEN 'paid' ELSE 'review' END,
+      paid_at = CASE WHEN ${matches} THEN ? ELSE NULL END, payment_intent_id = ?, updated_at = ?${shippingSql}
+      WHERE id = ? AND ${SETTLEABLE}`)
+      .bind(currency, amountCents, addressOk ? 1 : 0, currency, amountCents, addressOk ? 1 : 0,
+        timestamp, ref, timestamp, ...shippingArgs, order.id),
+    db.prepare(`INSERT OR IGNORE INTO checkout_payments (provider, ref, checkout_id, amount_cents, currency, status, detail, created_at, updated_at)
+      SELECT ?, ?, id, ?, ?, 'succeeded', '', ?, ? FROM orders WHERE ${owned}`)
+      .bind(provider, ref, amountCents, currency, timestamp, timestamp, order.id, ref, timestamp),
+    db.prepare(`UPDATE checkout_payments SET status = 'succeeded', amount_cents = ?, currency = ?, updated_at = ?
+      WHERE provider = ? AND ref = ? AND checkout_id = ? AND EXISTS (SELECT 1 FROM orders WHERE ${owned})`)
+      .bind(amountCents, currency, timestamp, provider, ref, order.id, order.id, ref, timestamp),
+    db.prepare(`INSERT OR IGNORE INTO order_email_jobs (order_id, kind, status, created_at, updated_at)
+      SELECT id, 'confirmation', 'pending', ?, ? FROM orders
+      WHERE id = ? AND status = 'paid' AND payment_intent_id = ? AND paid_at = ? AND updated_at = ?`)
+      .bind(timestamp, timestamp, order.id, ref, timestamp, timestamp),
+  ]);
+  const current = await getOrder(db, order.id);
+  if (!(results[0]?.meta?.changes > 0)) return alreadySettled(db, current, provider, ref, amountCents, currency, captureId);
+  return { status: current.status, changed: true, order: current, lateAfterExpiry: order.status === "expired", payment: { provider, ref } };
+}
+
 // Applies a PaymentIntent snapshot (from a webhook or a Retrieve call) to its order.
 // A succeeded intent whose amount or currency disagrees with the stored total is
-// parked in "review" instead of being marked paid. `changed` is true only for the
-// call that actually moved the order out of "pending" (the UPDATE is guarded by
-// status = 'pending'), which is what makes "notify once" safe under races.
+// parked in "review" instead of being marked paid. `changed` belongs only to the
+// call whose guarded UPDATE settled the checkout; amount checks use that UPDATE's live row.
 export async function settleIntent(db, intent) {
   const order = await getOrder(db, intent.merchant_order_id);
   // Any PaymentIntent the checkout ever had counts, not only the latest (worker/checkouts.js).
@@ -135,28 +176,7 @@ export async function settleIntent(db, intent) {
   }
   if (intent.status !== "SUCCEEDED") return { status: order.status, changed: false, order };
 
-  const amountCents = Math.round(Number(intent.amount) * 100);
-  const matches = intent.currency === order.currency && Math.abs(Number(intent.amount) - toMajor(order.total_cents)) < 0.005;
-  const status = matches ? "paid" : "review";
-  const timestamp = now();
-  const update = db
-    .prepare(`UPDATE orders SET status = ?, paid_at = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND ${SETTLEABLE}`)
-    .bind(status, status === "paid" ? timestamp : null, intent.id, timestamp, order.id);
-  // Commit payment and its confirmation instruction together. waitUntil is only
-  // a latency optimization; a fresh Worker can recover the instruction via cron.
-  // The timestamp guard excludes historic paid orders if a concurrent call won.
-  const result = status === "paid" ? (await db.batch([
-    update,
-    db.prepare(`INSERT OR IGNORE INTO order_email_jobs (order_id, kind, status, created_at, updated_at)
-      SELECT id, 'confirmation', 'pending', ?, ? FROM orders
-      WHERE id = ? AND status = 'paid' AND paid_at = ? AND updated_at = ?`)
-      .bind(timestamp, timestamp, order.id, timestamp, timestamp),
-  ]))[0] : await update.run();
-  const changed = (result?.meta?.changes ?? 1) > 0;
-  if (!changed) return alreadySettled(db, await getOrder(db, order.id), "airwallex", intent.id, amountCents, intent.currency);
-  await recordPayment(db, { provider: "airwallex", ref: intent.id, checkoutId: order.id, amountCents, currency: intent.currency });
-  await markPayment(db, "airwallex", intent.id, "succeeded");
-  return { status, changed, order: await getOrder(db, order.id), lateAfterExpiry: order.status === "expired", payment: { provider: "airwallex", ref: intent.id } };
+  return settlePayment(db, order, { provider: "airwallex", ref: intent.id, amount: intent.amount, currency: intent.currency });
 }
 
 export async function applyIntentStatus(db, intent) {
@@ -170,45 +190,7 @@ export async function settlePaypalOrder(db, { orderId, paypalOrderId, status, am
   const order = orderId ? await getOrder(db, orderId) : await getOrderByPaypalOrderId(db, paypalOrderId);
   if (!order || !(await paymentBelongsTo(db, "paypal", paypalOrderId, order.id))) return { status: null, changed: false, order: null };
   if (status !== "COMPLETED") return { status: order.status, changed: false, order };
-  const amountCents = Math.round(Number(amountValue) * 100);
-
-  const matches = currency === order.currency && amountsMatch(amountValue, order.total_cents);
-  const addressOk = isUsableUsShipping(shipping);
-  const nextStatus = matches && addressOk ? "paid" : "review";
-  const timestamp = now();
-  // The phone and the address check come from our checkout page; PayPal's address carries neither. The check only
-  // still applies when PayPal ships to the very address that was checked.
-  const stored = JSON.parse(order.shipping_json || "{}");
-  const sameAddress = ["street", "street2", "city", "state", "zip"]
-    .every((key) => String(stored[key] ?? "").trim().toLowerCase() === String(shipping?.[key] ?? "").trim().toLowerCase());
-  const shippingJson = shipping ? JSON.stringify({
-    firstName: shipping.firstName,
-    lastName: shipping.lastName,
-    street: shipping.street,
-    street2: shipping.street2 || "",
-    city: shipping.city,
-    state: shipping.state,
-    zip: shipping.zip,
-    ...(stored.phone ? { phone: stored.phone } : {}),
-    addressCheck: sameAddress && stored.addressCheck ? stored.addressCheck : { status: "unverified", reason: "paypal_address" },
-  }) : order.shipping_json;
-
-  const update = db
-    .prepare(`UPDATE orders SET status = ?, paid_at = ?, shipping_json = ?, payment_intent_id = ?, updated_at = ? WHERE id = ? AND ${SETTLEABLE}`)
-    .bind(nextStatus, nextStatus === "paid" ? timestamp : null, shippingJson, paypalOrderId, timestamp, order.id);
-  // The confirmation email instruction commits with the payment, as for a card payment (settleIntent).
-  const result = nextStatus === "paid" ? (await db.batch([
-    update,
-    db.prepare(`INSERT OR IGNORE INTO order_email_jobs (order_id, kind, status, created_at, updated_at)
-      SELECT id, 'confirmation', 'pending', ?, ? FROM orders
-      WHERE id = ? AND status = 'paid' AND paid_at = ? AND updated_at = ?`)
-      .bind(timestamp, timestamp, order.id, timestamp, timestamp),
-  ]))[0] : await update.run();
-  const changed = (result?.meta?.changes ?? 1) > 0;
-  if (!changed) return alreadySettled(db, await getOrder(db, order.id), "paypal", paypalOrderId, amountCents, currency, captureId);
-  await recordPayment(db, { provider: "paypal", ref: paypalOrderId, checkoutId: order.id, amountCents, currency });
-  await markPayment(db, "paypal", paypalOrderId, "succeeded");
-  return { status: nextStatus, changed, order: await getOrder(db, order.id), lateAfterExpiry: order.status === "expired", payment: { provider: "paypal", ref: paypalOrderId } };
+  return settlePayment(db, order, { provider: "paypal", ref: paypalOrderId, amount: amountValue, currency, captureId, shipping, addressOk: isUsableUsShipping(shipping) });
 }
 
 // ---------- New-order notification bookkeeping ----------
