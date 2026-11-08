@@ -13,6 +13,9 @@ export const RATE_LIMITED_ROUTES = new Map([
   ["/api/checkout/paypal/order", "CHECKOUT_LIMITER"],
   ["/api/checkout/address", "ADDRESS_LIMITER"],
   ["/api/cart/quote", "QUOTE_LIMITER"],
+  ["/api/webhooks/airwallex", "WEBHOOK_LIMITER"],
+  ["/api/webhooks/paypal", "WEBHOOK_LIMITER"],
+  ["/api/webhooks/resend", "WEBHOOK_LIMITER"],
 ]);
 
 export const RATE_LIMIT_MESSAGE = "Too many attempts. Please wait a minute and try again.";

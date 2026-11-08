@@ -122,6 +122,8 @@ test("login pair + ADMIN_TOKEN: both paths work; a short token does not block th
 test("optional staging site Basic still opens the admin host when the flag is on", async () => {
   const env = tokenEnv({
     SITE_ENV: "staging",
+    CONFIG_PROFILE: "staging",
+    ADMIN_SCRIPT_TOKEN_ENABLED: "true",
     ADMIN_HOST,
     ADMIN_ACCEPT_SITE_BASIC: "true",
     STAGING_BASIC_AUTH_USER: SITE_USER,

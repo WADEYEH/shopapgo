@@ -22,6 +22,8 @@ const env = (extra = {}) => ({
   DB,
   AIRWALLEX_ENV: "demo",
   SITE_ENV: "staging",
+  CONFIG_PROFILE: "staging",
+  ADMIN_SCRIPT_TOKEN_ENABLED: "true",
   STAGING_BASIC_AUTH_USER: "user",
   STAGING_BASIC_AUTH_PASSWORD: "basic-pass-0123456789",
   ADMIN_TOKEN: TOKEN,
@@ -137,7 +139,7 @@ test("admin host: CSRF same-origin check is relative to the admin host", { skip 
 });
 
 test("ADMIN_HOST unset (local dev / tests): one host serves store and back office as before", { skip }, async () => {
-  const e = env({ ADMIN_HOST: undefined, SITE_ENV: undefined });
+  const e = env({ ADMIN_HOST: undefined, SITE_ENV: undefined, CONFIG_PROFILE: undefined });
   assert.equal((await call("localhost", "/admin/", { headers: bearer, e })).status, 200);
   assert.equal((await call("localhost", "/cart", { e })).status, 200);
   assert.equal((await call(ADMIN, "/cart", { e })).status, 200);
@@ -229,11 +231,11 @@ test("site Basic login only works on the admin host; the store host still 404s /
   assert.equal((await call("apgo-us-store-staging.acct.workers.dev", "/admin/", { headers: { Authorization: BASIC } })).status, 404);
 });
 
-test("ADMIN_ACCEPT_SITE_BASIC unset or not exactly \"true\" (production default): site Basic is off; ADMIN_TOKEN still works", async () => {
+test("site Basic requires its staging flag; script token also requires the explicit staging environment", async () => {
   for (const extra of [{ ADMIN_ACCEPT_SITE_BASIC: undefined }, { ADMIN_ACCEPT_SITE_BASIC: "false" }, { ADMIN_ACCEPT_SITE_BASIC: "1" }, { ADMIN_ACCEPT_SITE_BASIC: "" }, { SITE_ENV: undefined }, { SITE_ENV: "production" }]) {
     const e = env(extra);
     assert.equal((await call(ADMIN, "/admin/api/orders", { headers: { Authorization: BASIC }, e })).status, 401, JSON.stringify(extra));
-    assert.equal((await call(ADMIN, "/admin/api/orders", { headers: bearer, e })).status, 200, JSON.stringify(extra));
+    assert.equal((await call(ADMIN, "/admin/api/orders", { headers: bearer, e })).status, e.SITE_ENV === "staging" ? 200 : 401, JSON.stringify(extra));
   }
 });
 
