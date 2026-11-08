@@ -75,7 +75,7 @@ test("every store page the brand links to exists on the site", async () => {
   // from the store's list.
   assert.equal(r.routes.shop, "/products");
   assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)/products/page.js")), "/products");
-  assert.match(read("app/(us)/(shop)/products/[slug]/page.js"), /generateStaticParams\(\) \{\n\s+return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
+  assert.match(read("app/(us)/(shop)/products/[slug]/page.js"), /generateStaticParams\(\) \{\r?\n\s+return SKUS\.map\(\(sku\) => \(\{ slug: PRODUCT_SLUGS\[sku\] \}\)\);/);
   for (const sku of data.SKUS) assert.equal(r.store[sku], `/products/${data.PRODUCT_SLUGS[sku]}`, sku);
   for (const key of ["cart", "checkout", "privacy", "terms", "returns", "shipping", "contact"]) {
     assert.ok(fs.existsSync(path.join(ROOT, "app/(us)/(shop)", r.routes[key], "page.js")), r.routes[key]);

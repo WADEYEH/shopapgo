@@ -1,0 +1,14 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    uses: anpuuuuu/ai-dev-governance/.github/workflows/security.yml@39f03aec49a407e8b3cb0543b49e0b6e24c7c145 # policy 0.1.0

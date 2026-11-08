@@ -1,5 +1,7 @@
 # APGO store Worker (`commerce/`)
 
+> Security remediation (2026-11-08, pending deployment): atomic settlement, production Access-only auth, bounded request streams and reviewed staging deploys. See [root causes and rollout](../docs/ops/security-remediation.md). Production credentials must be migrated before merging the workflow changes.
+
 The Cloudflare Worker `apgo-us-store` serves all of `www.shopapgo.com` (live since 2026-10-16): the Next.js static
 export in `../out` as its assets (`run_worker_first`, so every path passes the Worker), plus `/api/*` (quotes,
 checkout, PayPal and Airwallex, order status, contact form, webhooks, health), the back office on `admin.shopapgo.com`,

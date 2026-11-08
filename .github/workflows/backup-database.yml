@@ -10,7 +10,8 @@
 # - By hand (Run workflow): production or staging, from main only.
 # - A failure opens an issue, so the owner is told (GitHub tells only the last editor of this file about failed runs).
 #
-# Uses the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (the same as the staging deploy).
+# Uses a dedicated D1_BACKUP_API_TOKEN in backup-production / backup-staging (main-only environments).
+# No Worker/DNS deployment permission. Only the export step receives it (runbook section 28).
 name: Database backup
 
 on:
@@ -35,24 +36,28 @@ jobs:
   backup:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: ${{ format('backup-{0}', inputs.target || 'production') }}
     defaults:
       run:
         working-directory: commerce
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       TARGET: ${{ inputs.target || 'production' }}
     outputs:
       name: ${{ steps.encrypt.outputs.name }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: commerce/package-lock.json
       - run: npm ci
       - name: Export the database (plain copy stays on the runner)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.D1_BACKUP_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not set."
@@ -69,7 +74,7 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "file=$RUNNER_TEMP/$name.sql.enc" >> "$GITHUB_OUTPUT"
           echo "Backup $name: encrypted, kept 90 days. To restore: docs/ops/runbook.md section 6." >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ steps.encrypt.outputs.name }}
           path: ${{ steps.encrypt.outputs.file }}
