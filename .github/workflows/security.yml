@@ -78,6 +78,7 @@ jobs:
           report = {"results": [{"rule": r["check_id"], "file": r["path"], "line": r["start"]["line"],
                                  "severity": r.get("extra", {}).get("severity")} for r in found],
                     "scanner_errors": [{"type": e.get("type"), "code": e.get("code"), "path": e.get("path"),
+                                        "message": e.get("message", "")[:300],
                                         "spans": [{"file": span.get("file"), "line": span.get("start", {}).get("line")}
                                                   for span in e.get("spans", [])]} for e in data.get("errors", [])]}
           (Path(os.environ["RUNNER_TEMP"]) / "semgrep.json").write_text(json.dumps(report))
