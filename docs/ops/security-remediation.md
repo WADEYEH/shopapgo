@@ -20,7 +20,7 @@
 - 正式 token 无 JWT 被拒、Access 误关 503、有效成员正常登录；测试脚本需要显式开关。
 - 请求体覆盖缺少／伪造 Content-Length、分块、多字节 UTF-8、精确边界、签名原始字节、超限不访问数据库，以及按服务商限速。
 - 网站测试、商店 test:static、build:site、Worker dry-run、Playwright 必须通过。扫描失败不算通过，不自动忽略告警。
-- security 调用 anpuuuuu/ai-dev-governance 的已核实提交 `39f03aec49a407e8b3cb0543b49e0b6e24c7c145`；无 secrets，包含 Gitleaks、Semgrep 和两个 lockfile 的 OSV。
+- security 在本仓库独立运行 Gitleaks、Semgrep 和两个 lockfile 的 OSV，不接收 secrets。版本与校验值对齐参考策略 `39f03aec49a407e8b3cb0543b49e0b6e24c7c145`；参考仓库为私有，公开 repo 无法调用其 reusable workflow，因此未直接引用或公开该仓库。
 
 ## 平台迁移（仓库管理员执行，值不进入 Git 或日志）
 

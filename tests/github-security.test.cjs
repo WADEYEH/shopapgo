@@ -53,8 +53,15 @@ test("automatic backup uses a dedicated main-only environment credential only in
   assert.doesNotMatch(content, /secrets\.(?:CLOUDFLARE_API_TOKEN|PRODUCTION_CLOUDFLARE_API_TOKEN)/);
 });
 
-test("security scans use the reviewed governance commit without inherited secrets", () => {
+test("security scans run without credentials and pin binaries by checksum and containers by digest", () => {
   const source = read("security.yml");
-  assert.ok(source.includes("anpuuuuu/ai-dev-governance/.github/workflows/security.yml@39f03aec49a407e8b3cb0543b49e0b6e24c7c145"));
-  assert.doesNotMatch(source, /secrets:|secrets\./);
+  for (const name of ["secrets", "sast", "deps"]) assert.ok(job(source, name), name);
+  assert.match(source, /GITLEAKS_SHA256: "[a-f0-9]{64}"/);
+  assert.match(source, /OSV_SHA256: "[a-f0-9]{64}"/);
+  assert.match(source, /semgrep\/semgrep:[^\s]+@sha256:[a-f0-9]{64}/);
+  assert.equal((source.match(/sha256sum --check/g) ?? []).length, 2);
+  assert.ok(source.includes("--redact"));
+  assert.ok(source.includes("--baseline-commit"));
+  assert.ok(source.includes("sys.exit(1 if found or report[\"scanner_errors\"] else 0)"));
+  assert.doesNotMatch(source, /secrets:\s*inherit|\$\{\{\s*secrets\./);
 });

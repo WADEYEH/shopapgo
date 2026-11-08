@@ -1,4 +1,6 @@
 name: security
+# Scanner versions/checksums aligned with policy 0.1.0 (39f03aec49a407e8b3cb0543b49e0b6e24c7c145).
+# Run locally in this public repository: GitHub cannot call the private policy repository's reusable workflow.
 
 on:
   pull_request:
@@ -9,6 +11,111 @@ on:
 permissions:
   contents: read
 
+env:
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  OSV_VERSION: "2.7.0"
+  OSV_SHA256: "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b"
+
 jobs:
-  security:
-    uses: anpuuuuu/ai-dev-governance/.github/workflows/security.yml@39f03aec49a407e8b3cb0543b49e0b6e24c7c145 # policy 0.1.0
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install the checksum-verified scanner
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$RUNNER_TEMP/gitleaks.tgz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan complete history with secret values redacted
+        run: >-
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --report-format json
+          --report-path "$RUNNER_TEMP/gitleaks.json" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: security-gitleaks
+          path: ${{ runner.temp }}/gitleaks.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  sast:
+    name: sast (semgrep)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Analyze code and fail on findings or scanner errors
+        shell: sh
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          set -- scan --config p/default --json --output "$RUNNER_TEMP/semgrep-raw.json"
+          if [ "$EVENT" = pull_request ]; then set -- "$@" --baseline-commit "$PR_BASE"; fi
+          semgrep "$@" .
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          data = json.loads((Path(os.environ["RUNNER_TEMP"]) / "semgrep-raw.json").read_text())
+          # Gitleaks owns secret detection. Keep code excerpts/metavariables out of public artifacts.
+          found = [r for r in data.get("results", []) if not r["check_id"].startswith("generic.secrets.")]
+          report = {"results": [{"rule": r["check_id"], "file": r["path"], "line": r["start"]["line"],
+                                 "severity": r.get("extra", {}).get("severity")} for r in found],
+                    "scanner_errors": len(data.get("errors", []))}
+          (Path(os.environ["RUNNER_TEMP"]) / "semgrep.json").write_text(json.dumps(report))
+          print(f"Semgrep: {len(found)} findings, {report['scanner_errors']} scanner errors")
+          for r in report["results"][:20]:
+              print(f"{r['severity']} {r['rule']} {r['file']}:{r['line']}")
+          sys.exit(1 if found or report["scanner_errors"] else 0)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: security-semgrep
+          path: ${{ runner.temp }}/semgrep.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  deps:
+    name: deps (osv-scanner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install the checksum-verified dependency scanner
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" \
+            --output "$RUNNER_TEMP/osv-scanner"
+          echo "${OSV_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+      - name: Scan both lockfiles recursively
+        run: >-
+          "$RUNNER_TEMP/osv-scanner" scan source --recursive --format json
+          --output "$RUNNER_TEMP/osv.json" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: security-osv
+          path: ${{ runner.temp }}/osv.json
+          retention-days: 14
+          if-no-files-found: ignore
