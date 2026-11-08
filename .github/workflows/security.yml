@@ -77,11 +77,15 @@ jobs:
           found = [r for r in data.get("results", []) if not r["check_id"].startswith("generic.secrets.")]
           report = {"results": [{"rule": r["check_id"], "file": r["path"], "line": r["start"]["line"],
                                  "severity": r.get("extra", {}).get("severity")} for r in found],
-                    "scanner_errors": len(data.get("errors", []))}
+                    "scanner_errors": [{"type": e.get("type"), "code": e.get("code"), "path": e.get("path"),
+                                        "spans": [{"file": span.get("file"), "line": span.get("start", {}).get("line")}
+                                                  for span in e.get("spans", [])]} for e in data.get("errors", [])]}
           (Path(os.environ["RUNNER_TEMP"]) / "semgrep.json").write_text(json.dumps(report))
-          print(f"Semgrep: {len(found)} findings, {report['scanner_errors']} scanner errors")
+          print(f"Semgrep: {len(found)} findings, {len(report['scanner_errors'])} scanner errors")
           for r in report["results"][:20]:
               print(f"{r['severity']} {r['rule']} {r['file']}:{r['line']}")
+          for error in report["scanner_errors"][:20]:
+              print(json.dumps(error))
           sys.exit(1 if found or report["scanner_errors"] else 0)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

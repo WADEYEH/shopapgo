@@ -56,3 +56,5 @@
 - 这些结果不涉及真实扣款、退款、Amazon 出货或正式部署。平台设置仍待管理员执行。
 
 - 真实本地 Worker／D1 签名 webhook 演练：$37.98／1 件为 paid；付款 $37.98、订单 $307.89／10 件为 review。临时配置只含假密钥，数据库及数据均在系统暂存目录。
+
+- CI 首次全历史 Gitleaks 的 8 笔发现逐项核对，均为公开 ACCESS_AUD／ACCESS_LIST_ID，非鉴权密钥；只豁免精确历史指纹，并记录在 .gitleaksignore，不屏蔽新发现。测试部署改为静态 checkout main，并在审批后核对 CI 的不可变 SHA，main 已前进时拒绝部署。

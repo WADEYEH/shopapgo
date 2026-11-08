@@ -491,7 +491,9 @@ test("deploy workflow: staging after CI on main; production only by hand, from m
   for (const guard of ["github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.event == 'push'", "github.event.workflow_run.head_branch == 'main'"]) {
     assert.ok(staging.includes(guard), `staging: ${guard}`);
   }
-  assert.match(staging, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/, "deploys the commit CI tested");
+  assert.match(staging, /ref: main/, "checks out only the trusted main branch");
+  assert.match(staging, /EXPECTED_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/, "verifies the commit CI tested after approval");
+  assert.match(staging, /git rev-parse HEAD/, "rejects main advancing while approval was pending");
   // An older commit whose CI finishes last must not replace a newer one on staging (10/16).
   assert.ok(staging.includes("needs.newest.outputs.deploy == 'true'"), "staging: only the newest commit deploys");
   const newest = job("newest");

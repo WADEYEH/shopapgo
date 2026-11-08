@@ -78,8 +78,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-          # After CI: the commit CI tested, not whatever main is by now.
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Only trusted main; check its immutable identity against the approved run immediately below.
+          ref: main
+      - name: Check main still matches the approved commit
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED_SHA" ]; then
+            echo "::error::main changed while approval was pending. Approve the deployment for the latest successful CI run."
+            exit 1
+          fi
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22

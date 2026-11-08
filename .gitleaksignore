@@ -1,0 +1,12 @@
+# Verified false positives, not credentials: these historical assignments are public Cloudflare Access audience
+# and list identifiers. They cannot authenticate a request. Exact fingerprints only; new findings still fail CI.
+# Production ACCESS_AUD / ACCESS_LIST_ID (config and its manifest).
+545d338194120ade415af7cb236602792a28b5c5:commerce/wrangler.toml:generic-api-key:272
+545d338194120ade415af7cb236602792a28b5c5:commerce/wrangler.toml:generic-api-key:277
+545d338194120ade415af7cb236602792a28b5c5:commerce/worker/config-check.js:generic-api-key:57
+545d338194120ade415af7cb236602792a28b5c5:commerce/worker/config-check.js:generic-api-key:59
+# Staging ACCESS_AUD / ACCESS_LIST_ID (config and its manifest).
+657940204b3d87e865f36aa5096212408573551e:commerce/worker/config-check.js:generic-api-key:28
+657940204b3d87e865f36aa5096212408573551e:commerce/worker/config-check.js:generic-api-key:30
+657940204b3d87e865f36aa5096212408573551e:commerce/wrangler.toml:generic-api-key:157
+657940204b3d87e865f36aa5096212408573551e:commerce/wrangler.toml:generic-api-key:161
