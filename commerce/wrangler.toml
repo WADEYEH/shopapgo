@@ -45,6 +45,11 @@ name = "QUOTE_LIMITER"
 namespace_id = "3103"
 simple = { limit = 60, period = 60 }
 
+[[ratelimits]]
+name = "WEBHOOK_LIMITER"
+namespace_id = "3104"
+simple = { limit = 120, period = 60 }
+
 [vars]
 # "demo" = Airwallex sandbox (local dev). Production uses "prod" with prices, shipping and tax approved
 # (worker/pricing.js, PRICING_APPROVED).
@@ -146,6 +151,11 @@ name = "QUOTE_LIMITER"
 namespace_id = "3203"
 simple = { limit = 60, period = 60 }
 
+[[env.staging.ratelimits]]
+name = "WEBHOOK_LIMITER"
+namespace_id = "3204"
+simple = { limit = 120, period = 60 }
+
 [env.staging.vars]
 AIRWALLEX_ENV = "demo"   # Airwallex SANDBOX (worker/airwallex.js: anything but "prod" means sandbox)
 SITE_ENV = "staging"     # worker/staging.js: noindex header, /robots.txt Disallow, Basic-auth gate
@@ -162,6 +172,7 @@ ADMIN_OWNER_EMAIL = "wadeyeh@apgo.com.tw"
 # (emails in the Zero Trust list below). The site Basic login and the shared login no longer open /admin; ADMIN_TOKEN still
 # does, for scripts (role member), which pass Cloudflare with a service token. None of these values is a secret.
 ADMIN_ACCESS = "true"
+ADMIN_SCRIPT_TOKEN_ENABLED = "true"       # staging only: member-level scripts also need Cloudflare Service Auth
 ACCESS_TEAM_DOMAIN = "https://apgo.cloudflareaccess.com"
 ACCESS_AUD = "dc006dbb80b89d40c57c502cdde1bf61379a57b6436bbd7ac13cb85825e1c1f6"
 # The member list kept equal to Cloudflare's allowed-email list (worker/access-list.js): Zero Trust list
@@ -262,6 +273,11 @@ name = "QUOTE_LIMITER"
 namespace_id = "3303"
 simple = { limit = 60, period = 60 }
 
+[[env.production.ratelimits]]
+name = "WEBHOOK_LIMITER"
+namespace_id = "3304"
+simple = { limit = 120, period = 60 }
+
 [env.production.vars]
 AIRWALLEX_ENV = "prod"
 CONFIG_PROFILE = "production"   # worker/config-check.js: the settings this Worker must have (J6); keep its manifest equal to this file
@@ -314,8 +330,7 @@ REFUND_ALERT_EMAIL_TO = "wadeyeh@apgo.com.tw"   # a refund that failed
 MCF_AUTO_SUBMIT = "true"
 MCF_SYNC_CRON = "true"
 # ADMIN_ACCEPT_SITE_BASIC is deliberately NOT set: production has no website Basic login. With ADMIN_ACCESS on (above),
-# admin login is Cloudflare Access only; ADMIN_LOGIN_EMAIL + ADMIN_LOGIN_PASSWORD and ADMIN_TOKEN would open /admin again
-# only if ADMIN_ACCESS were switched off.
+# admin login is Cloudflare Access only. Legacy credentials never open a production profile; disabling Access fails closed.
 # PRICING_APPROVED is not a var here: it is set as a secret ("true"; with AIRWALLEX_ENV=prod checkout would answer 503
 # without it), and worker/config-check.js checks every day that it is "true" and PAYPAL_ENV "live" (C23). SITE_ENV is
 # deliberately not set (no staging gate).

@@ -87,6 +87,7 @@ import { serveSite } from "./site-content.js";
 import { handleContact } from "./contact.js";
 import { adminHost, hostSplit, isAdminHost, withNoindex } from "./hosts.js";
 import { rateLimited } from "./rate-limit.js";
+import { boundRequestBody } from "./request-body.js";
 import { cronHealth, runScheduled } from "./cron.js";
 import { noteBadSignature } from "./webhook-signatures.js";
 import { carrierTrackingUrl } from "./amazon-mcf.js";
@@ -634,6 +635,9 @@ async function handleRequest(request, env, ctx) {
 }
 
 async function dispatch(request, env, ctx) {
+  const bounded = await boundRequestBody(request);
+  if (bounded instanceof Response) return bounded;
+  request = bounded;
   const { pathname, origin } = new URL(request.url);
   if (isAdminPath(pathname)) return handleAdmin(request, env);
   if (pathname === APPLE_PAY_DOMAIN_PATH) return serveAppleDomainAssociation(request, env);

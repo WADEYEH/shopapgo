@@ -16,6 +16,8 @@ const env = (extra = {}) => ({
   ASSETS: { fetch: assets },
   AIRWALLEX_ENV: "demo",
   SITE_ENV: "staging",
+  CONFIG_PROFILE: "staging",
+  ADMIN_SCRIPT_TOKEN_ENABLED: "true",
   STAGING_BASIC_AUTH_USER: USER,
   STAGING_BASIC_AUTH_PASSWORD: PASS,
   ADMIN_TOKEN: "admin-token-0123456789abcdef",

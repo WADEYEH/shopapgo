@@ -15,7 +15,7 @@
 //     routes are not visible from inside either. Those are checked by deploying only from CI (M12).
 import { alertTeam } from "./team-alerts.js";
 
-const BINDINGS = ["DB", "ASSETS", "CHECKOUT_LIMITER", "ADDRESS_LIMITER", "QUOTE_LIMITER", "PRODUCT_IMAGES"];
+const BINDINGS = ["DB", "ASSETS", "CHECKOUT_LIMITER", "ADDRESS_LIMITER", "QUOTE_LIMITER", "WEBHOOK_LIMITER", "PRODUCT_IMAGES"];
 export const CONFIG_MANIFEST = {
   staging: {
     vars: {
@@ -28,6 +28,7 @@ export const CONFIG_MANIFEST = {
       ADMIN_ACCEPT_SITE_BASIC: "true",
       ADMIN_OWNER_EMAIL: "wadeyeh@apgo.com.tw",
       ADMIN_ACCESS: "true",
+      ADMIN_SCRIPT_TOKEN_ENABLED: "true",
       ACCESS_TEAM_DOMAIN: "https://apgo.cloudflareaccess.com",
       ACCESS_AUD: "dc006dbb80b89d40c57c502cdde1bf61379a57b6436bbd7ac13cb85825e1c1f6",
       CLOUDFLARE_ACCOUNT_ID: "71eb47531bc5b2d880acc57b74989146",
@@ -77,7 +78,7 @@ export const CONFIG_MANIFEST = {
     },
     // All set since the cutover (10/16; names listed in docs/ops/production-config.md); this check says so if one goes.
     secrets: [
-      "ADMIN_TOKEN", "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET",
+      "AIRWALLEX_CLIENT_ID", "AIRWALLEX_API_KEY", "AIRWALLEX_WEBHOOK_SECRET", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET",
       "PAYPAL_WEBHOOK_ID", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "META_CAPI_ACCESS_TOKEN",
       "AMAZON_OUTBOUND_BASE_URL", "OUTBOUND_INTERNAL_TOKEN", "MCF_SKU_MAP_JSON", "GOOGLE_ADDRESS_VALIDATION_KEY", "TURNSTILE_SECRET_KEY",
       "ACCESS_LIST_API_TOKEN", "GA4_API_SECRET", "HEALTHCHECK_PING_URL",
@@ -86,7 +87,7 @@ export const CONFIG_MANIFEST = {
     switches: { PRICING_APPROVED: "true", PAYPAL_ENV: "live" },
     absent: [
       "META_TEST_EVENT_CODE", "MCF_FAKE", "CUSTOMER_EMAIL_TEST_RECIPIENTS", "CUSTOMER_EMAIL_POLICY_NOTE",
-      "STAGING_BASIC_AUTH_USER", "STAGING_BASIC_AUTH_PASSWORD", "SITE_ENV", "ADMIN_ACCEPT_SITE_BASIC",
+      "STAGING_BASIC_AUTH_USER", "STAGING_BASIC_AUTH_PASSWORD", "SITE_ENV", "ADMIN_ACCEPT_SITE_BASIC", "ADMIN_SCRIPT_TOKEN_ENABLED",
     ],
     bindings: BINDINGS,
   },

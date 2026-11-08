@@ -13,7 +13,7 @@
 //                        ADMIN_LOGIN_EMAIL / ADMIN_LOGIN_PASSWORD (acts as the owner, recorded under that email) and,
 //                        on staging only, the website's Basic login ("staging-login", owner).
 //
-// In both modes ADMIN_TOKEN (scripts) is accepted as "token", with the member role (it cannot manage members).
+// ADMIN_TOKEN is local-only unless staging explicitly enables ADMIN_SCRIPT_TOKEN_ENABLED. Production always requires Access.
 // Every action is then recorded under actor.id (M9-02).
 import { adminConfigured, adminLogin, matchesAdminLogin, matchesAdminToken } from "./admin-auth.js";
 import { siteBasicOpensAdmin } from "./staging.js";
@@ -124,8 +124,12 @@ async function memberFor(env, email) {
 // { actor: { id, email, role, via } } when the request may proceed, otherwise { response }.
 export async function resolveAdmin(request, env, { nowMs = Date.now(), fetchImpl = fetch } = {}) {
   const access = accessMode(env);
+  const production = env.CONFIG_PROFILE === "production" || env.AIRWALLEX_ENV === "prod";
+  if (production && !access) return denied(503, "admin_access_required", "Production back-office sign-in requires Cloudflare Access.");
   if (!access && !adminConfigured(env)) return denied(503, "admin_not_configured", "The order back office is not configured.");
-  if (await matchesAdminToken(request, env)) return { actor: { id: "token", email: null, role: "member", via: "token" } };
+  const scriptAllowed = !production && ((!access && env.CONFIG_PROFILE !== "staging" && env.SITE_ENV !== "staging")
+    || (env.CONFIG_PROFILE === "staging" && env.SITE_ENV === "staging" && env.ADMIN_SCRIPT_TOKEN_ENABLED === "true"));
+  if (scriptAllowed && await matchesAdminToken(request, env)) return { actor: { id: "token", email: null, role: "member", via: "token" } };
 
   if (access) {
     const settings = accessSettings(env);

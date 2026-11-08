@@ -40,18 +40,18 @@ const request=(path,body={},headers={})=>new Request(`https://store.example/admi
 test('sandbox rejection probes enforce production, auth, CSRF, fixed input and approved test recipient boundaries',{skip},async()=>{
   const {env,order}=await setup();const path=`/admin/api/orders/${ID}/refunds/sandbox-check`;
   assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),env,path)).status,404);
-  const staging={...env,SITE_ENV:'staging',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
+  const staging={...env,SITE_ENV:'staging',CONFIG_PROFILE:'staging',ADMIN_SCRIPT_TOKEN_ENABLED:'true',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
   assert.equal((await handleAdminApi(new Request(request('refunds/sandbox-check'),{headers:{}}),staging,path)).status,401);
   assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'},{Origin:'https://evil.example'}),staging,path)).status,403);
   assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit',amount:1}),staging,path)).status,400);
   assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'anything'}),staging,path)).status,400);
-  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),{...staging,AIRWALLEX_ENV:'prod'},path)).status,404);
+  assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),{...staging,AIRWALLEX_ENV:'prod'},path)).status,503);
   assert.equal((await handleAdminApi(request('refunds/sandbox-check',{scenario:'above_limit'}),{...staging,AIRWALLEX_API_BASE:'https://evil.example'},path)).status,404);
   await mocked(()=>assert.fail('not an approved test order'),async()=>assert.equal((await runSandboxRefundCheck({...staging,CUSTOMER_EMAIL_TEST_RECIPIENTS:''},order,'above_limit')).outcome,'blocked'));
 });
 
 test('refund probes read current payment identity; fixed over-limit POST is not retried and retains only safe API rejection details',{skip},async()=>{
-  const {db,env,order}=await setup();const staging={...env,SITE_ENV:'staging',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
+  const {db,env,order}=await setup();const staging={...env,SITE_ENV:'staging',CONFIG_PROFILE:'staging',ADMIN_SCRIPT_TOKEN_ENABLED:'true',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
   let posts=0;
   await mocked((url,init)=>{
     if (init.method==='GET') return Response.json({id:'int_test',merchant_order_id:ID,status:'SUCCEEDED',amount:24.9,currency:'USD'});
@@ -67,7 +67,7 @@ test('refund probes read current payment identity; fixed over-limit POST is not 
 });
 
 test('already-refunded probe requires complete current provider data; missing refunds and auth errors cannot pass the negative check',{skip},async()=>{
-  const {env,order}=await setup();const staging={...env,SITE_ENV:'staging',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
+  const {env,order}=await setup();const staging={...env,SITE_ENV:'staging',CONFIG_PROFILE:'staging',ADMIN_SCRIPT_TOKEN_ENABLED:'true',CUSTOMER_EMAIL_TEST_RECIPIENTS:'test@example.com'};
   let posts=0;
   const intent={id:'int_test',merchant_order_id:ID,status:'SUCCEEDED',amount:24.9,currency:'USD'};
   await mocked((url,init)=>{assert.equal(init.method,'GET');return Response.json(url.includes('/payment_intents/') ? intent : {items:[],has_more:false});},async()=>assert.equal((await runSandboxRefundCheck(staging,order,'fully_refunded')).outcome,'blocked'));

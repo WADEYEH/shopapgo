@@ -281,7 +281,7 @@ const limiter = (success = false, calls = []) => ({ async limit(options) { calls
 const request = (path, method = "POST", ip = "203.0.113.7") => new Request(`https://www.example${path}`, { method, headers: { "CF-Connecting-IP": ip } });
 
 test("rate limit: payment start, address check and quote are limited per address and endpoint; 429 with Retry-After", async () => {
-  assert.deepEqual([...RATE_LIMITED_ROUTES.keys()].sort(), ["/api/cart/quote", "/api/checkout/address", "/api/checkout/paypal/order", "/api/checkout/session"]);
+  assert.deepEqual([...RATE_LIMITED_ROUTES.keys()].sort(), ["/api/cart/quote", "/api/checkout/address", "/api/checkout/paypal/order", "/api/checkout/session", "/api/webhooks/airwallex", "/api/webhooks/paypal", "/api/webhooks/resend"]);
   const calls = [];
   const env = { CHECKOUT_LIMITER: limiter(false, calls), ADDRESS_LIMITER: limiter(true), QUOTE_LIMITER: limiter(true) };
 
@@ -323,7 +323,7 @@ test("rate limit: the Worker answers 429 before creating an order; other routes 
   });
 });
 
-test("wrangler: every environment has the three limiters with its own namespaces", () => {
+test("wrangler: every environment has the four limiters with its own namespaces", () => {
   const blocks = [...toml.matchAll(/^\[\[((?:env\.(\w+)\.)?)ratelimits\]\]\nname = "(\w+)"\nnamespace_id = "(\d+)"\nsimple = \{ limit = (\d+), period = (\d+) \}/gm)]
     .map((match) => ({ env: match[2] ?? "local", name: match[3], id: match[4], limit: Number(match[5]), period: Number(match[6]) }));
   const names = [...new Set(RATE_LIMITED_ROUTES.values())].sort();
@@ -332,7 +332,7 @@ test("wrangler: every environment has the three limiters with its own namespaces
   }
   assert.equal(new Set(blocks.map((block) => block.id)).size, blocks.length, "namespace ids are unique");
   assert.ok(blocks.every((block) => block.period === 60 && block.limit > 0));
-  assert.equal(blocks.length, 9);
+  assert.equal(blocks.length, 12);
 });
 
 // ---------- cron run, health, ping ----------
@@ -475,7 +475,7 @@ test("Amazon gateway: its code and config are in the repo, CI dry-runs it, deplo
   }
   const cron = await readFile(new URL("amazon-review-cron/wrangler.toml", root), "utf8");
   assert.match(cron, /crons = \["30 16 \* \* \*"\]/);
-  assert.match(cron, /service = "amazon-spapi-mcp"\nentrypoint = "ReviewSolicitationJob"/);
+  assert.match(cron, /service = "amazon-spapi-mcp"\r?\nentrypoint = "ReviewSolicitationJob"/);
 });
 
 test("deploy workflow: staging after CI on main; production only by hand, from main, switched on, confirmed and approved", async () => {

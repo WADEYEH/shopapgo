@@ -73,7 +73,7 @@ test("each page: its own title, description, canonical and og tags, indexable si
   // the same for the page and the Worker).
   const page = read(PAGE);
   assert.match(page, /priceCents: priceCents\(config, sku\),[\s\S]*approved: config\?\.estimate === false,/);
-  assert.match(read("lib/shop/product-content.mjs"), /if \(approved && priceCents !== null\) \{\n\s+data\.offers = /);
+  assert.match(read("lib/shop/product-content.mjs"), /if \(approved && priceCents !== null\) \{\r?\n\s+data\.offers = /);
   assert.equal(read(OVERVIEW).includes("pdp-jsonld"), false, "no Product JSON-LD on a list page");
 });
 
