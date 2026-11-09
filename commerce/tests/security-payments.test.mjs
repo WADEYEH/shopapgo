@@ -120,4 +120,3 @@ test("PayPal settlement retains the live checkout phone across a concurrent addr
   assert.equal(result.status, "paid");
   assert.equal(JSON.parse(result.order.shipping_json).phone, "+15125550123");
 });
-

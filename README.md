@@ -1,5 +1,7 @@
 # shopapgo
 
+> 2026-11-08 安全修复分支：代码与新部署流程尚待合并、平台配置和部署验收。测试部署将与正式部署一样需要 Environment 审批；完整根因、凭证迁移、测试和回退见 [安全修复与验收](docs/ops/security-remediation.md)。
+
 APGO 美國站 `www.shopapgo.com` 的原始碼：品牌首頁、指南和所有購物頁面（商品、購物車、結帳、政策、聯絡）都在同一個 Next.js（App Router）靜態匯出（`out/`）裡，由 `commerce/` 的 Cloudflare Worker `apgo-us-store` 提供。同一個 Worker 也負責 `/api/*`、後台、轉址和排程。
 
 ## 現況（2026-10-16 起上線）

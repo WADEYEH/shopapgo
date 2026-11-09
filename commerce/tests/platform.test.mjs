@@ -488,18 +488,23 @@ test("deploy workflow: staging after CI on main; production only by hand, from m
   };
   assert.match(workflow, /workflow_run:\n\s+workflows: \[CI\]\n\s+types: \[completed\]\n\s+branches: \[main\]/);
   const staging = job("staging");
-  for (const guard of ["github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.event == 'push'", "github.event.workflow_run.head_branch == 'main'", "needs.credentials.outputs.ready == 'true'"]) {
+  for (const guard of ["github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.event == 'push'", "github.event.workflow_run.head_branch == 'main'"]) {
     assert.ok(staging.includes(guard), `staging: ${guard}`);
   }
-  assert.match(staging, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/, "deploys the commit CI tested");
+  assert.match(staging, /ref: main/, "checks out only the trusted main branch");
+  assert.match(staging, /EXPECTED_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/, "verifies the commit CI tested after approval");
+  assert.match(staging, /git rev-parse HEAD/, "rejects main advancing while approval was pending");
   // An older commit whose CI finishes last must not replace a newer one on staging (10/16).
   assert.ok(staging.includes("needs.newest.outputs.deploy == 'true'"), "staging: only the newest commit deploys");
   const newest = job("newest");
   assert.match(newest, /commits\/main/, "newest: compares with the tip of main");
   assert.ok(!newest.includes("concurrency"), "newest: decides before the deploy-staging queue");
 
+  assert.match(staging, /^ {4}environment: staging$/m, "staging also requires approval");
+  assert.ok(staging.includes("github.ref == 'refs/heads/main'"));
+  assert.ok(!workflow.includes("secrets.CLOUDFLARE_API_TOKEN"), "no shared repository deploy credential");
   const production = job("production");
-  for (const guard of ["github.event_name == 'workflow_dispatch'", "inputs.target == 'production'", "inputs.confirm == 'deploy production'", "github.ref == 'refs/heads/main'", "vars.PRODUCTION_DEPLOY_ENABLED == 'true'", "needs.credentials.outputs.ready == 'true'"]) {
+  for (const guard of ["github.event_name == 'workflow_dispatch'", "inputs.target == 'production'", "inputs.confirm == 'deploy production'", "github.ref == 'refs/heads/main'", "vars.PRODUCTION_DEPLOY_ENABLED == 'true'"]) {
     assert.ok(production.includes(guard), `production: ${guard}`);
   }
   assert.ok(!production.includes("workflow_run"), "production never follows CI automatically");

@@ -14,8 +14,15 @@
     "commerce:verify": "npm --prefix commerce run verify:bundle"
   },
   "dependencies": {
-    "next": "^15.5.25",
+    "next": "15.5.29",
     "react": "19.1.1",
     "react-dom": "19.1.1"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.32",
+      "sharp": "0.35.5"
+    },
+    "source-map-js": "1.2.2"
   }
 }

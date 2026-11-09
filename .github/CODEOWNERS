@@ -1,0 +1,6 @@
+# Security-sensitive changes require owner review when the main branch rule enables code-owner reviews.
+/.github/ @WADEYEH @anpuuuuu
+/commerce/backup/ @WADEYEH @anpuuuuu
+/commerce/scripts/backup-crypt.mjs @WADEYEH @anpuuuuu
+/commerce/wrangler.toml @WADEYEH @anpuuuuu
+/.gitleaksignore @WADEYEH @anpuuuuu
