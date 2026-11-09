@@ -32,6 +32,16 @@ test("quote merges duplicate SKUs and ignores client-sent prices", () => {
   assert.equal(result.lines[0].unitCents, PRODUCTS.d204.priceCents);
 });
 
+test("F3: names every object has (__proto__, constructor, toString…) are not products, in any case; real ones still price", () => {
+  for (const sku of ["__proto__", "__PROTO__", "constructor", "Constructor", "hasOwnProperty", "toString", "valueOf", "isPrototypeOf"]) {
+    assert.throws(() => quote([{ sku, qty: 1 }]), { code: "unknown_sku" }, sku);
+    assert.throws(() => quote([{ sku: "d204", qty: 1 }, { sku, qty: 1 }]), { code: "unknown_sku" }, `${sku} beside a real product`);
+  }
+  const ok = quote([{ sku: "D204", qty: 1 }, { sku: "d215", qty: 2 }], { state: "TX" });
+  assert.ok([ok.subtotalCents, ok.shippingCents, ok.totalCents].every(Number.isSafeInteger));
+  assert.equal(ok.totalCents, PRODUCTS.d204.priceCents + 2 * PRODUCTS.d215.priceCents + ok.shippingCents + (ok.taxCents ?? 0));
+});
+
 test("quote rejects empty carts, unknown SKUs and bad quantities", () => {
   assert.throws(() => quote([]), (e) => e instanceof QuoteError && e.code === "empty_cart");
   assert.throws(() => quote([{ sku: "x999", qty: 1 }]), { code: "unknown_sku" });

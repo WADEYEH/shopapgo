@@ -23,6 +23,7 @@ import {
   paypalSdkUrl,
   readCheckoutDraft,
   readCheckoutId,
+  readCheckoutKey,
   readPaypalOrder,
   resolveDraftStep,
   shippingComplete,
@@ -440,8 +441,8 @@ export default function CheckoutPage() {
     const fresh = s.session && s.sessionKey === key && Date.now() - s.session.createdAt < SESSION_MAX_AGE_MS;
     if (fresh) return s.session;
 
-    const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, checkoutId: readCheckoutId(), ...checkoutTracking() } });
-    storeCheckoutId(session.orderId);
+    const session = await api("/api/checkout/session", { method: "POST", body: { ...payload, checkoutId: readCheckoutId(), checkoutKey: readCheckoutKey(), ...checkoutTracking() } });
+    storeCheckoutId(session.orderId, session.checkoutKey);
     // This checkout was already paid (another tab, an earlier try) or its payment is processing: show the order.
     if (session.settled) {
       s.placing = true;
@@ -640,9 +641,12 @@ export default function CheckoutPage() {
         addressReview: s.addressReview,
         ...checkoutTracking(),
         checkoutId: readCheckoutId(),
+        checkoutKey: readCheckoutKey(),
       }),
     });
-    storeCheckoutId(data.orderId);
+    storeCheckoutId(data.orderId, data.checkoutKey);
+    // The key stays where storeCheckoutId keeps it (F1), not in this per-tab copy.
+    delete data.checkoutKey;
     storePaypalOrder(data);
     s.paypal.order = data;
     if (data.quote) showQuote(data.quote);

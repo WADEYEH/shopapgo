@@ -131,7 +131,7 @@ test("a fresh database gets the production tables with the same columns, plus th
     const prodColumns = columns(prod, table);
     assert.deepEqual(columns(fresh, table).slice(0, prodColumns.length), prodColumns, `${table}: production's columns first`);
   }
-  assert.deepEqual(columns(fresh, "orders").slice(columns(prod, "orders").length).map((c) => c.name), ["expired_at", "purged_at"]);
+  assert.deepEqual(columns(fresh, "orders").slice(columns(prod, "orders").length).map((c) => c.name), ["expired_at", "purged_at", "checkout_key_hash"]);
 });
 
 test("every environment applies the migrations with wrangler (migrations_dir), and the scripts use them", async () => {

@@ -4,8 +4,8 @@
 //   GET  /.well-known/apple-developer-merchantid-domain-association   Apple Pay domain check
 //   POST /api/cart/quote           server-priced cart ({ items, state?, method? })
 //   POST /api/checkout/address     shipping-address check before payment ({ shipping }; worker/address-check.js)
-//   POST /api/checkout/session     the checkout (reused via checkoutId, D36) + its Airwallex PaymentIntent
-//   POST /api/checkout/paypal/order   the checkout (reused via checkoutId) + a PayPal Orders v2 order
+//   POST /api/checkout/session     the checkout (reused via checkoutId + checkoutKey, D36, F1) + its Airwallex PaymentIntent
+//   POST /api/checkout/paypal/order   the checkout (reused via checkoutId + checkoutKey) + a PayPal Orders v2 order
 //   POST /api/checkout/paypal/capture capture a PayPal order and settle the store order
 //   GET  /api/orders/:id           public order status (syncs pending intents / PayPal)
 //   GET  /api/health               200 while the cron keeps running, 503 once it has stopped (worker/cron.js)
@@ -91,7 +91,7 @@ import { boundRequestBody } from "./request-body.js";
 import { cronHealth, runScheduled } from "./cron.js";
 import { noteBadSignature } from "./webhook-signatures.js";
 import { carrierTrackingUrl } from "./amazon-mcf.js";
-import { checkoutIdForPayment, checkoutPayments, nextRequestId, paymentBelongsTo, recordPayment, reusableCheckout, updateCheckout, voidPayments } from "./checkouts.js";
+import { checkoutIdForPayment, checkoutKeyHash, checkoutPayments, newCheckoutKey, nextRequestId, paymentBelongsTo, recordPayment, reusableCheckout, updateCheckout, voidPayments } from "./checkouts.js";
 
 async function readBody(request) {
   let body;
@@ -126,13 +126,15 @@ async function handleAddressCheck(request, env) {
 }
 
 // The checkout for this purchase (D36, M3 §5): the one the page sent back while it can still be paid, brought up to
-// date with what the shopper now has; otherwise a new one. Its id becomes the order number.
-async function openCheckout(env, checkoutId, { checkout, quote: priced }) {
-  const existing = await reusableCheckout(env.DB, checkoutId);
-  if (existing && (await updateCheckout(env.DB, existing.id, { checkout, quote: priced }))) return { orderId: existing.id, reused: true };
+// date with what the shopper now has, if the page also holds its key (F1, worker/checkouts.js); otherwise a new one,
+// with a new key the page keeps. Its id becomes the order number.
+async function openCheckout(env, checkoutId, checkoutKey, { checkout, quote: priced }) {
+  const existing = await reusableCheckout(env.DB, checkoutId, checkoutKey);
+  if (existing && (await updateCheckout(env.DB, existing.id, { checkout, quote: priced }))) return { orderId: existing.id, reused: true, checkoutKey };
   const orderId = newOrderId();
-  await insertOrder(env.DB, { id: orderId, checkout, quote: priced });
-  return { orderId, reused: false };
+  const key = newCheckoutKey();
+  await insertOrder(env.DB, { id: orderId, checkout, quote: priced, keyHash: await checkoutKeyHash(key) });
+  return { orderId, reused: false, checkoutKey: key };
 }
 
 // A PaymentIntent of this checkout that can still be paid for this amount, so a retry, a refresh or a second tab pays
@@ -173,7 +175,7 @@ async function handleCheckoutSession(request, env, services) {
   // Checked again here, whatever the page did: an undeliverable address never reaches a payment.
   checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
   const origin = new URL(request.url).origin;
-  const { orderId, reused } = await openCheckout(env, body.checkoutId, { checkout, quote: priced });
+  const { orderId, reused, checkoutKey } = await openCheckout(env, body.checkoutId, body.checkoutKey, { checkout, quote: priced });
 
   // Meta attribution (production only): browser-sent ids, cookies, IP and user agent, validated and stored per order.
   // Optional by design: a missing or malformed `attribution` never affects checkout.
@@ -242,6 +244,7 @@ async function handleCheckoutSession(request, env, services) {
 
   return json({
     orderId,
+    checkoutKey,
     quote: priced,
     intent: { id: intent.id, clientSecret: intent.client_secret, currency: intent.currency },
   });
@@ -264,7 +267,7 @@ async function handlePaypalCreate(request, env, services) {
     checkout.shipping.addressCheck = await enforceAddress(env, checkout.shipping, checkout.addressReview);
   }
   const origin = storefrontOrigin(request, env);
-  const { orderId } = await openCheckout(env, body.checkoutId, { checkout, quote: priced });
+  const { orderId, checkoutKey } = await openCheckout(env, body.checkoutId, body.checkoutKey, { checkout, quote: priced });
   const { returnUrl, cancelUrl } = checkoutReturnUrls(origin, orderId);
   await captureAttribution(env, request, body, orderId, origin);
 
@@ -285,6 +288,7 @@ async function handlePaypalCreate(request, env, services) {
 
   return json({
     orderId,
+    checkoutKey,
     quote: priced,
     paypal: { id: paypalOrder.id, status: paypalOrder.status, approveUrl: approveUrlFrom(paypalOrder) },
     eventIds: eventIdsFor(orderId),

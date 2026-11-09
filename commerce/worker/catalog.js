@@ -45,7 +45,8 @@ export function normalizeItems(items, pricing = DEFAULT_PRICING) {
   for (const item of items) {
     const key = String(item?.sku ?? "").toLowerCase();
     const qty = Number(item?.qty);
-    if (!products[key]) throw new QuoteError("unknown_sku", "An item in your cart is no longer available.");
+    // Own keys only (F3, 2026-11-09): "__proto__" or "constructor" are not products.
+    if (!Object.hasOwn(products, key)) throw new QuoteError("unknown_sku", "An item in your cart is no longer available.");
     // Stopped by an owner (worker/products.js): carts that already have it cannot check out.
     if (products[key].onSale === false) throw new QuoteError("product_unavailable", `${products[key].name} is not available right now. Remove it from your cart to check out.`);
     // Fewer than 5 at Amazon (worker/inventory.js, D25): the same, as out of stock.
@@ -93,6 +94,11 @@ export function quote(items, { state, method } = {}, pricing = DEFAULT_PRICING) 
   const shippingCents = shippingMethod.amountCents;
   const taxCents = computeTax(pricing, { state, subtotalCents, shippingCents });
   const totalCents = subtotalCents + shippingCents + (taxCents ?? 0);
+  // Every amount a whole number of cents, or no quote at all: nothing odd ever reaches a payment.
+  const amounts = [...lines.map((line) => line.lineCents), subtotalCents, shippingCents, taxCents ?? 0, totalCents];
+  if (!amounts.every((cents) => Number.isSafeInteger(cents) && cents >= 0)) {
+    throw new QuoteError("invalid_price", "We couldn't price your cart. Please try again later.");
+  }
 
   return {
     currency: pricing.currency,

@@ -108,17 +108,17 @@ export async function handleContact(request, env, { fetchImpl = fetch, nowMs = D
   const db = env.DB;
   const ipHash = await addressHash(request, nowMs);
   const since = new Date(nowMs - HOUR_MS).toISOString();
-  const recent = await db.prepare(
-    "SELECT SUM(CASE WHEN ip_hash = ? THEN 1 ELSE 0 END) AS mine, COUNT(*) AS everyone FROM contact_messages WHERE created_at > ?",
-  ).bind(ipHash, since).first();
-  if ((recent?.mine ?? 0) >= CONTACT_LIMITS.perAddressHour || (recent?.everyone ?? 0) >= CONTACT_LIMITS.allHour) {
-    return json({ error: { code: "too_many_messages", message: CONTACT_MESSAGES.busy } }, 429);
-  }
-
+  // Counted and saved in one statement (F2, 2026-11-09): two messages sent at the same moment cannot both see the last
+  // free place, so neither limit is ever exceeded. Nothing saved = over a limit.
   const record = { id: `CM-${crypto.randomUUID()}`, created_at: new Date(nowMs).toISOString(), ...value };
-  await db.prepare(
-    "INSERT INTO contact_messages (id, created_at, name, email, message, ip_hash, email_status) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
-  ).bind(record.id, record.created_at, record.name, record.email, record.message, ipHash).run();
+  const saved = await db.prepare(
+    `INSERT INTO contact_messages (id, created_at, name, email, message, ip_hash, email_status)
+     SELECT ?, ?, ?, ?, ?, ?, 'pending'
+     WHERE (SELECT COUNT(*) FROM contact_messages WHERE ip_hash = ? AND created_at > ?) < ?
+       AND (SELECT COUNT(*) FROM contact_messages WHERE created_at > ?) < ?`,
+  ).bind(record.id, record.created_at, record.name, record.email, record.message, ipHash,
+    ipHash, since, CONTACT_LIMITS.perAddressHour, since, CONTACT_LIMITS.allHour).run();
+  if (!(saved.meta?.changes > 0)) return json({ error: { code: "too_many_messages", message: CONTACT_MESSAGES.busy } }, 429);
 
   const sent = await sendContactEmail(env, record, fetchImpl);
   await db.prepare("UPDATE contact_messages SET email_status = ?, email_detail = ? WHERE id = ?").bind(sent.status, sent.detail || null, record.id).run();

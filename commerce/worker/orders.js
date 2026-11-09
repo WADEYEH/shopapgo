@@ -21,13 +21,14 @@ async function alreadySettled(db, order, provider, ref, amountCents, currency, c
 
 const now = () => new Date().toISOString();
 
-export async function insertOrder(db, { id, checkout, quote }) {
+// keyHash: the SHA-256 of the checkout key (worker/checkouts.js); without it the checkout can never be reused.
+export async function insertOrder(db, { id, checkout, quote, keyHash = null }) {
   const timestamp = now();
   await db
     .prepare(
       `INSERT INTO orders (id, status, email, marketing_opt_in, shipping_json, shipping_method, lines_json,
-        currency, subtotal_cents, shipping_cents, tax_cents, total_cents, created_at, updated_at)
-       VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        currency, subtotal_cents, shipping_cents, tax_cents, total_cents, created_at, updated_at, checkout_key_hash)
+       VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -43,6 +44,7 @@ export async function insertOrder(db, { id, checkout, quote }) {
       quote.totalCents,
       timestamp,
       timestamp,
+      keyHash,
     )
     .run();
 }

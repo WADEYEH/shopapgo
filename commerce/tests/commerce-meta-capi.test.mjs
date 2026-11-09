@@ -100,13 +100,17 @@ const FBP = "fb.1.1759600000000.1234567890";
 const FBC = "fb.1.1759600000001.AbCdEfGhIjKlMnOpQrStUvWxYz";
 const SOURCE_URL = "https://store.shopapgo.com/v3?utm_source=facebook&fbclid=AbCdEf";
 
+// The checkout key each new checkout came with (F1), for a later attempt of the same checkout.
+const checkoutKeys = new Map();
 async function startCheckout(env, body = checkoutBody(), headers = {}) {
   resetAirwallexTokenCache();
   const ctx = ctxStub();
   const response = await call(env, "/api/checkout/session", post(body, headers), ctx);
   await ctx.settled();
   assert.equal(response.status, 200);
-  return (await response.json()).orderId;
+  const { orderId, checkoutKey } = await response.json();
+  checkoutKeys.set(orderId, checkoutKey);
+  return orderId;
 }
 
 function signedWebhook(orderId, total = 127.96, { secret = WEBHOOK_SECRET } = {}) {
@@ -690,7 +694,7 @@ test("GPC: the page's privacy.gpc counts too, and a later attempt of the same ch
   await withWorld({}, async ({ meta }) => {
     const first = await startCheckout(env, checkoutBody({ attribution: { fbp: FBP, fbc: FBC } }));
     assert.ok(attributionRow(db, first), "no GPC yet: attribution kept");
-    const again = await startCheckout(env, checkoutBody({ checkoutId: first, privacy: { gpc: true } }));
+    const again = await startCheckout(env, checkoutBody({ checkoutId: first, checkoutKey: checkoutKeys.get(first), privacy: { gpc: true } }));
     assert.equal(again, first, "the same checkout");
     assert.equal(attributionRow(db, first), null);
     await payViaWebhook(env, first);

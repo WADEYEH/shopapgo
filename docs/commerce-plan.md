@@ -505,6 +505,7 @@ wrangler.toml            Worker 设定（staging / production）
 | C30 | 清理：删除旧的 Cloudflare Pages 专案（apgo-us-store.pages.dev，切换时说好保留两周）；删除测试站旧的 Resend 金钥 `shopapgo-staging`（已换新的） | 10/30 之后（Pages）；有空时（Resend） | 等 |
 | C31 | Amazon 转接程序以后只从 GitHub 部署（D75）：请 Mac 的使用者**不要再从 Mac 部署**，否则会把 1.8.3（含库存入口）盖回旧版 | 尽快告诉 Mac 的使用者 | 等你告诉 Mac 的使用者（10/19 起三个 Amazon Worker 都在 repo：`amazon-spapi-mcp/`、`amazon-connect/`、`amazon-review-cron/`，都只从 GitHub 部署） |
 | C32 | 另外两个跟 Amazon 有关的 Worker 原始码也不在 GitHub：`apgo-amazon-mcp-gateway`（Amazon 工具的登录入口 amazon-connect.apgo.tw）、`amazon-review-solicitation-cron`（评论排程备援，每天 16:30 UTC）。照 D75 的方式搬进 repo | 有空时 | **完成**（10/19，#88 合并）：两个都下载线上版本放进 repo（`amazon-connect/`、`amazon-review-cron/`），dry-run 打包跟线上一模一样；CI 每个 PR 都检查能打包；GitHub 部署流程加一个「Worker」选项，三个都从同一个流程部署（要核准）。营运手册第 25 节 |
+| C33 | 安全检查清单（11/09，Codex 做的 67 个情境，4 个没过）：F1 订单编号同时是修改未付款结账的钥匙；F2 联络表单的每小时上限，同时送出可以超过；F3 商品代码 `__proto__`、`constructor` 没被当成不存在的商品；F4 两位店主同时关团队邮件会两个都关掉 | 尽快 | **修好，等合并部署**（11/09，#97）：F1 每笔新结账另外给一把随机钥匙（只在该浏览器、数据库只存指纹），没钥匙就开新的结账（你问标准做法后照一般网店做）；F2、F4 改成「检查和存档同一步」，同时送出也不会超过；F3 只认真正的商品代码，金额不是整数分就不报价。每项都有测试，旧程式会失败、新程式通过。#96（部署金钥分开等）你决定先不做 |
 
 ---
 
@@ -649,6 +650,9 @@ wrangler.toml            Worker 设定（staging / production）
 | 10/21 | 你要求把 chiazipeng@gmail.com 加进后台，选「店主」、正式和测试站都加：在后台「成员」页新增，Cloudflare 登录名单自动更新（两边都是新增 1），正式环境已寄通知信给两位店主（测试站只寄给测试收件人）。对方用 Google 登录 admin.shopapgo.com 就能进；店主预设会收团队信，可以在后台左下角自己关 |
 | 10/21 | 你说「合并 #92，部署正式环境」：#92 已经在 GitHub 合并，正式部署你核准后完成（版本 f0ce5d15）；首页和指南的商品文字跟后台连动，首页没有错误讯息，排程都正常 |
 | 10/21 | 你要求把所有文件更新、不必要的删掉：删掉上线前的旧笔记 7 份（交接、10/4 决策原文、运费研究、staging 验证纪录、顾客信注记、landing 检查、加州隐私分析）、合并 2 份（Meta 追踪的前后端合成一份、库存规格并进 Amazon 转接程序的说明），重写 repo 首页说明、`commerce/README.md`、技术参考 `commerce.md`（98 KB → 62 KB）和 `paypal.md`，更新法务索引、销售税（D68＋每季检视）、阶段 3 计划和其他引用；顺便删掉 5 个没用的脚本和 4 张没用到的图片，修正程式里描述上线前状态的注解。旧档案都在 git 纪录里 |
+| 10/22 | 你说「合并」：#93 合并（5791e54），main 测试和测试站部署正常；只改文件，没有部署正式环境 |
+| 11/08 | （Codex）安全修复 #94（付款金额的时间差）、#95（正式后台一定要 Cloudflare 登录、限制送进来的资料大小）合并并部署正式环境（版本 ab7cc39f）；#96（部署金钥分开、锁版本、安全扫描、套件更新）开着，等你在 GitHub 建 4 把金钥和 WADEYEH 重新验证。细节见 `docs/ops/security-remediation.md`（在 #96） |
+| 11/09 | 你给我 Codex 的安全检查清单（67 个情境，4 个没过），要我拉最新状态看问题：4 个都对照程式确认是真的（F1 我评中、清单评高）。你选由我修、一次部署；F1 没钥匙时照一般网店的做法开新的结账；#96 先不做。修好放在 #97（C33） |
 
 ---
 

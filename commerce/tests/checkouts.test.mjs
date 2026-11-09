@@ -180,12 +180,12 @@ test("M3-13: a retry, a refresh or a second tab reuse the checkout and its Payme
   const env = env0(db);
   await withProviders(async (providers) => {
     const first = await session(env, cart(1));
-    const again = await session(env, cart(1, { checkoutId: first.orderId })); // refresh / second tab: same id from storage
+    const again = await session(env, cart(1, { checkoutId: first.orderId, checkoutKey: first.checkoutKey })); // refresh / second tab: same id from storage
     assert.equal(again.orderId, first.orderId);
     assert.deepEqual(again.intent, first.intent, "the same PaymentIntent, so only one can be charged");
     assert.equal(providers.calls.creates.length, 1);
 
-    const changed = await session(env, cart(3, { checkoutId: first.orderId }));
+    const changed = await session(env, cart(3, { checkoutId: first.orderId, checkoutKey: first.checkoutKey }));
     assert.equal(changed.orderId, first.orderId, "same checkout, priced again");
     assert.notEqual(changed.intent.id, first.intent.id);
     assert.deepEqual(providers.calls.cancels, [first.intent.id], "the old amount's intent is cancelled");
@@ -194,14 +194,14 @@ test("M3-13: a retry, a refresh or a second tab reuse the checkout and its Payme
     assert.equal(row(db, "SELECT COUNT(*) AS n FROM orders").n, 1, "one checkout");
 
     // Switching to PayPal stays the same checkout; paying with the old (cancelled) intent is impossible.
-    const pp = await paypalOrder(env, cart(3, { checkoutId: first.orderId }));
+    const pp = await paypalOrder(env, cart(3, { checkoutId: first.orderId, checkoutKey: first.checkoutKey }));
     assert.equal(pp.orderId, first.orderId);
     assert.equal(row(db, "SELECT COUNT(*) AS n FROM orders").n, 1);
     assert.deepEqual(rows(db, "SELECT provider, ref, status FROM checkout_payments ORDER BY created_at, rowid").map((r) => `${r.provider}:${r.ref}:${r.status}`), ["airwallex:int_1:voided", `airwallex:${changed.intent.id}:open`, "paypal:PP1:open"]);
 
     // A checkout id that is not open any more (or made up) starts a new checkout.
     await pay(env, providers, changed.intent.id);
-    const next = await session(env, cart(1, { checkoutId: first.orderId }));
+    const next = await session(env, cart(1, { checkoutId: first.orderId, checkoutKey: first.checkoutKey }));
     assert.notEqual(next.orderId, first.orderId);
     assert.equal((await session(env, cart(1, { checkoutId: "APGO-US-NOTAREALID00" }))).orderId.length, 20);
   });
@@ -213,7 +213,7 @@ test("M3-13: a page that asks again after the checkout was paid elsewhere is sen
   await withProviders(async (providers) => {
     const first = await session(env, cart(1));
     providers.succeed(first.intent.id); // paid in another tab; the webhook has not arrived yet
-    const again = await session(env, cart(1, { checkoutId: first.orderId }));
+    const again = await session(env, cart(1, { checkoutId: first.orderId, checkoutKey: first.checkoutKey }));
     assert.deepEqual([again.orderId, again.settled, again.intent], [first.orderId, "paid", undefined]);
     assert.equal(row(db, "SELECT status FROM orders WHERE id = ?", first.orderId).status, "paid");
     assert.equal(providers.calls.creates.length, 1);
@@ -225,13 +225,13 @@ test("PayPal: a replaced PayPal order or a checkout paid by card is never captur
   const env = env0(db);
   await withProviders(async (providers) => {
     const first = await paypalOrder(env, cart(1));
-    const second = await paypalOrder(env, cart(1, { checkoutId: first.orderId }));
+    const second = await paypalOrder(env, cart(1, { checkoutId: first.orderId, checkoutKey: first.checkoutKey }));
     assert.equal(second.orderId, first.orderId);
     const replaced = await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: first.paypal.id }));
     assert.equal(replaced.status, 409);
     assert.equal((await replaced.json()).error.code, "payment_replaced");
 
-    const card = await session(env, cart(1, { checkoutId: first.orderId }));
+    const card = await session(env, cart(1, { checkoutId: first.orderId, checkoutKey: first.checkoutKey }));
     await pay(env, providers, card.intent.id);
     const closed = await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: second.paypal.id }));
     assert.equal(closed.status, 409);
@@ -248,7 +248,7 @@ test("M5-08: card started, PayPal paid, then the card payment succeeds too: one 
   const env = env0(db);
   await withProviders(async (providers) => {
     const card = await session(env, cart(1));
-    const pp = await paypalOrder(env, cart(1, { checkoutId: card.orderId }));
+    const pp = await paypalOrder(env, cart(1, { checkoutId: card.orderId, checkoutKey: card.checkoutKey }));
     const captured = await (await call(env, "/api/checkout/paypal/capture", post({ paypalOrderId: pp.paypal.id }))).json();
     assert.equal(captured.status, "paid");
     assert.deepEqual(providers.calls.cancels, [card.intent.id], "once PayPal paid, the card intent is cancelled");
@@ -263,6 +263,54 @@ test("M5-08: card started, PayPal paid, then the card payment succeeds too: one 
     assert.equal(row(db, "SELECT status FROM checkout_payments WHERE ref = ?", card.intent.id).status, "duplicate_refunded");
     assert.equal(alerts(providers.calls).filter((m) => /was paid twice/.test(m.subject)).length, 1);
     assert.ok(rows(db, "SELECT action FROM order_audit").some((a) => a.action === "order.duplicate_payment_refunded"));
+  });
+});
+
+// ---------- F1 (2026-11-09): the order number is not the key to its checkout ----------
+
+const SOMEONE_ELSE = {
+  contact: { email: "mallory@example.com", phone: "(512) 555-0199", marketingOptIn: false },
+  shipping: { firstName: "Mal", lastName: "Lory", street: "1 Elsewhere Rd", street2: "", city: "Austin", state: "TX", zip: "78702" },
+};
+
+test("F1: knowing an unpaid order number is not enough to change that checkout; only the page that holds its key reuses it", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db);
+  await withProviders(async () => {
+    const shopper = await session(env, cart(1));
+    assert.match(shopper.checkoutKey, /^[A-Za-z0-9_-]{43}$/, "a new checkout comes with a key");
+    assert.match(row(db, "SELECT checkout_key_hash AS h FROM orders WHERE id = ?", shopper.orderId).h, /^[0-9a-f]{64}$/);
+    assert.ok(!JSON.stringify(rows(db, "SELECT * FROM orders")).includes(shopper.checkoutKey), "only its hash is stored");
+
+    // Someone else sends the order number with no key, a wrong key or a malformed one: a checkout of their own.
+    for (const key of [undefined, "A".repeat(43), "short"]) {
+      const theirs = await session(env, cart(1, { checkoutId: shopper.orderId, ...(key ? { checkoutKey: key } : {}), ...SOMEONE_ELSE }));
+      assert.notEqual(theirs.orderId, shopper.orderId);
+      assert.notEqual(theirs.intent.clientSecret, shopper.intent.clientSecret, "never the shopper's payment");
+      assert.notEqual(theirs.checkoutKey, shopper.checkoutKey);
+    }
+    const pp = await paypalOrder(env, cart(1, { checkoutId: shopper.orderId, ...SOMEONE_ELSE }));
+    assert.notEqual(pp.orderId, shopper.orderId, "PayPal too");
+    const original = row(db, "SELECT email, shipping_json FROM orders WHERE id = ?", shopper.orderId);
+    assert.equal(original.email, "ada@example.com", "the shopper's checkout is untouched");
+    assert.match(original.shipping_json, /100 Example Ave/);
+    assert.doesNotMatch(original.shipping_json, /Elsewhere/);
+
+    // The shopper's own page, with its key: the same checkout and the same PaymentIntent.
+    const again = await session(env, cart(1, { checkoutId: shopper.orderId, checkoutKey: shopper.checkoutKey }));
+    assert.deepEqual([again.orderId, again.intent.id], [shopper.orderId, shopper.intent.id]);
+  });
+});
+
+test("F1: a checkout made before keys existed is not reused: the page simply starts a new one", { skip }, async () => {
+  const db = await createD1();
+  const env = env0(db);
+  await withProviders(async () => {
+    const old = await session(env, cart(1));
+    db.raw.prepare("UPDATE orders SET checkout_key_hash = NULL WHERE id = ?").run(old.orderId);
+    const next = await session(env, cart(1, { checkoutId: old.orderId, checkoutKey: old.checkoutKey }));
+    assert.notEqual(next.orderId, old.orderId);
+    assert.match(next.checkoutKey, /^[A-Za-z0-9_-]{43}$/);
   });
 });
 
@@ -283,7 +331,7 @@ test("C20: a card payment started in a second tab while PayPal pays in the first
       }
       return handler(href, init);
     };
-    const card = await session(env, cart(1, { checkoutId: pp.orderId }));
+    const card = await session(env, cart(1, { checkoutId: pp.orderId, checkoutKey: pp.checkoutKey }));
     assert.deepEqual([card.orderId, card.settled, card.intent], [pp.orderId, "paid", undefined], "the page goes to the order");
     assert.equal(row(db, "SELECT payment_intent_id FROM orders WHERE id = ?", pp.orderId).payment_intent_id, pp.paypal.id, "still the PayPal order that paid");
     assert.equal(row(db, "SELECT status FROM checkout_payments WHERE provider = 'airwallex'").status, "voided");
