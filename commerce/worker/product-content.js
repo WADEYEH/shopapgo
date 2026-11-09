@@ -198,7 +198,7 @@ const ownerOnly = (actor) => {
 // (an empty search title or description = the site's own). dryRun: true answers what would change without saving.
 export async function publishContent(env, actor, sku, body, { nowMs = Date.now() } = {}) {
   ownerOnly(actor);
-  if (!PRODUCTS[sku]) throw new ContentError(404, "not_found", "Product not found.");
+  if (!Object.hasOwn(PRODUCTS, sku)) throw new ContentError(404, "not_found", "Product not found.");
   const overrides = await checkContent(env, sku, body?.content);
   return save(env, actor, sku, overrides, { expectedVersion: Number(body?.expectedVersion), dryRun: body?.dryRun === true, nowMs });
 }
@@ -206,7 +206,7 @@ export async function publishContent(env, actor, sku, body, { nowMs = Date.now()
 // POST /admin/api/products/:id/restore { version (0 = the original), expectedVersion, dryRun }
 export async function restoreContent(env, actor, sku, body, { nowMs = Date.now() } = {}) {
   ownerOnly(actor);
-  if (!PRODUCTS[sku]) throw new ContentError(404, "not_found", "Product not found.");
+  if (!Object.hasOwn(PRODUCTS, sku)) throw new ContentError(404, "not_found", "Product not found.");
   const version = Number(body?.version);
   if (!Number.isSafeInteger(version) || version < 0) throw new ContentError(400, "invalid_version", "Choose a version.");
   let overrides = {};
@@ -227,7 +227,7 @@ const magic = (bytes) => (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] ===
 // X-Image-Width / X-Image-Height. Returns { src, width, height, bytes }.
 export async function uploadProductImage(env, actor, sku, request, { nowMs = Date.now() } = {}) {
   ownerOnly(actor);
-  if (!PRODUCTS[sku]) throw new ContentError(404, "not_found", "Product not found.");
+  if (!Object.hasOwn(PRODUCTS, sku)) throw new ContentError(404, "not_found", "Product not found.");
   if (!env.PRODUCT_IMAGES) throw new ContentError(503, "images_not_configured", "Photo storage is not set up for this site.");
   const type = String(request.headers.get("Content-Type") ?? "").split(";")[0].trim().toLowerCase();
   if (!IMAGE_TYPES[type]) throw new ContentError(415, "invalid_image_type", "Upload a WebP, JPEG or PNG photo.");

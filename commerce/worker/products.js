@@ -65,7 +65,8 @@ export async function livePricing(env) {
 
 export async function setOnSale(env, actor, productId, body, { now = () => new Date().toISOString() } = {}) {
   if (actor.role !== "owner") throw new ProductError(403, "owner_only", "Only an owner can stop or resume selling a product.");
-  const product = resolvePricing(env).products[productId];
+  const products = resolvePricing(env).products;
+  const product = Object.hasOwn(products, productId) ? products[productId] : null;
   if (!product) throw new ProductError(404, "not_found", "Product not found.");
   if (typeof body?.onSale !== "boolean") throw new ProductError(400, "invalid_on_sale", "Say whether the product is on sale (true or false).");
   const before = (await productSettings(env.DB))[productId]?.onSale ?? true;

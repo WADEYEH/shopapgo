@@ -205,7 +205,16 @@ export async function setTeamAlerts(env, actor, body, { now = () => new Date().t
     if (!results.some(getsTeamAlerts)) throw new MemberError(409, "last_recipient", "At least one person must get the team emails. Ask someone else to turn theirs on first.");
   }
   const at = now();
-  await db.prepare("UPDATE admin_members SET team_alerts = ?, updated_by = ?, updated_at = ? WHERE email = ?").bind(body.on ? 1 : 0, actor.id, at, row.email).run();
+  // Turning off is checked and saved in one statement (F4, 2026-11-09): only while another active person still gets the
+  // team emails, so two people turning theirs off at the same moment cannot both succeed.
+  const saved = body.on
+    ? await db.prepare("UPDATE admin_members SET team_alerts = 1, updated_by = ?, updated_at = ? WHERE email = ?").bind(actor.id, at, row.email).run()
+    : await db.prepare(
+      `UPDATE admin_members SET team_alerts = 0, updated_by = ?, updated_at = ? WHERE email = ?
+         AND EXISTS (SELECT 1 FROM admin_members m WHERE m.status = 'active' AND m.email != ?
+           AND (m.team_alerts = 1 OR (m.team_alerts IS NULL AND m.role = 'owner')))`,
+    ).bind(actor.id, at, row.email, row.email).run();
+  if (!body.on && !(saved.meta?.changes > 0)) throw new MemberError(409, "last_recipient", "At least one person must get the team emails. Ask someone else to turn theirs on first.");
   await recordAdminAudit(db, {
     actor, action: "member.alerts_changed", target: row.email,
     before: { ...snapshot(row), teamAlerts: !body.on }, after: { ...snapshot(row), teamAlerts: body.on }, reason: "", at,

@@ -1,17 +1,24 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
   CHECKOUT_DRAFT_KEY,
+  CHECKOUT_ID_KEY,
+  CHECKOUT_KEY_KEY,
   CONTACT_FIELDS,
   DRAFT_STEPS,
   SHIPPING_FIELDS,
   clearCheckoutDraft,
+  clearCheckoutId,
   emptyDraft,
   normalizeCheckoutDraft,
   readCheckoutDraft,
+  readCheckoutId,
+  readCheckoutKey,
   resolveDraftStep,
   shippingComplete,
+  storeCheckoutId,
   writeCheckoutDraft,
 } from "../../lib/shop/checkout-draft.mjs";
 
@@ -104,4 +111,26 @@ test("sessionStorage helpers read, write, and clear the draft", () => {
   clearCheckoutDraft(storage);
   assert.equal(readCheckoutDraft(storage), null);
   assert.equal(readCheckoutDraft({ getItem: () => "{not-json" }), null);
+});
+
+test("F1: the checkout key is kept beside the id, only in this browser's storage, and dropped with it", async () => {
+  const storage = memoryStorage();
+  const key = "k".repeat(43);
+  storeCheckoutId("APGO-US-ABCDEFGHJKMN", key, storage);
+  assert.deepEqual([readCheckoutId(storage), readCheckoutKey(storage)], ["APGO-US-ABCDEFGHJKMN", key]);
+  storeCheckoutId("APGO-US-ABCDEFGHJKMN", "not a key", storage);
+  assert.equal(readCheckoutKey(storage), key, "a malformed key never replaces the real one");
+  storage.setItem(CHECKOUT_KEY_KEY, "tampered!");
+  assert.equal(readCheckoutKey(storage), null);
+  clearCheckoutId(storage);
+  assert.equal(storage.store.has(CHECKOUT_ID_KEY) || storage.store.has(CHECKOUT_KEY_KEY), false);
+
+  // The page sends it in request bodies only: never in a URL, an analytics event or the per-tab PayPal copy.
+  const page = await readFile(new URL("../../components/shop/checkout/CheckoutPage.js", import.meta.url), "utf8");
+  const uses = page.split(/\r?\n/).filter((line) => /checkoutKey|readCheckoutKey/.test(line)).map((line) => line.trim());
+  assert.ok(uses.length >= 4);
+  for (const line of uses) {
+    assert.doesNotMatch(line, /track\(|dataLayer|history\.|location|orderUrl|storePaypalOrder\(/, line);
+  }
+  assert.match(page, /delete data\.checkoutKey;\s*storePaypalOrder\(data\);/);
 });

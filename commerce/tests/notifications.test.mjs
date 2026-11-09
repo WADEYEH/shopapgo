@@ -196,6 +196,34 @@ test("M8-07: an order paid while the address check service was down is reported 
 
 // ---------- M9-20: each person's team emails ----------
 
+test("F4: two owners turning their team emails off at the same moment: one of them keeps them on", { skip }, async () => {
+  const db = await createD1();
+  const at = iso(Date.now());
+  for (const email of [OWNER, "partner@apgo.example"]) {
+    db.raw.prepare("INSERT INTO admin_members (email, role, status, added_by, added_at, updated_by, updated_at) VALUES (?, 'owner', 'active', 'system', ?, 'system', ?)").run(email, at, at);
+  }
+  // The worst timing: both read who else gets the emails, and only then do both save.
+  let arrived = 0;
+  let release;
+  const both = new Promise((resolve) => { release = resolve; });
+  const together = new Proxy(db, {
+    get(target, prop) {
+      if (prop !== "prepare") { const value = target[prop]; return typeof value === "function" ? value.bind(target) : value; }
+      return (sql) => {
+        const statement = target.prepare(sql);
+        if (!sql.startsWith("SELECT * FROM admin_members WHERE status = 'active' AND email != ?")) return statement;
+        return { bind: (...args) => ({ all: async () => { const rows = await statement.bind(...args).all(); arrived += 1; if (arrived >= 2) release(); await both; return rows; } }) };
+      };
+    },
+  });
+  const env = { ...env0(db), DB: together };
+  const results = await Promise.allSettled([OWNER, "partner@apgo.example"].map((email) => setTeamAlerts(env, { id: email, email, role: "owner", via: "access" }, { on: false })));
+  assert.deepEqual(results.map((r) => r.status).sort(), ["fulfilled", "rejected"]);
+  assert.equal(results.find((r) => r.status === "rejected").reason.code, "last_recipient");
+  const on = db.raw.prepare("SELECT email FROM admin_members WHERE team_alerts IS NULL OR team_alerts = 1").all();
+  assert.equal(on.length, 1, "someone still gets them");
+});
+
 test("M9-20: people turn their own team emails on or off; the last one cannot turn them off; member changes still reach every owner", { skip }, async () => {
   const db = await createD1();
   const env = env0(db);

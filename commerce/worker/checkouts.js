@@ -28,11 +28,35 @@ const clip = (value, max) => String(value ?? "").slice(0, max);
 
 // ---------- the checkout row ----------
 
-// The checkout this browser started, when it can still be paid: pending and less than 24 hours old.
-export async function reusableCheckout(db, checkoutId, nowMs = Date.now()) {
-  if (!CHECKOUT_ID.test(String(checkoutId ?? ""))) return null;
+// The checkout key (F1, 2026-11-09): the checkout id is also the order number, which the shopper sees and PayPal and
+// Meta receive, so it must not be enough to change a checkout. A new checkout gets 32 random bytes as its key, given
+// once to the browser that made it (kept in its localStorage, never in a URL or an analytics event); the database
+// keeps only a SHA-256 of it. Without the right key the page gets a new checkout, as shops do with a cart token: the
+// other checkout is never touched.
+const CHECKOUT_KEY = /^[A-Za-z0-9_-]{43}$/;
+export function newCheckoutKey() {
+  let binary = "";
+  for (const byte of crypto.getRandomValues(new Uint8Array(32))) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+export async function checkoutKeyHash(key) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`apgo-checkout-key:${key}`));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function sameHash(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// The checkout this browser started, when it can still be paid: pending, less than 24 hours old, and the browser holds
+// its key. Checkouts made before keys existed have none and are not reused.
+export async function reusableCheckout(db, checkoutId, checkoutKey, nowMs = Date.now()) {
+  if (!CHECKOUT_ID.test(String(checkoutId ?? "")) || !CHECKOUT_KEY.test(String(checkoutKey ?? ""))) return null;
   const row = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(checkoutId).first();
   if (!row || row.status !== "pending" || Date.parse(row.created_at) <= nowMs - CHECKOUT_TTL_MS) return null;
+  if (!row.checkout_key_hash || !sameHash(row.checkout_key_hash, await checkoutKeyHash(checkoutKey))) return null;
   return row;
 }
 

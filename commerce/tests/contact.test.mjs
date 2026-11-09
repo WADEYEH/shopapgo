@@ -108,6 +108,44 @@ test("at most 5 an hour from one address and 60 an hour overall; the hash change
   assert.equal((await handleContact(request(GOOD, "192.0.2.1"), { DB: busy }, { nowMs: now + 100 })).status, 429);
 });
 
+// The worst timing for a count-then-save limit: every request reads the count, and only then do they all go on. Any
+// separate read of contact_messages waits until `parties` requests have read; a single count-and-save statement never waits.
+function readsTogether(db, parties) {
+  let arrived = 0;
+  let release;
+  const all = new Promise((resolve) => { release = resolve; });
+  const hold = async (value) => { arrived += 1; if (arrived >= parties) release(); await all; return value; };
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop !== "prepare") { const value = target[prop]; return typeof value === "function" ? value.bind(target) : value; }
+      return (sql) => {
+        const statement = target.prepare(sql);
+        if (!/^\s*SELECT[\s\S]*FROM contact_messages/i.test(sql)) return statement;
+        return { bind: (...args) => { const bound = statement.bind(...args); return { first: async () => hold(await bound.first()), all: async () => hold(await bound.all()) }; } };
+      };
+    },
+  });
+}
+
+test("F2: messages sent at the same moment never get past either limit (counted and saved in one step)", { skip }, async () => {
+  const now = Date.parse("2026-11-09T10:00:00Z");
+  const db = await createD1();
+  for (let i = 0; i < 4; i += 1) assert.equal((await handleContact(request(GOOD), { DB: db }, { nowMs: now + i })).status, 200);
+  const mail = emailService();
+  const together = readsTogether(db, 2);
+  const both = await Promise.all([0, 1].map((i) => handleContact(request(GOOD), { DB: together, ...MAIL }, { nowMs: now + 10 + i, fetchImpl: mail.fetchImpl })));
+  assert.deepEqual(both.map((r) => r.status).sort(), [200, 429], "the fifth place goes to one of them");
+  assert.equal((await rows(db)).length, 5);
+  assert.equal(mail.calls.length, 1, "one email, not two");
+
+  const busy = await createD1();
+  for (let i = 0; i < 59; i += 1) await handleContact(request(GOOD, `198.51.100.${i}`), { DB: busy }, { nowMs: now + i });
+  const busyTogether = readsTogether(busy, 3);
+  const last = await Promise.all(["192.0.2.1", "192.0.2.2", "192.0.2.3"].map((ip, i) => handleContact(request(GOOD, ip), { DB: busyTogether }, { nowMs: now + 100 + i })));
+  assert.deepEqual(last.map((r) => r.status).sort(), [200, 429, 429], "the 60th place overall goes to one");
+  assert.equal((await rows(busy)).length, 60);
+});
+
 test("Turnstile: off until both keys are set; then every message needs a token Cloudflare accepts", { skip }, async () => {
   assert.equal(publicConfig({}).contact.turnstileSiteKey, null);
   assert.equal(publicConfig({ TURNSTILE_SITE_KEY: "0x4AAA" }).contact.turnstileSiteKey, null, "no secret, no widget");
