@@ -4,7 +4,7 @@ import ArticleHead from "@/components/us/guides/ArticleHead";
 import ArticleBody from "@/components/us/guides/ArticleBody";
 import RelatedGuides from "@/components/us/guides/RelatedGuides";
 import JsonLd, { articleLd, breadcrumbLd } from "@/components/us/guides/JsonLd";
-import { routes, asset } from "@/lib/us/routes";
+import { routes, asset, productPathFor } from "@/lib/us/routes";
 import { color, CONDENSED } from "@/lib/us/tokens";
 import { h2, h2Balance, section, lead, body, strong, finePrint } from "@/components/us/guides/styles";
 
@@ -174,7 +174,7 @@ export default function WaxVsSprayCoatingPage() {
               If you'd rather use a silicone-based spray glaze than a ceramic spray,{" "}
               <strong style={strong}>APGO Atomic Colored Glaze (D204)</strong> is one option. It goes on dry paint, and the U.S.
               product page rates it to last <strong style={strong}>up to about 6 months (180 days)</strong>; see{" "}
-              <Link href={routes.compare} className="us-text-link">compare the options</Link>. That is the only specific duration we
+              <Link href={productPathFor("d204")} className="us-text-link">the Atomic Colored Glaze product page</Link>. That is the only specific duration we
               cite here.
             </p>
             <p style={body}>
